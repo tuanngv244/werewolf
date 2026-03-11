@@ -1,5 +1,5 @@
 // ============================================================
-// Role Definitions & Metadata — All 40 Roles
+// Role Definitions & Metadata — All 50 Roles
 // Source of truth: ROLES.md
 // ============================================================
 
@@ -9,17 +9,17 @@ export interface RoleDefinition {
   role: Role;
   team: Team;
   seerResult: SeerResult;
-  nameKey: string;   // i18n key
-  descKey: string;   // i18n key
+  nameKey: string; // i18n key
+  descKey: string; // i18n key
   hasNightAction: boolean;
   hasDayAction: boolean;
   isUnique: boolean; // only 1 per game
-  priority: number;  // night action order (lower = earlier)
+  priority: number; // night action order (lower = earlier)
 }
 
 export const ROLE_DEFINITIONS: Record<Role, RoleDefinition> = {
   // ═══════════════════════════════════════════════════
-  // Village Team — Active Abilities (11 roles)
+  // Village Team — Active Abilities (15 roles)
   // ═══════════════════════════════════════════════════
   [Role.DOCTOR]: {
     role: Role.DOCTOR,
@@ -142,6 +142,50 @@ export const ROLE_DEFINITIONS: Record<Role, RoleDefinition> = {
     isUnique: true,
     priority: 999,
   },
+  [Role.VIGILANTE]: {
+    role: Role.VIGILANTE,
+    team: Team.VILLAGE,
+    seerResult: SeerResult.GOOD,
+    nameKey: 'role.vigilante.name',
+    descKey: 'role.vigilante.desc',
+    hasNightAction: true,
+    hasDayAction: false,
+    isUnique: true,
+    priority: 95, // after wolf kill, before doctor
+  },
+  [Role.SPY]: {
+    role: Role.SPY,
+    team: Team.VILLAGE,
+    seerResult: SeerResult.GOOD,
+    nameKey: 'role.spy.name',
+    descKey: 'role.spy.desc',
+    hasNightAction: true,
+    hasDayAction: false,
+    isUnique: true,
+    priority: 18, // early, to observe wolf actions
+  },
+  [Role.JAILER]: {
+    role: Role.JAILER,
+    team: Team.VILLAGE,
+    seerResult: SeerResult.GOOD,
+    nameKey: 'role.jailer.name',
+    descKey: 'role.jailer.desc',
+    hasNightAction: true,
+    hasDayAction: false,
+    isUnique: true,
+    priority: 12, // very early, blocks abilities before they execute
+  },
+  [Role.GRAVE_ROBBER]: {
+    role: Role.GRAVE_ROBBER,
+    team: Team.VILLAGE,
+    seerResult: SeerResult.UNKNOWN,
+    nameKey: 'role.graveRobber.name',
+    descKey: 'role.graveRobber.desc',
+    hasNightAction: true,
+    hasDayAction: false,
+    isUnique: true,
+    priority: 22, // after seer, reads dead info
+  },
 
   // ═══════════════════════════════════════════════════
   // Village Team — Passive/No-ability (8 roles)
@@ -236,7 +280,7 @@ export const ROLE_DEFINITIONS: Record<Role, RoleDefinition> = {
   },
 
   // ═══════════════════════════════════════════════════
-  // Werewolf Team (10 roles)
+  // Werewolf Team (13 roles)
   // ═══════════════════════════════════════════════════
   [Role.WEREWOLF]: {
     role: Role.WEREWOLF,
@@ -348,9 +392,42 @@ export const ROLE_DEFINITIONS: Record<Role, RoleDefinition> = {
     isUnique: true,
     priority: 75, // after wolf vote
   },
+  [Role.INFECTOR_WOLF]: {
+    role: Role.INFECTOR_WOLF,
+    team: Team.WEREWOLF,
+    seerResult: SeerResult.EVIL,
+    nameKey: 'role.infectorWolf.name',
+    descKey: 'role.infectorWolf.desc',
+    hasNightAction: true,
+    hasDayAction: false,
+    isUnique: true,
+    priority: 71, // alongside other wolves
+  },
+  [Role.STALKER_WOLF]: {
+    role: Role.STALKER_WOLF,
+    team: Team.WEREWOLF,
+    seerResult: SeerResult.EVIL,
+    nameKey: 'role.stalkerWolf.name',
+    descKey: 'role.stalkerWolf.desc',
+    hasNightAction: true,
+    hasDayAction: false,
+    isUnique: true,
+    priority: 35, // before wolf vote, gathers intel
+  },
+  [Role.CURSED_WOLF]: {
+    role: Role.CURSED_WOLF,
+    team: Team.WEREWOLF,
+    seerResult: SeerResult.UNKNOWN, // sneaky, appears unknown to seer
+    nameKey: 'role.cursedWolf.name',
+    descKey: 'role.cursedWolf.desc',
+    hasNightAction: true,
+    hasDayAction: false,
+    isUnique: true,
+    priority: 70,
+  },
 
   // ═══════════════════════════════════════════════════
-  // Solo Team (10 roles)
+  // Solo Team (13 roles)
   // ═══════════════════════════════════════════════════
   [Role.HEADHUNTER]: {
     role: Role.HEADHUNTER,
@@ -461,6 +538,39 @@ export const ROLE_DEFINITIONS: Record<Role, RoleDefinition> = {
     hasDayAction: false,
     isUnique: true,
     priority: 999,
+  },
+  [Role.PIRATE]: {
+    role: Role.PIRATE,
+    team: Team.SOLO,
+    seerResult: SeerResult.UNKNOWN,
+    nameKey: 'role.pirate.name',
+    descKey: 'role.pirate.desc',
+    hasNightAction: true,
+    hasDayAction: false,
+    isUnique: true,
+    priority: 92, // after wolf kill, alongside serial killer
+  },
+  [Role.PLAGUE_DOCTOR]: {
+    role: Role.PLAGUE_DOCTOR,
+    team: Team.SOLO,
+    seerResult: SeerResult.UNKNOWN,
+    nameKey: 'role.plagueDoctor.name',
+    descKey: 'role.plagueDoctor.desc',
+    hasNightAction: true,
+    hasDayAction: false,
+    isUnique: true,
+    priority: 135, // late: spreads plague after combat
+  },
+  [Role.CORRUPTOR]: {
+    role: Role.CORRUPTOR,
+    team: Team.SOLO,
+    seerResult: SeerResult.UNKNOWN,
+    nameKey: 'role.corruptor.name',
+    descKey: 'role.corruptor.desc',
+    hasNightAction: true,
+    hasDayAction: false,
+    isUnique: true,
+    priority: 16, // early: corrupts before seers check
   },
 
   // ═══════════════════════════════════════════════════

@@ -22,7 +22,16 @@ interface PlayerData {
 interface RoleCostume {
   bodyColor: string;
   hatColor?: string;
-  hatType?: 'pointy' | 'tophat' | 'hood' | 'crown' | 'jester' | 'helmet' | 'bandana' | 'goggles' | 'none';
+  hatType?:
+    | 'pointy'
+    | 'tophat'
+    | 'hood'
+    | 'crown'
+    | 'jester'
+    | 'helmet'
+    | 'bandana'
+    | 'goggles'
+    | 'none';
   accessoryColor?: string;
   capeColor?: string;
   eyeColor?: string;
@@ -32,55 +41,346 @@ interface RoleCostume {
 
 const ROLE_COSTUMES: Record<string, RoleCostume> = {
   // ── Village Team — Active ──
-  villager:      { bodyColor: '#8B7355', hatType: 'none',    emoji: '🏘️', eyeColor: '#2C1810' },
-  doctor:        { bodyColor: '#FFFFFF', hatType: 'tophat',  hatColor: '#FFFFFF', accessoryColor: '#E74C3C', emoji: '💊', glowColor: '#3498DB', eyeColor: '#2C5F8A' },
-  gunner:        { bodyColor: '#8B6914', hatType: 'bandana', hatColor: '#B8860B', accessoryColor: '#DAA520', emoji: '🔫', eyeColor: '#4A3728' },
-  seer:          { bodyColor: '#7B3FA0', hatType: 'pointy',  hatColor: '#9B59B6', accessoryColor: '#D8B4FE', emoji: '🔮', glowColor: '#9B59B6', eyeColor: '#6B21A8' },
-  aura_seer:     { bodyColor: '#E6E6FA', hatType: 'hood',    hatColor: '#F0E6FF', accessoryColor: '#C4B5FD', emoji: '✨', glowColor: '#E6E6FA', eyeColor: '#7C3AED' },
-  medium:        { bodyColor: '#4A6670', hatType: 'hood',    hatColor: '#5A7A8A', accessoryColor: '#7FDBFF', emoji: '👻', glowColor: '#7FDBFF', eyeColor: '#0EA5E9' },
-  witch:         { bodyColor: '#4A1A6B', hatType: 'pointy',  hatColor: '#6C3483', accessoryColor: '#27AE60', emoji: '🧙', glowColor: '#6C3483', eyeColor: '#A855F7' },
-  avenger:       { bodyColor: '#7A1A1A', hatType: 'hood',    hatColor: '#8B2020', capeColor: '#C0392B', emoji: '⚔️', glowColor: '#DC2626', eyeColor: '#DC2626' },
-  beast_hunter:  { bodyColor: '#5C4A1E', hatType: 'helmet',  hatColor: '#6B5A2E', accessoryColor: '#8B6914', emoji: '🪤', eyeColor: '#78350F' },
-  cursed:        { bodyColor: '#4A5568', hatType: 'none',    emoji: '🌑', eyeColor: '#374151' },
-  bodyguard:     { bodyColor: '#2C3E8C', hatType: 'helmet',  hatColor: '#1E3A7A', accessoryColor: '#C0C0C0', emoji: '🛡️', glowColor: '#3B82F6', eyeColor: '#1E40AF' },
-  priest:        { bodyColor: '#F5F5DC', hatType: 'hood',    hatColor: '#F0EAD6', accessoryColor: '#FFD700', emoji: '✝️', glowColor: '#FBBF24', eyeColor: '#92400E' },
+  villager: { bodyColor: '#8B7355', hatType: 'none', emoji: '🏘️', eyeColor: '#2C1810' },
+  doctor: {
+    bodyColor: '#FFFFFF',
+    hatType: 'tophat',
+    hatColor: '#FFFFFF',
+    accessoryColor: '#E74C3C',
+    emoji: '💊',
+    glowColor: '#3498DB',
+    eyeColor: '#2C5F8A',
+  },
+  gunner: {
+    bodyColor: '#8B6914',
+    hatType: 'bandana',
+    hatColor: '#B8860B',
+    accessoryColor: '#DAA520',
+    emoji: '🔫',
+    eyeColor: '#4A3728',
+  },
+  seer: {
+    bodyColor: '#7B3FA0',
+    hatType: 'pointy',
+    hatColor: '#9B59B6',
+    accessoryColor: '#D8B4FE',
+    emoji: '🔮',
+    glowColor: '#9B59B6',
+    eyeColor: '#6B21A8',
+  },
+  aura_seer: {
+    bodyColor: '#E6E6FA',
+    hatType: 'hood',
+    hatColor: '#F0E6FF',
+    accessoryColor: '#C4B5FD',
+    emoji: '✨',
+    glowColor: '#E6E6FA',
+    eyeColor: '#7C3AED',
+  },
+  medium: {
+    bodyColor: '#4A6670',
+    hatType: 'hood',
+    hatColor: '#5A7A8A',
+    accessoryColor: '#7FDBFF',
+    emoji: '👻',
+    glowColor: '#7FDBFF',
+    eyeColor: '#0EA5E9',
+  },
+  witch: {
+    bodyColor: '#4A1A6B',
+    hatType: 'pointy',
+    hatColor: '#6C3483',
+    accessoryColor: '#27AE60',
+    emoji: '🧙',
+    glowColor: '#6C3483',
+    eyeColor: '#A855F7',
+  },
+  avenger: {
+    bodyColor: '#7A1A1A',
+    hatType: 'hood',
+    hatColor: '#8B2020',
+    capeColor: '#C0392B',
+    emoji: '⚔️',
+    glowColor: '#DC2626',
+    eyeColor: '#DC2626',
+  },
+  beast_hunter: {
+    bodyColor: '#5C4A1E',
+    hatType: 'helmet',
+    hatColor: '#6B5A2E',
+    accessoryColor: '#8B6914',
+    emoji: '🪤',
+    eyeColor: '#78350F',
+  },
+  cursed: { bodyColor: '#4A5568', hatType: 'none', emoji: '🌑', eyeColor: '#374151' },
+  bodyguard: {
+    bodyColor: '#2C3E8C',
+    hatType: 'helmet',
+    hatColor: '#1E3A7A',
+    accessoryColor: '#C0C0C0',
+    emoji: '🛡️',
+    glowColor: '#3B82F6',
+    eyeColor: '#1E40AF',
+  },
+  priest: {
+    bodyColor: '#F5F5DC',
+    hatType: 'hood',
+    hatColor: '#F0EAD6',
+    accessoryColor: '#FFD700',
+    emoji: '✝️',
+    glowColor: '#FBBF24',
+    eyeColor: '#92400E',
+  },
 
   // ── Village Team — Passive ──
-  elder:         { bodyColor: '#8B7D6B', hatType: 'none',    accessoryColor: '#C0C0C0', emoji: '👴', eyeColor: '#5C4B3A' },
-  baker:         { bodyColor: '#DEB887', hatType: 'tophat',  hatColor: '#F5DEB3', accessoryColor: '#D2691E', emoji: '🍞', eyeColor: '#8B4513' },
-  drunk:         { bodyColor: '#6B4423', hatType: 'none',    accessoryColor: '#8B0000', emoji: '🍺', eyeColor: '#4A2810' },
-  mayor:         { bodyColor: '#2F4F4F', hatType: 'tophat',  hatColor: '#1C1C1C', accessoryColor: '#FFD700', emoji: '🎩', glowColor: '#D4AF37', eyeColor: '#1F2937' },
-  pacifist:      { bodyColor: '#E8F5E9', hatType: 'none',    accessoryColor: '#4CAF50', emoji: '☮️', glowColor: '#66BB6A', eyeColor: '#2E7D32' },
-  sleepwalker:   { bodyColor: '#B0C4DE', hatType: 'none',    accessoryColor: '#778899', emoji: '😴', eyeColor: '#4682B4' },
-  hermit:        { bodyColor: '#556B2F', hatType: 'hood',    hatColor: '#6B8E23', accessoryColor: '#8FBC8F', emoji: '🏔️', eyeColor: '#3B5323' },
-  apprentice_seer: { bodyColor: '#9370DB', hatType: 'pointy', hatColor: '#BA55D3', accessoryColor: '#E6E6FA', emoji: '🌟', glowColor: '#C084FC', eyeColor: '#7B2FBE' },
+  elder: {
+    bodyColor: '#8B7D6B',
+    hatType: 'none',
+    accessoryColor: '#C0C0C0',
+    emoji: '👴',
+    eyeColor: '#5C4B3A',
+  },
+  baker: {
+    bodyColor: '#DEB887',
+    hatType: 'tophat',
+    hatColor: '#F5DEB3',
+    accessoryColor: '#D2691E',
+    emoji: '🍞',
+    eyeColor: '#8B4513',
+  },
+  drunk: {
+    bodyColor: '#6B4423',
+    hatType: 'none',
+    accessoryColor: '#8B0000',
+    emoji: '🍺',
+    eyeColor: '#4A2810',
+  },
+  mayor: {
+    bodyColor: '#2F4F4F',
+    hatType: 'tophat',
+    hatColor: '#1C1C1C',
+    accessoryColor: '#FFD700',
+    emoji: '🎩',
+    glowColor: '#D4AF37',
+    eyeColor: '#1F2937',
+  },
+  pacifist: {
+    bodyColor: '#E8F5E9',
+    hatType: 'none',
+    accessoryColor: '#4CAF50',
+    emoji: '☮️',
+    glowColor: '#66BB6A',
+    eyeColor: '#2E7D32',
+  },
+  sleepwalker: {
+    bodyColor: '#B0C4DE',
+    hatType: 'none',
+    accessoryColor: '#778899',
+    emoji: '😴',
+    eyeColor: '#4682B4',
+  },
+  hermit: {
+    bodyColor: '#556B2F',
+    hatType: 'hood',
+    hatColor: '#6B8E23',
+    accessoryColor: '#8FBC8F',
+    emoji: '🏔️',
+    eyeColor: '#3B5323',
+  },
+  apprentice_seer: {
+    bodyColor: '#9370DB',
+    hatType: 'pointy',
+    hatColor: '#BA55D3',
+    accessoryColor: '#E6E6FA',
+    emoji: '🌟',
+    glowColor: '#C084FC',
+    eyeColor: '#7B2FBE',
+  },
 
   // ── Werewolf Team ──
-  werewolf:         { bodyColor: '#5A2020', hatType: 'none',  accessoryColor: '#8B0000', emoji: '🐺', glowColor: '#8B0000', eyeColor: '#FFA500' },
-  alpha_werewolf:   { bodyColor: '#3D0A0A', hatType: 'crown', hatColor: '#8B0000', accessoryColor: '#4A0000', emoji: '🐺', glowColor: '#B91C1C', eyeColor: '#FF4500' },
-  werewolf_shaman:  { bodyColor: '#4A1A4A', hatType: 'hood',  hatColor: '#5A2A5A', accessoryColor: '#800080', emoji: '🐺', glowColor: '#9333EA', eyeColor: '#D946EF' },
-  werewolf_seer:    { bodyColor: '#1A1A4A', hatType: 'hood',  hatColor: '#2A2A6A', accessoryColor: '#191970', emoji: '🐺', glowColor: '#3B82F6', eyeColor: '#60A5FA' },
-  nightmare_wolf:   { bodyColor: '#1A0A2E', hatType: 'hood',  hatColor: '#2D1B4E', accessoryColor: '#4B0082', emoji: '🐺', glowColor: '#7C3AED', eyeColor: '#A78BFA' },
-  shadow_wolf:      { bodyColor: '#1A1A1A', hatType: 'hood',  hatColor: '#2A2A2A', accessoryColor: '#333333', emoji: '🐺', glowColor: '#4B5563', eyeColor: '#9CA3AF' },
-  blood_moon_wolf:  { bodyColor: '#4A0000', hatType: 'none',  accessoryColor: '#8B0000', emoji: '🐺', glowColor: '#DC2626', eyeColor: '#EF4444' },
-  howler_wolf:      { bodyColor: '#4A3728', hatType: 'none',  accessoryColor: '#8B6914', emoji: '🐺', glowColor: '#D97706', eyeColor: '#F59E0B' },
-  lone_wolf:        { bodyColor: '#3D2B1F', hatType: 'bandana', hatColor: '#5C4033', accessoryColor: '#6B4423', emoji: '🐺', glowColor: '#92400E', eyeColor: '#B45309' },
-  venom_wolf:       { bodyColor: '#1B4D3E', hatType: 'none',  accessoryColor: '#228B22', emoji: '🐺', glowColor: '#16A34A', eyeColor: '#22C55E' },
+  werewolf: {
+    bodyColor: '#5A2020',
+    hatType: 'none',
+    accessoryColor: '#8B0000',
+    emoji: '🐺',
+    glowColor: '#8B0000',
+    eyeColor: '#FFA500',
+  },
+  alpha_werewolf: {
+    bodyColor: '#3D0A0A',
+    hatType: 'crown',
+    hatColor: '#8B0000',
+    accessoryColor: '#4A0000',
+    emoji: '🐺',
+    glowColor: '#B91C1C',
+    eyeColor: '#FF4500',
+  },
+  werewolf_shaman: {
+    bodyColor: '#4A1A4A',
+    hatType: 'hood',
+    hatColor: '#5A2A5A',
+    accessoryColor: '#800080',
+    emoji: '🐺',
+    glowColor: '#9333EA',
+    eyeColor: '#D946EF',
+  },
+  werewolf_seer: {
+    bodyColor: '#1A1A4A',
+    hatType: 'hood',
+    hatColor: '#2A2A6A',
+    accessoryColor: '#191970',
+    emoji: '🐺',
+    glowColor: '#3B82F6',
+    eyeColor: '#60A5FA',
+  },
+  nightmare_wolf: {
+    bodyColor: '#1A0A2E',
+    hatType: 'hood',
+    hatColor: '#2D1B4E',
+    accessoryColor: '#4B0082',
+    emoji: '🐺',
+    glowColor: '#7C3AED',
+    eyeColor: '#A78BFA',
+  },
+  shadow_wolf: {
+    bodyColor: '#1A1A1A',
+    hatType: 'hood',
+    hatColor: '#2A2A2A',
+    accessoryColor: '#333333',
+    emoji: '🐺',
+    glowColor: '#4B5563',
+    eyeColor: '#9CA3AF',
+  },
+  blood_moon_wolf: {
+    bodyColor: '#4A0000',
+    hatType: 'none',
+    accessoryColor: '#8B0000',
+    emoji: '🐺',
+    glowColor: '#DC2626',
+    eyeColor: '#EF4444',
+  },
+  howler_wolf: {
+    bodyColor: '#4A3728',
+    hatType: 'none',
+    accessoryColor: '#8B6914',
+    emoji: '🐺',
+    glowColor: '#D97706',
+    eyeColor: '#F59E0B',
+  },
+  lone_wolf: {
+    bodyColor: '#3D2B1F',
+    hatType: 'bandana',
+    hatColor: '#5C4033',
+    accessoryColor: '#6B4423',
+    emoji: '🐺',
+    glowColor: '#92400E',
+    eyeColor: '#B45309',
+  },
+  venom_wolf: {
+    bodyColor: '#1B4D3E',
+    hatType: 'none',
+    accessoryColor: '#228B22',
+    emoji: '🐺',
+    glowColor: '#16A34A',
+    eyeColor: '#22C55E',
+  },
 
   // ── Solo Team ──
-  headhunter: { bodyColor: '#2C3E50', hatType: 'hood',    hatColor: '#34495E', accessoryColor: '#E74C3C', emoji: '🎯', glowColor: '#EF4444', eyeColor: '#94A3B8' },
-  fool:       { bodyColor: '#FF6B6B', hatType: 'jester',  hatColor: '#FFD93D', accessoryColor: '#FF6B6B', emoji: '🃏', glowColor: '#FBBF24', eyeColor: '#F59E0B' },
-  bomber:     { bodyColor: '#CC5500', hatType: 'goggles', hatColor: '#FF8C00', accessoryColor: '#FFD700', emoji: '💣', glowColor: '#F97316', eyeColor: '#EA580C' },
-  serial_killer: { bodyColor: '#1C1C1C', hatType: 'hood', hatColor: '#2D2D2D', accessoryColor: '#B22222', emoji: '🔪', glowColor: '#991B1B', eyeColor: '#EF4444' },
-  cupid:      { bodyColor: '#FFB6C1', hatType: 'none',    accessoryColor: '#FF69B4', emoji: '💘', glowColor: '#EC4899', eyeColor: '#DB2777' },
-  arsonist:   { bodyColor: '#8B2500', hatType: 'bandana', hatColor: '#CD3700', accessoryColor: '#FF4500', emoji: '🔥', glowColor: '#EF4444', eyeColor: '#F97316' },
-  survivor:   { bodyColor: '#696969', hatType: 'helmet',  hatColor: '#808080', accessoryColor: '#A9A9A9', emoji: '🦺', eyeColor: '#6B7280' },
-  amnesiac:   { bodyColor: '#B8B8D1', hatType: 'none',    accessoryColor: '#9898B8', emoji: '❓', glowColor: '#A78BFA', eyeColor: '#8B8BB8' },
-  doppelganger: { bodyColor: '#4A4A6A', hatType: 'hood',  hatColor: '#5A5A7A', accessoryColor: '#6A6A8A', emoji: '🪞', glowColor: '#818CF8', eyeColor: '#6366F1' },
-  jester:     { bodyColor: '#FF4500', hatType: 'jester',  hatColor: '#FF6347', accessoryColor: '#FFD700', emoji: '🤡', glowColor: '#FB923C', eyeColor: '#EA580C' },
+  headhunter: {
+    bodyColor: '#2C3E50',
+    hatType: 'hood',
+    hatColor: '#34495E',
+    accessoryColor: '#E74C3C',
+    emoji: '🎯',
+    glowColor: '#EF4444',
+    eyeColor: '#94A3B8',
+  },
+  fool: {
+    bodyColor: '#FF6B6B',
+    hatType: 'jester',
+    hatColor: '#FFD93D',
+    accessoryColor: '#FF6B6B',
+    emoji: '🃏',
+    glowColor: '#FBBF24',
+    eyeColor: '#F59E0B',
+  },
+  bomber: {
+    bodyColor: '#CC5500',
+    hatType: 'goggles',
+    hatColor: '#FF8C00',
+    accessoryColor: '#FFD700',
+    emoji: '💣',
+    glowColor: '#F97316',
+    eyeColor: '#EA580C',
+  },
+  serial_killer: {
+    bodyColor: '#1C1C1C',
+    hatType: 'hood',
+    hatColor: '#2D2D2D',
+    accessoryColor: '#B22222',
+    emoji: '🔪',
+    glowColor: '#991B1B',
+    eyeColor: '#EF4444',
+  },
+  cupid: {
+    bodyColor: '#FFB6C1',
+    hatType: 'none',
+    accessoryColor: '#FF69B4',
+    emoji: '💘',
+    glowColor: '#EC4899',
+    eyeColor: '#DB2777',
+  },
+  arsonist: {
+    bodyColor: '#8B2500',
+    hatType: 'bandana',
+    hatColor: '#CD3700',
+    accessoryColor: '#FF4500',
+    emoji: '🔥',
+    glowColor: '#EF4444',
+    eyeColor: '#F97316',
+  },
+  survivor: {
+    bodyColor: '#696969',
+    hatType: 'helmet',
+    hatColor: '#808080',
+    accessoryColor: '#A9A9A9',
+    emoji: '🦺',
+    eyeColor: '#6B7280',
+  },
+  amnesiac: {
+    bodyColor: '#B8B8D1',
+    hatType: 'none',
+    accessoryColor: '#9898B8',
+    emoji: '❓',
+    glowColor: '#A78BFA',
+    eyeColor: '#8B8BB8',
+  },
+  doppelganger: {
+    bodyColor: '#4A4A6A',
+    hatType: 'hood',
+    hatColor: '#5A5A7A',
+    accessoryColor: '#6A6A8A',
+    emoji: '🪞',
+    glowColor: '#818CF8',
+    eyeColor: '#6366F1',
+  },
+  jester: {
+    bodyColor: '#FF4500',
+    hatType: 'jester',
+    hatColor: '#FF6347',
+    accessoryColor: '#FFD700',
+    emoji: '🤡',
+    glowColor: '#FB923C',
+    eyeColor: '#EA580C',
+  },
 };
 
-const DEFAULT_COSTUME: RoleCostume = { bodyColor: '#6B8CFF', hatType: 'none', emoji: '❓', eyeColor: '#2C1810' };
+const DEFAULT_COSTUME: RoleCostume = {
+  bodyColor: '#6B8CFF',
+  hatType: 'none',
+  emoji: '❓',
+  eyeColor: '#2C1810',
+};
 
 function getCostume(role?: Role | string): RoleCostume {
   if (!role) return DEFAULT_COSTUME;
@@ -115,7 +415,12 @@ function TopHat({ color }: { color: string }) {
     <group position={[0, 1.35, 0]}>
       <mesh position={[0, -0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <ringGeometry args={[0.18, 0.35, 12]} />
-        <meshStandardMaterial color={color} roughness={0.4} metalness={0.1} side={THREE.DoubleSide} />
+        <meshStandardMaterial
+          color={color}
+          roughness={0.4}
+          metalness={0.1}
+          side={THREE.DoubleSide}
+        />
       </mesh>
       <mesh position={[0, 0.15, 0]}>
         <cylinderGeometry args={[0.18, 0.18, 0.3, 8]} />
@@ -265,15 +570,24 @@ function Goggles({ color }: { color: string }) {
 
 function RoleHat({ type, color, color2 }: { type: string; color: string; color2?: string }) {
   switch (type) {
-    case 'pointy':  return <PointyHat color={color} />;
-    case 'tophat':  return <TopHat color={color} />;
-    case 'hood':    return <Hood color={color} />;
-    case 'crown':   return <Crown color={color} />;
-    case 'jester':  return <JesterHat color={color} color2={color2 || '#6B6BFF'} />;
-    case 'helmet':  return <Helmet color={color} />;
-    case 'bandana': return <Bandana color={color} />;
-    case 'goggles': return <Goggles color={color} />;
-    default:        return null;
+    case 'pointy':
+      return <PointyHat color={color} />;
+    case 'tophat':
+      return <TopHat color={color} />;
+    case 'hood':
+      return <Hood color={color} />;
+    case 'crown':
+      return <Crown color={color} />;
+    case 'jester':
+      return <JesterHat color={color} color2={color2 || '#6B6BFF'} />;
+    case 'helmet':
+      return <Helmet color={color} />;
+    case 'bandana':
+      return <Bandana color={color} />;
+    case 'goggles':
+      return <Goggles color={color} />;
+    default:
+      return null;
   }
 }
 
@@ -339,7 +653,11 @@ function RoleAccessory({ role, color }: { role: string; color: string }) {
           {[0, 1, 2, 3, 4, 5].map((i) => {
             const a = (i / 6) * Math.PI * 2;
             return (
-              <mesh key={i} position={[Math.cos(a) * 0.26, Math.sin(a) * 0.26, 0]} rotation={[0, 0, a]}>
+              <mesh
+                key={i}
+                position={[Math.cos(a) * 0.26, Math.sin(a) * 0.26, 0]}
+                rotation={[0, 0, a]}
+              >
                 <cylinderGeometry args={[0.015, 0.015, 0.05, 4]} />
                 <meshStandardMaterial color="#DAA520" roughness={0.3} metalness={0.7} />
               </mesh>
@@ -353,7 +671,13 @@ function RoleAccessory({ role, color }: { role: string; color: string }) {
           <Float speed={3} floatIntensity={0.1}>
             <mesh>
               <sphereGeometry args={[0.08, 10, 10]} />
-              <meshStandardMaterial color="#D8B4FE" roughness={0.1} metalness={0.3} transparent opacity={0.8} />
+              <meshStandardMaterial
+                color="#D8B4FE"
+                roughness={0.1}
+                metalness={0.3}
+                transparent
+                opacity={0.8}
+              />
             </mesh>
             <pointLight color="#9B59B6" intensity={0.5} distance={1} />
           </Float>
@@ -536,7 +860,11 @@ function useWander(homePos: [number, number, number], isAlive: boolean, seed: nu
 }
 
 // ─── Player-controlled Movement ──────────────────────────────
-function usePlayerControl(homePos: [number, number, number], isAlive: boolean, keys: React.RefObject<Set<string>>) {
+function usePlayerControl(
+  homePos: [number, number, number],
+  isAlive: boolean,
+  keys: React.RefObject<Set<string>>,
+) {
   const posRef = useRef(new THREE.Vector3(homePos[0], homePos[1], homePos[2]));
   const rotRef = useRef(0);
   const isMovingRef = useRef(false);
@@ -552,9 +880,9 @@ function usePlayerControl(homePos: [number, number, number], isAlive: boolean, k
     let moveX = 0;
     let moveZ = 0;
 
-    if (keys.current.has('arrowup'))    moveZ -= 1;
-    if (keys.current.has('arrowdown'))  moveZ += 1;
-    if (keys.current.has('arrowleft'))  moveX -= 1;
+    if (keys.current.has('arrowup')) moveZ -= 1;
+    if (keys.current.has('arrowdown')) moveZ += 1;
+    if (keys.current.has('arrowleft')) moveX -= 1;
     if (keys.current.has('arrowright')) moveX += 1;
 
     const isMoving = moveX !== 0 || moveZ !== 0;
@@ -570,9 +898,7 @@ function usePlayerControl(homePos: [number, number, number], isAlive: boolean, k
       const newZ = posRef.current.z + moveZ * speed * delta;
 
       // Boundary check — stay within maxRadius of home
-      const distFromHome = Math.sqrt(
-        (newX - homePos[0]) ** 2 + (newZ - homePos[2]) ** 2,
-      );
+      const distFromHome = Math.sqrt((newX - homePos[0]) ** 2 + (newZ - homePos[2]) ** 2);
 
       if (distFromHome < maxRadius) {
         posRef.current.x = newX;
@@ -620,10 +946,26 @@ function ChibiCharacter({
   const groupRef = useRef<THREE.Group>(null);
   const costume = useMemo(() => getCostume(player.role), [player.role]);
   const bodyColor = useMemo(() => new THREE.Color(costume.bodyColor), [costume.bodyColor]);
-  const deadColor = useMemo(() => new THREE.Color('#555555'), []);
+  const deadColor = useMemo(() => new THREE.Color('#888888'), []); // grey for dead players
   const skinColor = useMemo(() => new THREE.Color('#FFD5B8'), []);
-  const eyeColor = useMemo(() => new THREE.Color(costume.eyeColor || '#2C1810'), [costume.eyeColor]);
-  const isWolf = player.role && ['werewolf', 'alpha_werewolf', 'werewolf_shaman', 'werewolf_seer', 'nightmare_wolf', 'shadow_wolf', 'blood_moon_wolf', 'howler_wolf', 'lone_wolf', 'venom_wolf'].includes(player.role);
+  const eyeColor = useMemo(
+    () => new THREE.Color(costume.eyeColor || '#2C1810'),
+    [costume.eyeColor],
+  );
+  const isWolf =
+    player.role &&
+    [
+      'werewolf',
+      'alpha_werewolf',
+      'werewolf_shaman',
+      'werewolf_seer',
+      'nightmare_wolf',
+      'shadow_wolf',
+      'blood_moon_wolf',
+      'howler_wolf',
+      'lone_wolf',
+      'venom_wolf',
+    ].includes(player.role);
 
   // Movement — local player uses keyboard, bots/others use AI wander
   const wanderState = useWander(homePosition, !isLocalPlayer && player.isAlive, index);
@@ -721,7 +1063,7 @@ function ChibiCharacter({
             // Hold + return
             const t2 = (p - 0.25) / 0.2;
             rightArmRef.current.rotation.x = 1.5 * (1 - t2);
-            rightArmRef.current.rotation.z = -(0.3) * (1 - t2) - 0.3;
+            rightArmRef.current.rotation.z = -0.3 * (1 - t2) - 0.3;
           } else {
             // Done
             attackAnimRef.current = 0;
@@ -771,8 +1113,10 @@ function ChibiCharacter({
         // Lean into movement direction
         const targetLeanZ = isMoving ? -vx * 3 : 0;
         const targetLeanX = isMoving ? vz * 3 : 0;
-        bodyMeshRef.current.rotation.z += (THREE.MathUtils.clamp(targetLeanZ, -0.15, 0.15) - bodyMeshRef.current.rotation.z) * 0.1;
-        bodyMeshRef.current.rotation.x += (THREE.MathUtils.clamp(targetLeanX, -0.1, 0.1) - bodyMeshRef.current.rotation.x) * 0.1;
+        bodyMeshRef.current.rotation.z +=
+          (THREE.MathUtils.clamp(targetLeanZ, -0.15, 0.15) - bodyMeshRef.current.rotation.z) * 0.1;
+        bodyMeshRef.current.rotation.x +=
+          (THREE.MathUtils.clamp(targetLeanX, -0.1, 0.1) - bodyMeshRef.current.rotation.x) * 0.1;
       }
 
       // ── Head bobbing while walking ──
@@ -816,7 +1160,7 @@ function ChibiCharacter({
               } else if (p < 0.3) {
                 headGroupRef.current.rotation.x = -0.15 * (1 - (p - 0.15) / 0.15);
               } else if (p < 0.45) {
-                headGroupRef.current.rotation.x = -(p - 0.3) / 0.15 * 0.1;
+                headGroupRef.current.rotation.x = (-(p - 0.3) / 0.15) * 0.1;
               } else if (p < 0.6) {
                 headGroupRef.current.rotation.x = -0.1 * (1 - (p - 0.45) / 0.15);
               } else {
@@ -848,7 +1192,8 @@ function ChibiCharacter({
         if (isBlinkingRef.current) {
           blinkDurationRef.current += delta;
           const blinkT = blinkDurationRef.current;
-          const blinkScale = blinkT < 0.06 ? 1 - blinkT / 0.06 : blinkT < 0.12 ? (blinkT - 0.06) / 0.06 : 1;
+          const blinkScale =
+            blinkT < 0.06 ? 1 - blinkT / 0.06 : blinkT < 0.12 ? (blinkT - 0.06) / 0.06 : 1;
           leftEyeRef.current.scale.y = Math.max(0.05, blinkScale);
           rightEyeRef.current.scale.y = Math.max(0.05, blinkScale);
           if (blinkT >= 0.12) {
@@ -864,15 +1209,27 @@ function ChibiCharacter({
   });
 
   // Calculate bubble age for fade
-  const bubbleOpacity = chatBubble ? Math.max(0, 1 - (Date.now() - chatBubble.timestamp) / 4000) : 0;
+  const bubbleOpacity = chatBubble
+    ? Math.max(0, 1 - (Date.now() - chatBubble.timestamp) / 4000)
+    : 0;
 
   return (
     <group
       ref={groupRef}
       position={homePosition}
-      onClick={(e) => { e.stopPropagation(); onClick?.(); }}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick?.();
+      }}
       scale={player.isAlive ? 1 : 0.7}
     >
+      {/* Dead ghost overlay — reduce opacity of the entire character */}
+      {!player.isAlive && (
+        <mesh position={[0, 0.7, 0]}>
+          <sphereGeometry args={[0.01, 2, 2]} />
+          <meshBasicMaterial transparent opacity={0} />
+        </mesh>
+      )}
       {/* Selection ring */}
       {player.isSelected && (
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
@@ -894,6 +1251,8 @@ function ChibiCharacter({
           <meshStandardMaterial
             color={player.isAlive ? bodyColor : deadColor}
             roughness={0.7}
+            transparent={!player.isAlive}
+            opacity={player.isAlive ? 1 : 0.5}
           />
         </mesh>
         {/* Shoe */}
@@ -910,6 +1269,8 @@ function ChibiCharacter({
           <meshStandardMaterial
             color={player.isAlive ? bodyColor : deadColor}
             roughness={0.7}
+            transparent={!player.isAlive}
+            opacity={player.isAlive ? 1 : 0.5}
           />
         </mesh>
         {/* Shoe */}
@@ -926,29 +1287,51 @@ function ChibiCharacter({
           color={player.isAlive ? bodyColor : deadColor}
           roughness={0.6}
           metalness={0.05}
+          transparent={!player.isAlive}
+          opacity={player.isAlive ? 1 : 0.5}
         />
       </mesh>
 
       {/* Left Arm */}
       <mesh ref={leftArmRef} position={[-0.28, 0.55, 0]} rotation={[0, 0, 0.3]} castShadow>
         <capsuleGeometry args={[0.055, 0.2, 3, 6]} />
-        <meshStandardMaterial color={player.isAlive ? bodyColor : deadColor} roughness={0.7} />
+        <meshStandardMaterial
+          color={player.isAlive ? bodyColor : deadColor}
+          roughness={0.7}
+          transparent={!player.isAlive}
+          opacity={player.isAlive ? 1 : 0.5}
+        />
       </mesh>
       {/* Left Hand */}
       <mesh position={[-0.34, 0.36, 0]}>
         <sphereGeometry args={[0.055, 6, 6]} />
-        <meshStandardMaterial color={player.isAlive ? skinColor : deadColor} roughness={0.5} />
+        <meshStandardMaterial
+          color={player.isAlive ? skinColor : deadColor}
+          roughness={0.5}
+          transparent={!player.isAlive}
+          opacity={player.isAlive ? 1 : 0.45}
+        />
       </mesh>
 
       {/* Right Arm */}
       <mesh ref={rightArmRef} position={[0.28, 0.55, 0]} rotation={[0, 0, -0.3]} castShadow>
         <capsuleGeometry args={[0.055, 0.2, 3, 6]} />
-        <meshStandardMaterial color={player.isAlive ? bodyColor : deadColor} roughness={0.7} />
+        <meshStandardMaterial
+          color={player.isAlive ? bodyColor : deadColor}
+          roughness={0.7}
+          transparent={!player.isAlive}
+          opacity={player.isAlive ? 1 : 0.5}
+        />
       </mesh>
       {/* Right Hand */}
       <mesh position={[0.34, 0.36, 0]}>
         <sphereGeometry args={[0.055, 6, 6]} />
-        <meshStandardMaterial color={player.isAlive ? skinColor : deadColor} roughness={0.5} />
+        <meshStandardMaterial
+          color={player.isAlive ? skinColor : deadColor}
+          roughness={0.5}
+          transparent={!player.isAlive}
+          opacity={player.isAlive ? 1 : 0.45}
+        />
       </mesh>
 
       {/* Cape (if role has one) */}
@@ -961,6 +1344,8 @@ function ChibiCharacter({
           <meshStandardMaterial
             color={player.isAlive ? skinColor : deadColor}
             roughness={0.5}
+            transparent={!player.isAlive}
+            opacity={player.isAlive ? 1 : 0.5}
           />
         </mesh>
 
@@ -1115,9 +1500,7 @@ function ChibiCharacter({
               transition: 'none',
             }}
           >
-            <div className="text-2xl font-bold drop-shadow-lg">
-              {hitEmoji || '💥'}
-            </div>
+            <div className="text-2xl font-bold drop-shadow-lg">{hitEmoji || '💥'}</div>
             <div
               className="text-xs font-black text-red-500 drop-shadow-lg"
               style={{ textShadow: '1px 1px 0 #fff, -1px -1px 0 #fff' }}
@@ -1137,9 +1520,7 @@ function ChibiCharacter({
       >
         <div className="flex flex-col items-center gap-0.5">
           {player.role && (
-            <span className="text-lg leading-none drop-shadow-md">
-              {costume.emoji}
-            </span>
+            <span className="text-lg leading-none drop-shadow-md">{costume.emoji}</span>
           )}
           <span
             className={`text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap backdrop-blur-sm shadow-sm ${
@@ -1187,7 +1568,17 @@ export function PlayerCircle({
   isNight: boolean;
   chatBubbles?: Map<string, { content: string; timestamp: number }>;
 }) {
-  const radius = Math.max(3, players.length * 0.4);
+  // Deduplicate players by ID to prevent duplicate key warnings
+  const uniquePlayers = useMemo(() => {
+    const seen = new Set<string>();
+    return players.filter((p) => {
+      if (seen.has(p.id)) return false;
+      seen.add(p.id);
+      return true;
+    });
+  }, [players]);
+
+  const radius = Math.max(3, uniquePlayers.length * 0.4);
   const keys = useKeyboard();
   const localUserId = useAuthStore((s) => s.user?.id);
   const emptyBubbles = useMemo(() => new Map<string, { content: string; timestamp: number }>(), []);
@@ -1218,7 +1609,7 @@ export function PlayerCircle({
       let nearestId: string | null = null;
       let nearestDist = 2.0; // attack range
 
-      for (const p of players) {
+      for (const p of uniquePlayers) {
         if (p.id === localUserId || !p.isAlive) continue;
         const otherPos = playerPositionsRef.current.get(p.id);
         if (!otherPos) continue;
@@ -1283,8 +1674,8 @@ export function PlayerCircle({
       {/* Campfire in center */}
       <CampFire isNight={isNight} />
 
-      {players.map((player, i) => {
-        const angle = (i / players.length) * Math.PI * 2 - Math.PI / 2;
+      {uniquePlayers.map((player, i) => {
+        const angle = (i / uniquePlayers.length) * Math.PI * 2 - Math.PI / 2;
         const x = Math.cos(angle) * radius;
         const z = Math.sin(angle) * radius;
         const isLocal = player.id === localUserId;
@@ -1355,7 +1746,8 @@ function CampFire({ isNight }: { isNight: boolean }) {
   useFrame(({ clock }) => {
     const t = clock.getElapsedTime();
     if (lightRef.current) {
-      lightRef.current.intensity = (isNight ? 2.5 : 0.5) + Math.sin(t * 5) * 0.3 + Math.sin(t * 7) * 0.2;
+      lightRef.current.intensity =
+        (isNight ? 2.5 : 0.5) + Math.sin(t * 5) * 0.3 + Math.sin(t * 7) * 0.2;
     }
     if (flame1Ref.current) {
       flame1Ref.current.scale.y = 1 + Math.sin(t * 6) * 0.2;

@@ -129,7 +129,12 @@
     "gameStarting": "Game Starting!",
     "seerCheckResult": "{target} is {role}",
     "auraSeerCheckResult": "{target}'s aura is {result}",
-    "spectating": "You are spectating"
+    "spectating": "You are spectating",
+    "witchChooseAction": "Choose your potion",
+    "witchHeal": "Heal Potion",
+    "witchKill": "Kill Potion",
+    "witchHealDesc": "Use your heal potion to save the werewolves' target tonight. One-time use.",
+    "deadCantChat": "Dead players can only use ghost chat 👻"
   },
   "chat": {
     "placeholder": "Type a message...",
@@ -184,49 +189,219 @@
     "survivor": "Survivor",
     "amnesiac": "Amnesiac",
     "doppelganger": "Doppelganger",
-    "jester": "Jester"
+    "jester": "Jester",
+    "vigilante": "Vigilante",
+    "spy": "Spy",
+    "jailer": "Jailer",
+    "graveRobber": "Grave Robber",
+    "infectorWolf": "Infector Wolf",
+    "stalkerWolf": "Stalker Wolf",
+    "cursedWolf": "Cursed Wolf",
+    "pirate": "Pirate",
+    "plagueDoctor": "Plague Doctor",
+    "corruptor": "Corruptor"
   },
   "role": {
-    "villager": { "name": "Villager", "desc": "A regular villager with no special abilities. Use your wits to find the werewolves!" },
-    "doctor": { "name": "Doctor", "desc": "Each night, protect one player from being killed" },
-    "gunner": { "name": "Gunner", "desc": "Has 2 bullets to shoot any player during the day" },
-    "seer": { "name": "Seer", "desc": "Each night, view one player's exact role" },
-    "auraSeer": { "name": "Aura Seer", "desc": "Each night, view one player's alignment (Good/Evil/Unknown)" },
-    "medium": { "name": "Medium", "desc": "Talk to dead players each night. Resurrect one player per game" },
-    "witch": { "name": "Witch", "desc": "Has 1 heal potion (only when target is attacked) and 1 kill potion" },
-    "avenger": { "name": "Avenger", "desc": "Choose a player who will die if you are killed" },
-    "beastHunter": { "name": "Beast Hunter", "desc": "Place a trap. If wolf bites trapped player, weakest wolf dies" },
-    "cursed": { "name": "Cursed", "desc": "Normal villager until bitten by werewolf, then becomes a werewolf" },
-    "bodyguard": { "name": "Bodyguard", "desc": "Protect one player each night. Cannot protect the same player two nights in a row. If target is attacked, Bodyguard dies instead" },
-    "priest": { "name": "Priest", "desc": "Has holy water. If killed by werewolves, the attacking wolf also dies" },
-    "elder": { "name": "Elder", "desc": "Survives the first werewolf attack. Dies normally on the second attack" },
-    "baker": { "name": "Baker", "desc": "The village baker. Everyone knows who the Baker is. If Baker dies, village loses morale" },
-    "drunk": { "name": "Drunk", "desc": "Doesn't know their real role until night 3. Acts as Villager until then" },
-    "mayor": { "name": "Mayor", "desc": "Can reveal during the day to gain double voting power, but becomes a target" },
-    "pacifist": { "name": "Pacifist", "desc": "A peaceful villager. If voted out, reveals all players who voted for them" },
-    "sleepwalker": { "name": "Sleepwalker", "desc": "Wanders at night. Has a chance to accidentally visit a player, learning if they acted that night" },
-    "hermit": { "name": "Hermit", "desc": "Lives alone. Cannot be targeted by werewolves on the first night" },
-    "apprenticeSeer": { "name": "Apprentice Seer", "desc": "A regular villager until the Seer dies, then inherits the Seer's power" },
-    "werewolf": { "name": "Werewolf", "desc": "Each night, vote with other wolves to kill one player" },
-    "werewolfShaman": { "name": "Werewolf Shaman", "desc": "During the day, curse a player to appear Evil to Seers that night" },
-    "alphaWerewolf": { "name": "Alpha Werewolf", "desc": "A werewolf with double voting power in the night kill vote" },
-    "werewolfSeer": { "name": "Werewolf Seer", "desc": "View one player's role at night — all wolves see the result" },
-    "nightmareWolf": { "name": "Nightmare Wolf", "desc": "Choose a player to silence. That player cannot use their night ability this night" },
-    "shadowWolf": { "name": "Shadow Wolf", "desc": "Appears as Unknown to Seers. Hides among the villagers more easily" },
-    "bloodMoonWolf": { "name": "Blood Moon Wolf", "desc": "Every 3rd night, the wolf kill cannot be saved by Doctor or Witch" },
-    "howlerWolf": { "name": "Howler Wolf", "desc": "When a wolf dies, Howler lets out a cry that reveals one random village role" },
-    "loneWolf": { "name": "Lone Wolf", "desc": "A werewolf who also wins solo if they are the last wolf alive. Has own kill target" },
-    "venomWolf": { "name": "Venom Wolf", "desc": "Once per game, poison a player. That player dies the following night regardless" },
-    "headhunter": { "name": "Headhunter", "desc": "Get your target voted out to win. If target dies otherwise, join Village" },
-    "fool": { "name": "Fool", "desc": "Win by getting yourself voted out during the day" },
-    "bomber": { "name": "Bomber", "desc": "Place a bomb at night, explodes next night. Immune to werewolf kills" },
-    "serialKiller": { "name": "Serial Killer", "desc": "Kill one player each night independently. Win when you are the last one standing" },
-    "cupid": { "name": "Cupid", "desc": "On the first night, link two players as lovers. If one dies, the other dies too. Lovers win together if they are the last 2 alive" },
-    "arsonist": { "name": "Arsonist", "desc": "Douse a player in gasoline each night. Ignite to kill all doused players at once. Win when all others are dead" },
-    "survivor": { "name": "Survivor", "desc": "Has 2 bulletproof vests. Win by simply surviving to the end of the game" },
-    "amnesiac": { "name": "Amnesiac", "desc": "Doesn't remember their role. Choose a dead player to copy their role and team" },
-    "doppelganger": { "name": "Doppelganger", "desc": "Choose a player on night 1. When that player dies, you become their role" },
-    "jester": { "name": "Jester", "desc": "Win by getting yourself voted out. When voted out, one player who voted for you dies" }
+    "villager": {
+      "name": "Villager",
+      "desc": "A regular villager with no special abilities. Use your wits to find the werewolves!"
+    },
+    "doctor": {
+      "name": "Doctor",
+      "desc": "Each night, protect one player from being killed"
+    },
+    "gunner": {
+      "name": "Gunner",
+      "desc": "Has 2 bullets to shoot any player during the day"
+    },
+    "seer": {
+      "name": "Seer",
+      "desc": "Each night, view one player's exact role"
+    },
+    "auraSeer": {
+      "name": "Aura Seer",
+      "desc": "Each night, view one player's alignment (Good/Evil/Unknown)"
+    },
+    "medium": {
+      "name": "Medium",
+      "desc": "Talk to dead players each night. Resurrect one player per game"
+    },
+    "witch": {
+      "name": "Witch",
+      "desc": "Has 1 heal potion (only when target is attacked) and 1 kill potion"
+    },
+    "avenger": {
+      "name": "Avenger",
+      "desc": "Choose a player who will die if you are killed"
+    },
+    "beastHunter": {
+      "name": "Beast Hunter",
+      "desc": "Place a trap. If wolf bites trapped player, weakest wolf dies"
+    },
+    "cursed": {
+      "name": "Cursed",
+      "desc": "Normal villager until bitten by werewolf, then becomes a werewolf"
+    },
+    "bodyguard": {
+      "name": "Bodyguard",
+      "desc": "Protect one player each night. Cannot protect the same player two nights in a row. If target is attacked, Bodyguard dies instead"
+    },
+    "priest": {
+      "name": "Priest",
+      "desc": "Has holy water. If killed by werewolves, the attacking wolf also dies"
+    },
+    "elder": {
+      "name": "Elder",
+      "desc": "Survives the first werewolf attack. Dies normally on the second attack"
+    },
+    "baker": {
+      "name": "Baker",
+      "desc": "The village baker. Everyone knows who the Baker is. If Baker dies, village loses morale"
+    },
+    "drunk": {
+      "name": "Drunk",
+      "desc": "Doesn't know their real role until night 3. Acts as Villager until then"
+    },
+    "mayor": {
+      "name": "Mayor",
+      "desc": "Can reveal during the day to gain double voting power, but becomes a target"
+    },
+    "pacifist": {
+      "name": "Pacifist",
+      "desc": "A peaceful villager. If voted out, reveals all players who voted for them"
+    },
+    "sleepwalker": {
+      "name": "Sleepwalker",
+      "desc": "Wanders at night. Has a chance to accidentally visit a player, learning if they acted that night"
+    },
+    "hermit": {
+      "name": "Hermit",
+      "desc": "Lives alone. Cannot be targeted by werewolves on the first night"
+    },
+    "apprenticeSeer": {
+      "name": "Apprentice Seer",
+      "desc": "A regular villager until the Seer dies, then inherits the Seer's power"
+    },
+    "werewolf": {
+      "name": "Werewolf",
+      "desc": "Each night, vote with other wolves to kill one player"
+    },
+    "werewolfShaman": {
+      "name": "Werewolf Shaman",
+      "desc": "During the day, curse a player to appear Evil to Seers that night"
+    },
+    "alphaWerewolf": {
+      "name": "Alpha Werewolf",
+      "desc": "A werewolf with double voting power in the night kill vote"
+    },
+    "werewolfSeer": {
+      "name": "Werewolf Seer",
+      "desc": "View one player's role at night — all wolves see the result"
+    },
+    "nightmareWolf": {
+      "name": "Nightmare Wolf",
+      "desc": "Choose a player to silence. That player cannot use their night ability this night"
+    },
+    "shadowWolf": {
+      "name": "Shadow Wolf",
+      "desc": "Appears as Unknown to Seers. Hides among the villagers more easily"
+    },
+    "bloodMoonWolf": {
+      "name": "Blood Moon Wolf",
+      "desc": "Every 3rd night, the wolf kill cannot be saved by Doctor or Witch"
+    },
+    "howlerWolf": {
+      "name": "Howler Wolf",
+      "desc": "When a wolf dies, Howler lets out a cry that reveals one random village role"
+    },
+    "loneWolf": {
+      "name": "Lone Wolf",
+      "desc": "A werewolf who also wins solo if they are the last wolf alive. Has own kill target"
+    },
+    "venomWolf": {
+      "name": "Venom Wolf",
+      "desc": "Once per game, poison a player. That player dies the following night regardless"
+    },
+    "headhunter": {
+      "name": "Headhunter",
+      "desc": "Get your target voted out to win. If target dies otherwise, join Village"
+    },
+    "fool": {
+      "name": "Fool",
+      "desc": "Win by getting yourself voted out during the day"
+    },
+    "bomber": {
+      "name": "Bomber",
+      "desc": "Place a bomb at night, explodes next night. Immune to werewolf kills"
+    },
+    "serialKiller": {
+      "name": "Serial Killer",
+      "desc": "Kill one player each night independently. Win when you are the last one standing"
+    },
+    "cupid": {
+      "name": "Cupid",
+      "desc": "On the first night, link two players as lovers. If one dies, the other dies too. Lovers win together if they are the last 2 alive"
+    },
+    "arsonist": {
+      "name": "Arsonist",
+      "desc": "Douse a player in gasoline each night. Ignite to kill all doused players at once. Win when all others are dead"
+    },
+    "survivor": {
+      "name": "Survivor",
+      "desc": "Has 2 bulletproof vests. Win by simply surviving to the end of the game"
+    },
+    "amnesiac": {
+      "name": "Amnesiac",
+      "desc": "Doesn't remember their role. Choose a dead player to copy their role and team"
+    },
+    "doppelganger": {
+      "name": "Doppelganger",
+      "desc": "Choose a player on night 1. When that player dies, you become their role"
+    },
+    "jester": {
+      "name": "Jester",
+      "desc": "Win by getting yourself voted out. When voted out, one player who voted for you dies"
+    },
+    "vigilante": {
+      "name": "Vigilante",
+      "desc": "Has 1 bullet to shoot a suspect at night. Be careful — you might kill an innocent villager!"
+    },
+    "spy": {
+      "name": "Spy",
+      "desc": "Each night, learn which player the werewolves targeted. Information is power!"
+    },
+    "jailer": {
+      "name": "Jailer",
+      "desc": "Lock a player in jail each night. They cannot be killed or use abilities. Can't jail the same person twice in a row"
+    },
+    "graveRobber": {
+      "name": "Grave Robber",
+      "desc": "Each night, peek at a dead player's grave to learn their role. Useful for deduction!"
+    },
+    "infectorWolf": {
+      "name": "Infector Wolf",
+      "desc": "Once per game, infect a player instead of killing. Infected appear Evil to seers for 2 nights"
+    },
+    "stalkerWolf": {
+      "name": "Stalker Wolf",
+      "desc": "Each night, stalk a player to learn who they visited. Share intel with your pack"
+    },
+    "cursedWolf": {
+      "name": "Cursed Wolf",
+      "desc": "If voted out during the day, one random player who voted for you also dies"
+    },
+    "pirate": {
+      "name": "Pirate",
+      "desc": "Duel a player each night — they die unless protected. Win after 2 successful duels"
+    },
+    "plagueDoctor": {
+      "name": "Plague Doctor",
+      "desc": "Spread plague each night. When you die, all plagued players die with you. Win if 3+ are plagued when you die"
+    },
+    "corruptor": {
+      "name": "Corruptor",
+      "desc": "Corrupt a player each night — they permanently appear Evil to seers. Win when 3 players are corrupted"
+    }
   },
   "team": {
     "village": "Village Team",
@@ -249,7 +424,12 @@
     "serialKiller": "{player} was murdered by the Serial Killer",
     "arsonist": "{player} was burned by the Arsonist",
     "venom": "{player} died from the Venom Wolf's poison",
-    "lovers": "{player} died of a broken heart"
+    "lovers": "{player} died of a broken heart",
+    "vigilante": "{player} was shot by the Vigilante",
+    "jailer": "{player} was executed in jail",
+    "pirate": "{player} was killed in a pirate duel",
+    "plague": "{player} died from the plague",
+    "cursedWolfRevenge": "{player} was cursed and died after voting"
   },
   "win": {
     "village": "The Village Wins!",
@@ -262,6 +442,9 @@
     "survivor": "The Survivor Wins!",
     "jester": "The Jester Wins!",
     "lovers": "The Lovers Win!",
-    "loneWolf": "The Lone Wolf Wins!"
+    "loneWolf": "The Lone Wolf Wins!",
+    "pirate": "The Pirate Wins!",
+    "plagueDoctor": "The Plague Doctor Wins!",
+    "corruptor": "The Corruptor Wins!"
   }
 }

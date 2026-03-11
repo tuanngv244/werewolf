@@ -1,6 +1,6 @@
 // ============================================================
 // Game Types — Werewolf Game (Ma Soi)
-// 40 Roles: 19 Village + 10 Werewolf + 10 Solo + Villager filler
+// 50 Roles: 23 Village + 13 Werewolf + 13 Solo + Villager filler
 // ============================================================
 
 export enum Team {
@@ -10,7 +10,7 @@ export enum Team {
 }
 
 export enum Role {
-  // Village Team — with abilities (11)
+  // Village Team — with abilities (15)
   DOCTOR = 'doctor',
   GUNNER = 'gunner',
   SEER = 'seer',
@@ -22,6 +22,10 @@ export enum Role {
   CURSED = 'cursed',
   BODYGUARD = 'bodyguard',
   PRIEST = 'priest',
+  VIGILANTE = 'vigilante',
+  SPY = 'spy',
+  JAILER = 'jailer',
+  GRAVE_ROBBER = 'grave_robber',
   // Village Team — passive/no-ability (8)
   ELDER = 'elder',
   BAKER = 'baker',
@@ -31,7 +35,7 @@ export enum Role {
   SLEEPWALKER = 'sleepwalker',
   HERMIT = 'hermit',
   APPRENTICE_SEER = 'apprentice_seer',
-  // Werewolf Team (10)
+  // Werewolf Team (13)
   WEREWOLF = 'werewolf',
   WEREWOLF_SHAMAN = 'werewolf_shaman',
   ALPHA_WEREWOLF = 'alpha_werewolf',
@@ -42,7 +46,10 @@ export enum Role {
   HOWLER_WOLF = 'howler_wolf',
   LONE_WOLF = 'lone_wolf',
   VENOM_WOLF = 'venom_wolf',
-  // Solo Team (10)
+  INFECTOR_WOLF = 'infector_wolf',
+  STALKER_WOLF = 'stalker_wolf',
+  CURSED_WOLF = 'cursed_wolf',
+  // Solo Team (13)
   HEADHUNTER = 'headhunter',
   FOOL = 'fool',
   BOMBER = 'bomber',
@@ -53,6 +60,9 @@ export enum Role {
   AMNESIAC = 'amnesiac',
   DOPPELGANGER = 'doppelganger',
   JESTER = 'jester',
+  PIRATE = 'pirate',
+  PLAGUE_DOCTOR = 'plague_doctor',
+  CORRUPTOR = 'corruptor',
   // Filler
   VILLAGER = 'villager',
 }
@@ -87,6 +97,11 @@ export enum DeathCause {
   ARSONIST_FIRE = 'arsonist_fire',
   VENOM = 'venom',
   LOVERS_SUICIDE = 'lovers_suicide',
+  VIGILANTE_SHOT = 'vigilante_shot',
+  JAILER_EXECUTE = 'jailer_execute',
+  PIRATE_DUEL = 'pirate_duel',
+  PLAGUE = 'plague',
+  CURSED_WOLF_REVENGE = 'cursed_wolf_revenge',
 }
 
 export enum WinCondition {
@@ -101,6 +116,9 @@ export enum WinCondition {
   JESTER_WINS = 'jester_wins',
   LOVERS_WIN = 'lovers_win',
   LONE_WOLF_WINS = 'lone_wolf_wins',
+  PIRATE_WINS = 'pirate_wins',
+  PLAGUE_DOCTOR_WINS = 'plague_doctor_wins',
+  CORRUPTOR_WINS = 'corruptor_wins',
 }
 
 export interface PlayerState {
@@ -141,12 +159,28 @@ export interface PlayerState {
   loversPartnerId?: string; // set by Cupid
   isDoused?: boolean; // set by Arsonist
   nightmareBlocked?: boolean; // set by Nightmare Wolf
+  isJailed?: boolean; // set by Jailer
+  isInfected?: boolean; // set by Infector Wolf
+  infectedRounds?: number; // rounds remaining as infected
+  isPlagued?: boolean; // set by Plague Doctor
+  isCorrupted?: boolean; // set by Corruptor (seer result permanently Evil)
+  // New role states
+  vigilanteState?: VigilanteState;
+  spyState?: SpyState;
+  jailerState?: JailerState;
+  graveRobberState?: GraveRobberState;
+  infectorWolfState?: InfectorWolfState;
+  stalkerWolfState?: StalkerWolfState;
+  cursedWolfState?: CursedWolfState;
+  pirateState?: PirateState;
+  plagueDoctorState?: PlagueDoctorState;
+  corruptorState?: CorruptorState;
 }
 
 export interface GameTimers {
-  night: number;   // seconds
-  day: number;     // seconds
-  vote: number;    // seconds
+  night: number; // seconds
+  day: number; // seconds
+  vote: number; // seconds
   lastWords: number; // seconds
 }
 
@@ -187,6 +221,16 @@ export interface NightActions {
   nightmareWolfTarget?: string;
   venomWolfTarget?: string;
   loneWolfTarget?: string;
+  // New role actions
+  vigilanteTarget?: string;
+  spyTarget?: string;
+  jailerTarget?: string;
+  graveRobberTarget?: string;
+  infectorWolfTarget?: string;
+  stalkerWolfTarget?: string;
+  pirateTarget?: string;
+  plagueDoctorTarget?: string;
+  corruptorTarget?: string;
 }
 
 // Role-specific state
@@ -292,4 +336,47 @@ export interface LoneWolfState {
 
 export interface VenomWolfState {
   hasVenom: boolean; // one-time: poison a player who dies next night
+}
+
+// ─── New Role States (10 new roles) ────────────────
+
+export interface VigilanteState {
+  hasBullet: boolean; // one-time kill at night — can accidentally kill villager
+}
+
+export interface SpyState {
+  // passive: receives info about who wolves visited
+}
+
+export interface JailerState {
+  jailedPlayerId?: string; // currently jailed player
+  lastJailed?: string; // can't jail same person 2 nights in a row
+}
+
+export interface GraveRobberState {
+  lastRobbedRole?: Role; // the role of the last dead player they checked
+}
+
+export interface InfectorWolfState {
+  hasInfection: boolean; // one-time: infect instead of kill
+}
+
+export interface StalkerWolfState {
+  // passive: learns who a target visited at night
+}
+
+export interface CursedWolfState {
+  // passive: if voted out, one random voter dies
+}
+
+export interface PirateState {
+  successfulDuels: number; // wins after 2 successful duels
+}
+
+export interface PlagueDoctorState {
+  plaguedPlayers: string[]; // players infected with plague
+}
+
+export interface CorruptorState {
+  corruptedPlayers: string[]; // players whose seer result is now Evil
 }

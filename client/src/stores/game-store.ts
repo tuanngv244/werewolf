@@ -67,7 +67,13 @@ interface GameState {
   headhunterTarget: string | null;
 
   // Actions
-  setGame: (gameId: string, players: GamePlayer[], timers: GameTimers, phase?: GamePhase | null, phaseEndAt?: number | null) => void;
+  setGame: (
+    gameId: string,
+    players: GamePlayer[],
+    timers: GameTimers,
+    phase?: GamePhase | null,
+    phaseEndAt?: number | null,
+  ) => void;
   setPhase: (phase: GamePhase, endAt: number, round?: number) => void;
   setMyRole: (role: Role, team: Team, headhunterTarget?: string) => void;
   updatePlayer: (playerId: string, updates: Partial<GamePlayer>) => void;
@@ -108,8 +114,23 @@ const initialState = {
 export const useGameStore = create<GameState>()((set) => ({
   ...initialState,
 
-  setGame: (gameId, players, timers, phase, phaseEndAt) =>
-    set({ gameId, players, timers, phase: phase || null, phaseEndAt: phaseEndAt || null, round: 0 }),
+  setGame: (gameId, players, timers, phase, phaseEndAt) => {
+    // Deduplicate players by ID to prevent React key warnings
+    const seen = new Set<string>();
+    const uniquePlayers = players.filter((p) => {
+      if (seen.has(p.id)) return false;
+      seen.add(p.id);
+      return true;
+    });
+    set({
+      gameId,
+      players: uniquePlayers,
+      timers,
+      phase: phase || null,
+      phaseEndAt: phaseEndAt || null,
+      round: 0,
+    });
+  },
 
   setPhase: (phase, endAt, round) =>
     set((state) => ({
@@ -128,37 +149,26 @@ export const useGameStore = create<GameState>()((set) => ({
 
   updatePlayer: (playerId, updates) =>
     set((state) => ({
-      players: state.players.map((p) =>
-        p.id === playerId ? { ...p, ...updates } : p,
-      ),
+      players: state.players.map((p) => (p.id === playerId ? { ...p, ...updates } : p)),
     })),
 
-  setNightResult: (result) =>
-    set({ nightResult: result }),
+  setNightResult: (result) => set({ nightResult: result }),
 
-  setVoteState: (voteState) =>
-    set({ voteState }),
+  setVoteState: (voteState) => set({ voteState }),
 
-  setNightAction: (target) =>
-    set({ nightActionDone: true, nightActionTarget: target }),
+  setNightAction: (target) => set({ nightActionDone: true, nightActionTarget: target }),
 
-  setWinners: (team, playerIds) =>
-    set({ winners: { team, playerIds } }),
+  setWinners: (team, playerIds) => set({ winners: { team, playerIds } }),
 
-  setSeerResult: (seerResult) =>
-    set({ seerResult }),
+  setSeerResult: (seerResult) => set({ seerResult }),
 
-  setAuraSeerResult: (auraSeerResult) =>
-    set({ auraSeerResult }),
+  setAuraSeerResult: (auraSeerResult) => set({ auraSeerResult }),
 
-  setWerewolfSeerResult: (werewolfSeerResult) =>
-    set({ werewolfSeerResult }),
+  setWerewolfSeerResult: (werewolfSeerResult) => set({ werewolfSeerResult }),
 
-  setWerewolfTeam: (werewolfTeam) =>
-    set({ werewolfTeam }),
+  setWerewolfTeam: (werewolfTeam) => set({ werewolfTeam }),
 
-  setIsAlive: (isAlive) =>
-    set({ isAlive }),
+  setIsAlive: (isAlive) => set({ isAlive }),
 
   resetGame: () => set(initialState),
 }));

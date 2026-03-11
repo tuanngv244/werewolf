@@ -68,6 +68,12 @@ export function useSocket() {
 
       socket.on('game:dawn_result', (result) => {
         setNightResult(result);
+        // Mark ALL killed players as dead in the store
+        if (result.killed && Array.isArray(result.killed)) {
+          for (const killedId of result.killed) {
+            updatePlayer(killedId, { isAlive: false });
+          }
+        }
         // Check if local player was killed in dawn results
         const userId = useAuthStore.getState().user?.id;
         if (userId && result.killed && result.killed.includes(userId)) {
@@ -183,10 +189,24 @@ export function useSocket() {
       cleanupListeners();
     };
   }, [
-    setCurrentRoom, updateRoomPlayer, removeRoomPlayer, updateRoomSettings,
-    setGame, setMyRole, setPhase, setNightResult, setVoteState,
-    updatePlayer, setWinners, setSeerResult, setAuraSeerResult,
-    setWerewolfSeerResult, setWerewolfTeam, setIsAlive, addMessage, setActiveChannel,
+    setCurrentRoom,
+    updateRoomPlayer,
+    removeRoomPlayer,
+    updateRoomSettings,
+    setGame,
+    setMyRole,
+    setPhase,
+    setNightResult,
+    setVoteState,
+    updatePlayer,
+    setWinners,
+    setSeerResult,
+    setAuraSeerResult,
+    setWerewolfSeerResult,
+    setWerewolfTeam,
+    setIsAlive,
+    addMessage,
+    setActiveChannel,
   ]);
 
   const emit = useCallback((event: string, data?: unknown) => {

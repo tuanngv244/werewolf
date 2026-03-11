@@ -5,9 +5,21 @@ import { isWerewolfRole } from '@shared/constants/roles';
 import { randomUUID } from 'crypto';
 
 const BOT_NAMES = [
-  'Luna 🌙', 'Shadow 🐾', 'Fang 🐺', 'Mystic ✨', 'Storm ⚡',
-  'Raven 🪶', 'Ember 🔥', 'Frost ❄️', 'Sage 🌿', 'Blaze 💥',
-  'Dusk 🌅', 'Echo 🔮', 'Ivy 🍀', 'Hawk 🦅', 'Coral 🌊',
+  'Luna 🌙',
+  'Shadow 🐾',
+  'Fang 🐺',
+  'Mystic ✨',
+  'Storm ⚡',
+  'Raven 🪶',
+  'Ember 🔥',
+  'Frost ❄️',
+  'Sage 🌿',
+  'Blaze 💥',
+  'Dusk 🌅',
+  'Echo 🔮',
+  'Ivy 🍀',
+  'Hawk 🦅',
+  'Coral 🌊',
 ];
 
 @Injectable()
@@ -19,7 +31,9 @@ export class BotService {
   /**
    * Generate bot players to fill a room. Returns array of bot RoomPlayer objects.
    */
-  generateBotPlayers(count: number): { id: string; username: string; isReady: boolean; isHost: boolean; isConnected: boolean }[] {
+  generateBotPlayers(
+    count: number,
+  ): { id: string; username: string; isReady: boolean; isHost: boolean; isConnected: boolean }[] {
     const shuffled = [...BOT_NAMES].sort(() => Math.random() - 0.5);
     return Array.from({ length: count }, (_, i) => ({
       id: `bot-${randomUUID()}`,
@@ -48,7 +62,7 @@ export class BotService {
     const game = await this.gameService.getGame(gameId);
     if (!game) return;
 
-    const botPlayers = game.players.filter(p => this.isBot(p.id) && p.isAlive);
+    const botPlayers = game.players.filter((p) => this.isBot(p.id) && p.isAlive);
     if (botPlayers.length === 0) return;
 
     if (phase === GamePhase.NIGHT) {
@@ -67,7 +81,7 @@ export class BotService {
     botPlayers: GameState['players'],
   ): void {
     const timers: NodeJS.Timeout[] = [];
-    const alivePlayers = game.players.filter(p => p.isAlive);
+    const alivePlayers = game.players.filter((p) => p.isAlive);
 
     for (const bot of botPlayers) {
       const delay = 1000 + Math.random() * 3000; // 1-4s random delay
@@ -76,12 +90,10 @@ export class BotService {
         const freshGame = await this.gameService.getGame(gameId);
         if (!freshGame || freshGame.phase !== GamePhase.NIGHT) return;
 
-        const freshBot = freshGame.players.find(p => p.id === bot.id);
+        const freshBot = freshGame.players.find((p) => p.id === bot.id);
         if (!freshBot || !freshBot.isAlive) return;
 
-        const aliveOthers = freshGame.players.filter(
-          p => p.isAlive && p.id !== bot.id,
-        );
+        const aliveOthers = freshGame.players.filter((p) => p.isAlive && p.id !== bot.id);
         if (aliveOthers.length === 0) return;
 
         const randomTarget = aliveOthers[Math.floor(Math.random() * aliveOthers.length)];
@@ -118,7 +130,7 @@ export class BotService {
         return { action: 'protect' };
       case Role.WITCH: {
         // Randomly choose kill (50% chance if has potion)
-        const witch = game.players.find(p => p.id === botId);
+        const witch = game.players.find((p) => p.id === botId);
         if (witch?.witchState?.hasKillPotion) {
           return { action: 'kill' };
         }
@@ -136,7 +148,7 @@ export class BotService {
         return { action: 'kill' };
       case Role.ARSONIST:
         // Alternate between douse and ignite
-        const arsonist = game.players.find(p => p.id === botId);
+        const arsonist = game.players.find((p) => p.id === botId);
         if (arsonist?.arsonistState && arsonist.arsonistState.dousedPlayers.length >= 2) {
           return { action: Math.random() < 0.5 ? 'ignite' : 'douse' };
         }
@@ -145,6 +157,25 @@ export class BotService {
         return game.round === 1 ? { action: 'link' } : { action: null };
       case Role.DOPPELGANGER:
         return game.round === 1 ? { action: 'choose' } : { action: null };
+      case Role.VIGILANTE: {
+        const vig = game.players.find((p) => p.id === botId);
+        if (vig?.vigilanteState?.hasBullet) {
+          return { action: 'vigilante_kill' };
+        }
+        return { action: null };
+      }
+      case Role.SPY:
+        return { action: 'spy_watch' };
+      case Role.JAILER:
+        return { action: 'jail' };
+      case Role.GRAVE_ROBBER:
+        return { action: 'rob_grave' };
+      case Role.PIRATE:
+        return { action: 'duel' };
+      case Role.PLAGUE_DOCTOR:
+        return { action: 'plague' };
+      case Role.CORRUPTOR:
+        return { action: 'corrupt' };
       default:
         return { action: null };
     }
@@ -156,27 +187,24 @@ export class BotService {
    * random voting across N players almost never reaches majority and
    * the game stalls with no eliminations.
    */
-  private scheduleVotes(
-    gameId: string,
-    game: GameState,
-    botPlayers: GameState['players'],
-  ): void {
+  private scheduleVotes(gameId: string, game: GameState, botPlayers: GameState['players']): void {
     const timers: NodeJS.Timeout[] = [];
-    const alivePlayers = game.players.filter(p => p.isAlive);
+    const alivePlayers = game.players.filter((p) => p.isAlive);
 
     // Pre-select a coordinated target for each faction so bots reach majority.
     // Werewolf bots all vote for the same non-wolf target.
     // Village bots all vote for the same target (random alive player).
     // Some bots (20%) deviate to add unpredictability.
 
-    const nonWolves = alivePlayers.filter(p => !isWerewolfRole(p.role));
-    const wolfVoteTarget = nonWolves.length > 0
-      ? nonWolves[Math.floor(Math.random() * nonWolves.length)]
-      : alivePlayers[Math.floor(Math.random() * alivePlayers.length)];
+    const nonWolves = alivePlayers.filter((p) => !isWerewolfRole(p.role));
+    const wolfVoteTarget =
+      nonWolves.length > 0
+        ? nonWolves[Math.floor(Math.random() * nonWolves.length)]
+        : alivePlayers[Math.floor(Math.random() * alivePlayers.length)];
 
     // Village bots pick a random player to coordinate on
     // Prefer wolf players if any are "suspicious" (random chance to guess right)
-    const wolves = alivePlayers.filter(p => isWerewolfRole(p.role));
+    const wolves = alivePlayers.filter((p) => isWerewolfRole(p.role));
     let villageVoteTarget;
     // 40% chance village bots correctly suspect a wolf (simulates game intuition)
     if (wolves.length > 0 && Math.random() < 0.4) {
@@ -192,12 +220,10 @@ export class BotService {
         const freshGame = await this.gameService.getGame(gameId);
         if (!freshGame || freshGame.phase !== GamePhase.VOTE) return;
 
-        const freshBot = freshGame.players.find(p => p.id === bot.id);
+        const freshBot = freshGame.players.find((p) => p.id === bot.id);
         if (!freshBot || !freshBot.isAlive) return;
 
-        const aliveOthers = freshGame.players.filter(
-          p => p.isAlive && p.id !== bot.id,
-        );
+        const aliveOthers = freshGame.players.filter((p) => p.isAlive && p.id !== bot.id);
         if (aliveOthers.length === 0) return;
 
         let target;
@@ -206,10 +232,11 @@ export class BotService {
         if (isWerewolfRole(freshBot.role)) {
           // Werewolf bots coordinate on the same non-wolf target
           if (shouldDeviate || wolfVoteTarget.id === bot.id) {
-            const candidates = aliveOthers.filter(p => !isWerewolfRole(p.role));
-            target = candidates.length > 0
-              ? candidates[Math.floor(Math.random() * candidates.length)]
-              : aliveOthers[Math.floor(Math.random() * aliveOthers.length)];
+            const candidates = aliveOthers.filter((p) => !isWerewolfRole(p.role));
+            target =
+              candidates.length > 0
+                ? candidates[Math.floor(Math.random() * candidates.length)]
+                : aliveOthers[Math.floor(Math.random() * aliveOthers.length)];
           } else {
             target = wolfVoteTarget;
           }
@@ -228,10 +255,7 @@ export class BotService {
       timers.push(timer);
     }
 
-    this.activeGames.set(gameId, [
-      ...(this.activeGames.get(gameId) || []),
-      ...timers,
-    ]);
+    this.activeGames.set(gameId, [...(this.activeGames.get(gameId) || []), ...timers]);
   }
 
   /**
@@ -240,7 +264,7 @@ export class BotService {
   clearTimers(gameId: string): void {
     const timers = this.activeGames.get(gameId);
     if (timers) {
-      timers.forEach(t => clearTimeout(t));
+      timers.forEach((t) => clearTimeout(t));
       this.activeGames.delete(gameId);
     }
   }

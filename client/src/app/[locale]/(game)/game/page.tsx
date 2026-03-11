@@ -183,8 +183,16 @@ const ChatPanel = React.memo(function ChatPanel({ isNight }: { isNight: boolean 
     return channels;
   }, [isAlive, phase, myRole]);
 
+  const canSendMessage = useMemo(() => {
+    if (!isAlive) {
+      // Dead players can only chat in DEAD channel
+      return activeChannel === 'DEAD';
+    }
+    return availableChannels.some((ch) => ch.key === activeChannel);
+  }, [isAlive, activeChannel, availableChannels]);
+
   const handleSend = () => {
-    if (!input.trim()) return;
+    if (!input.trim() || !canSendMessage) return;
     emit('chat:send', { channel: activeChannel, content: input.trim() });
     setInput('');
   };
@@ -246,13 +254,16 @@ const ChatPanel = React.memo(function ChatPanel({ isNight }: { isNight: boolean 
             isNight
               ? 'bg-night-bg/60 border border-night-border/50 text-night-text placeholder-night-muted'
               : 'bg-white/60 border border-day-border/50 text-day-text placeholder-day-muted'
-          }`}
+          } ${!canSendMessage ? 'opacity-50 cursor-not-allowed' : ''}`}
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={(e) => canSendMessage && setInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-          placeholder={t('chat.placeholder')}
+          placeholder={
+            !isAlive && activeChannel !== 'DEAD' ? t('game.deadCantChat') : t('chat.placeholder')
+          }
+          disabled={!canSendMessage}
         />
-        <Button size="sm" onClick={handleSend}>
+        <Button size="sm" onClick={handleSend} disabled={!canSendMessage}>
           {t('chat.send')}
         </Button>
       </div>
@@ -276,6 +287,7 @@ function NightActionPanel({
   const { user } = useAuthStore();
   const { emit } = useEmit();
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
+  const [witchAction, setWitchAction] = useState<'heal' | 'kill' | null>(null);
 
   // Sync 3D selection with night action target
   useEffect(() => {
@@ -378,6 +390,16 @@ function NightActionPanel({
     [Role.AMNESIAC]: '❓',
     [Role.DOPPELGANGER]: '🪞',
     [Role.JESTER]: '🤡',
+    [Role.VIGILANTE]: '🎯',
+    [Role.SPY]: '🕵️',
+    [Role.JAILER]: '🔒',
+    [Role.GRAVE_ROBBER]: '⚰️',
+    [Role.INFECTOR_WOLF]: '🐺',
+    [Role.STALKER_WOLF]: '🐺',
+    [Role.CURSED_WOLF]: '🐺',
+    [Role.PIRATE]: '🏴‍☠️',
+    [Role.PLAGUE_DOCTOR]: '🩺',
+    [Role.CORRUPTOR]: '👿',
   };
 
   const hasNightAction = [
@@ -406,6 +428,16 @@ function NightActionPanel({
     Role.DOPPELGANGER,
     Role.AMNESIAC,
     Role.APPRENTICE_SEER,
+    Role.VIGILANTE,
+    Role.SPY,
+    Role.JAILER,
+    Role.GRAVE_ROBBER,
+    Role.INFECTOR_WOLF,
+    Role.STALKER_WOLF,
+    Role.CURSED_WOLF,
+    Role.PIRATE,
+    Role.PLAGUE_DOCTOR,
+    Role.CORRUPTOR,
   ].includes(myRole);
 
   const handleConfirmAction = () => {
@@ -416,7 +448,7 @@ function NightActionPanel({
     else if (myRole === Role.AURA_SEER) action = 'aura_check';
     else if (myRole === Role.DOCTOR) action = 'protect';
     else if (myRole === Role.BODYGUARD) action = 'protect';
-    else if (myRole === Role.WITCH) action = selectedTarget ? 'kill' : 'heal';
+    else if (myRole === Role.WITCH) action = witchAction || 'heal';
     else if (myRole === Role.BOMBER) action = 'bomb';
     else if (myRole === Role.BEAST_HUNTER) action = 'trap';
     else if (myRole === Role.AVENGER) action = 'revenge';
@@ -426,6 +458,13 @@ function NightActionPanel({
     else if (myRole === Role.ARSONIST) action = 'douse';
     else if (myRole === Role.DOPPELGANGER) action = 'choose';
     else if (myRole === Role.AMNESIAC) action = 'choose';
+    else if (myRole === Role.VIGILANTE) action = 'vigilante_kill';
+    else if (myRole === Role.SPY) action = 'spy_watch';
+    else if (myRole === Role.JAILER) action = 'jail';
+    else if (myRole === Role.GRAVE_ROBBER) action = 'rob_grave';
+    else if (myRole === Role.PIRATE) action = 'duel';
+    else if (myRole === Role.PLAGUE_DOCTOR) action = 'plague';
+    else if (myRole === Role.CORRUPTOR) action = 'corrupt';
 
     emit('game:night_action', { gameId, action, targetId: selectedTarget });
     useGameStore.getState().setNightAction(selectedTarget);
@@ -440,6 +479,102 @@ function NightActionPanel({
           {t(`roles.${roleToCamel(myRole)}`)}
         </p>
         <p className="text-sm text-night-muted mt-2">{t('phases.night')}</p>
+      </GlassCard>
+    );
+  }
+
+  // ─── Witch-specific UI with Heal/Kill buttons ───
+  if (myRole === Role.WITCH) {
+    return (
+      <GlassCard isNight>
+        <div className="flex items-center gap-3 mb-3">
+          <span className="text-3xl">🧙</span>
+          <div>
+            <h3 className="font-heading font-semibold text-night-text">{t('roles.witch')}</h3>
+            <p className="text-xs text-night-muted">{t('game.witchChooseAction')}</p>
+          </div>
+        </div>
+
+        {/* Heal / Kill mode buttons */}
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          <button
+            onClick={() => {
+              setWitchAction('heal');
+              setSelectedTarget(null);
+            }}
+            className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all ${
+              witchAction === 'heal'
+                ? 'bg-emerald-500/25 border-emerald-400 ring-1 ring-emerald-400/40'
+                : 'bg-night-bg/40 border-night-border/30 hover:bg-night-bg/60 hover:border-emerald-400/50'
+            }`}
+          >
+            <span className="text-2xl">💚</span>
+            <span
+              className={`text-xs font-semibold ${
+                witchAction === 'heal' ? 'text-emerald-300' : 'text-night-muted'
+              }`}
+            >
+              {t('game.witchHeal')}
+            </span>
+          </button>
+          <button
+            onClick={() => {
+              setWitchAction('kill');
+              setSelectedTarget(null);
+            }}
+            className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all ${
+              witchAction === 'kill'
+                ? 'bg-red-500/25 border-red-400 ring-1 ring-red-400/40'
+                : 'bg-night-bg/40 border-night-border/30 hover:bg-night-bg/60 hover:border-red-400/50'
+            }`}
+          >
+            <span className="text-2xl">☠️</span>
+            <span
+              className={`text-xs font-semibold ${
+                witchAction === 'kill' ? 'text-red-300' : 'text-night-muted'
+              }`}
+            >
+              {t('game.witchKill')}
+            </span>
+          </button>
+        </div>
+
+        {/* Show player list for Kill mode */}
+        {witchAction === 'kill' && (
+          <>
+            <p className="text-xs text-night-muted mb-2">{t('game.selectTarget')}</p>
+            <PlayerList
+              onSelect={(id) => {
+                setSelectedTarget(id);
+                onSelectPlayer?.(id);
+              }}
+              selectedId={selectedTarget}
+              excludeIds={[user?.id || '']}
+              isNight
+            />
+          </>
+        )}
+
+        {/* Heal mode info */}
+        {witchAction === 'heal' && (
+          <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-400/20 mb-2">
+            <p className="text-xs text-emerald-300">{t('game.witchHealDesc')}</p>
+          </div>
+        )}
+
+        <div className="mt-3">
+          <Button
+            className="w-full"
+            onClick={handleConfirmAction}
+            disabled={!witchAction || (witchAction === 'kill' && !selectedTarget)}
+          >
+            {witchAction === 'heal'
+              ? `💚 ${t('game.witchHeal')}`
+              : witchAction === 'kill'
+                ? `☠️ ${t('game.witchKill')}`
+                : t('common.confirm')}
+          </Button>
+        </div>
       </GlassCard>
     );
   }
@@ -485,11 +620,12 @@ function VotePanel({
 }) {
   const t = useTranslations();
   const { players, voteState, gameId } = useGameStore();
+  const isAlive = useGameStore((s) => s.isAlive);
   const { emit } = useEmit();
   const [votedFor, setVotedFor] = useState<string | null>(null);
 
   const handleVote = (playerId: string) => {
-    if (!gameId) return;
+    if (!gameId || !isAlive) return;
     setVotedFor(playerId);
     onSelectPlayer?.(playerId);
     emit('game:vote', { gameId, targetId: playerId });
@@ -502,21 +638,52 @@ function VotePanel({
     }
   }, [selectedPlayerId, votedFor, gameId]);
 
-  const alivePlayers = players.filter((p) => p.isAlive);
+  // Show all players: alive ones are votable, dead ones are greyed out
+  const sortedPlayers = [...players].sort((a, b) => {
+    // Alive players first, dead last
+    if (a.isAlive && !b.isAlive) return -1;
+    if (!a.isAlive && b.isAlive) return 1;
+    return 0;
+  });
 
   return (
     <GlassCard isNight={isNight}>
-      <h3 className="font-heading font-semibold mb-3">{t('game.voteTitle')}</h3>
+      <div className="flex items-center gap-2 mb-3">
+        <h3 className="font-heading font-semibold">{t('game.voteTitle')}</h3>
+        {!isAlive && <Badge variant="warning">👁 {t('game.spectating')}</Badge>}
+      </div>
       <div className="space-y-2">
-        {alivePlayers.map((player) => {
+        {sortedPlayers.map((player) => {
           const voteCount = voteState?.votes
             ? Object.values(voteState.votes).filter((v) => v === player.id).length
             : 0;
+
+          if (!player.isAlive) {
+            return (
+              <div
+                key={player.id}
+                className={`w-full flex items-center justify-between p-2.5 rounded-xl text-sm opacity-40 ${
+                  isNight ? 'bg-night-bg/30' : 'bg-gray-100/50'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 bg-gray-400/20 rounded-full flex items-center justify-center text-xs">
+                    💀
+                  </div>
+                  <div className="min-w-0">
+                    <span className="font-semibold text-xs">{player.username}</span>
+                    <p className="text-[10px] text-danger">{t('game.dead')}</p>
+                  </div>
+                </div>
+              </div>
+            );
+          }
 
           return (
             <button
               key={player.id}
               onClick={() => handleVote(player.id)}
+              disabled={!isAlive}
               className={`w-full flex items-center justify-between p-2.5 rounded-xl transition-all text-sm ${
                 votedFor === player.id
                   ? 'bg-danger/20 border-2 border-danger'
@@ -538,15 +705,22 @@ function VotePanel({
           );
         })}
       </div>
-      {selectedPlayerId && !votedFor && (
-        <div className="mt-3">
-          <Button className="w-full" variant="danger" onClick={() => handleVote(selectedPlayerId)}>
-            {t('game.voteFor', {
-              player: players.find((p) => p.id === selectedPlayerId)?.username || '',
-            })}
-          </Button>
-        </div>
-      )}
+      {selectedPlayerId &&
+        !votedFor &&
+        isAlive &&
+        players.find((p) => p.id === selectedPlayerId)?.isAlive && (
+          <div className="mt-3">
+            <Button
+              className="w-full"
+              variant="danger"
+              onClick={() => handleVote(selectedPlayerId)}
+            >
+              {t('game.voteFor', {
+                player: players.find((p) => p.id === selectedPlayerId)?.username || '',
+              })}
+            </Button>
+          </div>
+        )}
     </GlassCard>
   );
 }
@@ -895,23 +1069,17 @@ export default function GamePage() {
                     <h3 className="font-heading font-semibold mb-2 text-sm">
                       {t('game.discussion')}
                     </h3>
-                    <PlayerList showDead isNight={false} />
+                    <PlayerList isNight={false} />
                   </GlassCard>
                   <GunnerPanel isNight={false} />
                 </div>
               )}
-              {phase === GamePhase.VOTE && isAlive && (
+              {phase === GamePhase.VOTE && (
                 <VotePanel
                   isNight={false}
                   selectedPlayerId={selectedPlayerId}
                   onSelectPlayer={setSelectedPlayerId}
                 />
-              )}
-              {phase === GamePhase.VOTE && !isAlive && (
-                <GlassCard isNight={false} className="text-center py-6">
-                  <span className="text-4xl block mb-2">💀</span>
-                  <p className="text-day-muted text-sm">{t('game.dead')}</p>
-                </GlassCard>
               )}
               {phase === GamePhase.VOTE_RESULT && (
                 <GlassCard isNight={false} className="text-center py-6">

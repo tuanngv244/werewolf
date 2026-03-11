@@ -129,7 +129,12 @@
     "gameStarting": "Trò Chơi Bắt Đầu!",
     "seerCheckResult": "{target} là {role}",
     "auraSeerCheckResult": "Linh khí của {target} là {result}",
-    "spectating": "Bạn đang xem trận đấu"
+    "spectating": "Bạn đang xem trận đấu",
+    "witchChooseAction": "Chọn bình thuốc",
+    "witchHeal": "Bình Cứu",
+    "witchKill": "Bình Độc",
+    "witchHealDesc": "Dùng bình cứu để cứu nạn nhân của sói đêm nay. Chỉ dùng được một lần.",
+    "deadCantChat": "Người chết chỉ có thể chat với hồn ma 👻"
   },
   "chat": {
     "placeholder": "Nhập tin nhắn...",
@@ -184,49 +189,219 @@
     "survivor": "Người Sống Sót",
     "amnesiac": "Kẻ Mất Trí",
     "doppelganger": "Kẻ Giả Mạo",
-    "jester": "Hề Cười"
+    "jester": "Hề Cười",
+    "vigilante": "Dân Quân",
+    "spy": "Gián Điệp",
+    "jailer": "Cai Ngục",
+    "graveRobber": "Kẻ Trộm Mộ",
+    "infectorWolf": "Sói Lây Nhiễm",
+    "stalkerWolf": "Sói Theo Dõi",
+    "cursedWolf": "Sói Nguyền Rủa",
+    "pirate": "Hải Tặc",
+    "plagueDoctor": "Bác Sĩ Dịch",
+    "corruptor": "Kẻ Tha Hoá"
   },
   "role": {
-    "villager": { "name": "Dân Làng", "desc": "Dân thường không có khả năng đặc biệt. Dùng trí tuệ để tìm sói!" },
-    "doctor": { "name": "Bác Sĩ", "desc": "Chọn một người để che chở mỗi đêm, người đó sẽ không bị giết" },
-    "gunner": { "name": "Xạ Thủ", "desc": "Có hai viên đạn để bắn ai đó vào ban ngày" },
-    "seer": { "name": "Tiên Tri", "desc": "Được xem vai trò của một người chơi mỗi đêm" },
-    "auraSeer": { "name": "Thầy Bói", "desc": "Xem được một người chơi thuộc phe nào mỗi đêm" },
-    "medium": { "name": "Thầy Đồng", "desc": "Nói chuyện với người đã chết mỗi đêm và hồi sinh một người mỗi ván" },
-    "witch": { "name": "Phù Thủy", "desc": "Có một bình cứu (chỉ khi bị tấn công) và một bình giết" },
-    "avenger": { "name": "Kẻ Báo Thù", "desc": "Chọn một người để chết khi bạn bị giết" },
-    "beastHunter": { "name": "Thợ Săn Quái Thú", "desc": "Đặt bẫy lên người chơi. Khi sói cắn người có bẫy, sói yếu nhất chết" },
-    "cursed": { "name": "Bán Sói", "desc": "Là Dân Làng cho tới khi bị Sói cắn, sau đó trở thành Sói" },
-    "bodyguard": { "name": "Vệ Sĩ", "desc": "Bảo vệ một người mỗi đêm. Không thể bảo vệ cùng người hai đêm liên. Nếu mục tiêu bị tấn công, Vệ Sĩ chết thay" },
-    "priest": { "name": "Linh Mục", "desc": "Có nước thánh. Nếu bị sói giết, sói tấn công cũng chết theo" },
-    "elder": { "name": "Trưởng Lão", "desc": "Sống sót lần bị sói tấn công đầu tiên. Chết bình thường lần thứ hai" },
-    "baker": { "name": "Thợ Làm Bánh", "desc": "Người làm bánh của làng. Mọi người biết ai là Thợ Làm Bánh. Nếu chết, làng mất tinh thần" },
-    "drunk": { "name": "Người Say", "desc": "Không biết vai trò thật của mình cho đến đêm thứ 3. Đóng vai Dân Làng trước đó" },
-    "mayor": { "name": "Trưởng Làng", "desc": "Có thể tiết lộ ban ngày để có gấp đôi phiếu bầu, nhưng trở thành mục tiêu" },
-    "pacifist": { "name": "Người Hoà Bình", "desc": "Dân làng hoà bình. Nếu bị treo cổ, tiết lộ tất cả người đã bỏ phiếu cho mình" },
-    "sleepwalker": { "name": "Người Mộng Du", "desc": "Lang thang ban đêm. Có cơ hội vô tình ghé thăm một người, biết họ có hành động đêm đó không" },
-    "hermit": { "name": "Ẩn Sĩ", "desc": "Sống một mình. Không thể bị sói nhắm vào đêm đầu tiên" },
-    "apprenticeSeer": { "name": "Học Trò Tiên Tri", "desc": "Là dân làng cho đến khi Tiên Tri chết, sau đó thừa hưởng sức mạnh của Tiên Tri" },
-    "werewolf": { "name": "Ma Sói", "desc": "Chọn một người để cắn chết vào mỗi đêm" },
-    "werewolfShaman": { "name": "Sói Pháp Sư", "desc": "Yểm một người ban ngày, người đó bị coi là Ác bởi Tiên Tri ban đêm" },
-    "alphaWerewolf": { "name": "Sói Đầu Đàn", "desc": "Ma Sói có gấp đôi phiếu bầu trong đêm" },
-    "werewolfSeer": { "name": "Sói Tiên Tri", "desc": "Xem vai trò của ai đó trong đêm, các Sói sẽ biết" },
-    "nightmareWolf": { "name": "Sói Ác Mộng", "desc": "Chọn một người để câm lặng. Người đó không thể dùng khả năng đêm đó" },
-    "shadowWolf": { "name": "Sói Bóng Đêm", "desc": "Hiển thị là Không Rõ với Tiên Tri. Ẩn náu giữa dân làng dễ dàng hơn" },
-    "bloodMoonWolf": { "name": "Sói Trăng Máu", "desc": "Cứ mỗi 3 đêm, nhân giết không thể bị Bác Sĩ hoặc Phù Thủy cứu" },
-    "howlerWolf": { "name": "Sói Trú", "desc": "Khi sói chết, Sói Trú trú lên tiết lộ một vai trò dân làng ngẫu nhiên" },
-    "loneWolf": { "name": "Sói Cô Độc", "desc": "Ma Sói cũng thắng độc lập nếu là sói cuối cùng còn sống. Có mục tiêu giết riêng" },
-    "venomWolf": { "name": "Sói Độc", "desc": "Một lần mỗi ván, độc một người chơi. Người đó chết đêm sau bất kể" },
-    "headhunter": { "name": "Thợ Săn Người", "desc": "Lừa mục tiêu bị treo cổ ban ngày. Nếu mục tiêu chết cách khác, thắng cùng Dân" },
-    "fool": { "name": "Thằng Ngố", "desc": "Lừa dân làng treo cổ bạn vào ban ngày" },
-    "bomber": { "name": "Kẻ Đặt Bom", "desc": "Đặt bom ban đêm, nổ đêm sau. Không thể bị Sói giết" },
-    "serialKiller": { "name": "Kẻ Giết Người", "desc": "Giết một người mỗi đêm độc lập. Thắng khi bạn là người cuối cùng sống sót" },
-    "cupid": { "name": "Thần Tình Yêu", "desc": "Đêm đầu tiên, ghép đôi hai người thành tình nhân. Nếu một người chết, người kia cũng chết. Tình nhân thắng nếu là 2 người cuối cùng" },
-    "arsonist": { "name": "Kẻ Phóng Hoả", "desc": "Tẩm xăng một người mỗi đêm. Đốt cháy để giết tất cả người bị tẩm xăng. Thắng khi tất cả đã chết" },
-    "survivor": { "name": "Người Sống Sót", "desc": "Có 2 áo chống đạn. Thắng bằng cách sống sót đến cuối game" },
-    "amnesiac": { "name": "Kẻ Mất Trí", "desc": "Không nhớ vai trò của mình. Chọn một người đã chết để sao chép vai trò và phe của họ" },
-    "doppelganger": { "name": "Kẻ Giả Mạo", "desc": "Chọn một người đêm đầu tiên. Khi người đó chết, bạn trở thành vai trò của họ" },
-    "jester": { "name": "Hề Cười", "desc": "Thắng bằng cách bị treo cổ. Khi bị treo cổ, một người đã bỏ phiếu cho bạn chết theo" }
+    "villager": {
+      "name": "Dân Làng",
+      "desc": "Dân thường không có khả năng đặc biệt. Dùng trí tuệ để tìm sói!"
+    },
+    "doctor": {
+      "name": "Bác Sĩ",
+      "desc": "Chọn một người để che chở mỗi đêm, người đó sẽ không bị giết"
+    },
+    "gunner": {
+      "name": "Xạ Thủ",
+      "desc": "Có hai viên đạn để bắn ai đó vào ban ngày"
+    },
+    "seer": {
+      "name": "Tiên Tri",
+      "desc": "Được xem vai trò của một người chơi mỗi đêm"
+    },
+    "auraSeer": {
+      "name": "Thầy Bói",
+      "desc": "Xem được một người chơi thuộc phe nào mỗi đêm"
+    },
+    "medium": {
+      "name": "Thầy Đồng",
+      "desc": "Nói chuyện với người đã chết mỗi đêm và hồi sinh một người mỗi ván"
+    },
+    "witch": {
+      "name": "Phù Thủy",
+      "desc": "Có một bình cứu (chỉ khi bị tấn công) và một bình giết"
+    },
+    "avenger": {
+      "name": "Kẻ Báo Thù",
+      "desc": "Chọn một người để chết khi bạn bị giết"
+    },
+    "beastHunter": {
+      "name": "Thợ Săn Quái Thú",
+      "desc": "Đặt bẫy lên người chơi. Khi sói cắn người có bẫy, sói yếu nhất chết"
+    },
+    "cursed": {
+      "name": "Bán Sói",
+      "desc": "Là Dân Làng cho tới khi bị Sói cắn, sau đó trở thành Sói"
+    },
+    "bodyguard": {
+      "name": "Vệ Sĩ",
+      "desc": "Bảo vệ một người mỗi đêm. Không thể bảo vệ cùng người hai đêm liên. Nếu mục tiêu bị tấn công, Vệ Sĩ chết thay"
+    },
+    "priest": {
+      "name": "Linh Mục",
+      "desc": "Có nước thánh. Nếu bị sói giết, sói tấn công cũng chết theo"
+    },
+    "elder": {
+      "name": "Trưởng Lão",
+      "desc": "Sống sót lần bị sói tấn công đầu tiên. Chết bình thường lần thứ hai"
+    },
+    "baker": {
+      "name": "Thợ Làm Bánh",
+      "desc": "Người làm bánh của làng. Mọi người biết ai là Thợ Làm Bánh. Nếu chết, làng mất tinh thần"
+    },
+    "drunk": {
+      "name": "Người Say",
+      "desc": "Không biết vai trò thật của mình cho đến đêm thứ 3. Đóng vai Dân Làng trước đó"
+    },
+    "mayor": {
+      "name": "Trưởng Làng",
+      "desc": "Có thể tiết lộ ban ngày để có gấp đôi phiếu bầu, nhưng trở thành mục tiêu"
+    },
+    "pacifist": {
+      "name": "Người Hoà Bình",
+      "desc": "Dân làng hoà bình. Nếu bị treo cổ, tiết lộ tất cả người đã bỏ phiếu cho mình"
+    },
+    "sleepwalker": {
+      "name": "Người Mộng Du",
+      "desc": "Lang thang ban đêm. Có cơ hội vô tình ghé thăm một người, biết họ có hành động đêm đó không"
+    },
+    "hermit": {
+      "name": "Ẩn Sĩ",
+      "desc": "Sống một mình. Không thể bị sói nhắm vào đêm đầu tiên"
+    },
+    "apprenticeSeer": {
+      "name": "Học Trò Tiên Tri",
+      "desc": "Là dân làng cho đến khi Tiên Tri chết, sau đó thừa hưởng sức mạnh của Tiên Tri"
+    },
+    "werewolf": {
+      "name": "Ma Sói",
+      "desc": "Chọn một người để cắn chết vào mỗi đêm"
+    },
+    "werewolfShaman": {
+      "name": "Sói Pháp Sư",
+      "desc": "Yểm một người ban ngày, người đó bị coi là Ác bởi Tiên Tri ban đêm"
+    },
+    "alphaWerewolf": {
+      "name": "Sói Đầu Đàn",
+      "desc": "Ma Sói có gấp đôi phiếu bầu trong đêm"
+    },
+    "werewolfSeer": {
+      "name": "Sói Tiên Tri",
+      "desc": "Xem vai trò của ai đó trong đêm, các Sói sẽ biết"
+    },
+    "nightmareWolf": {
+      "name": "Sói Ác Mộng",
+      "desc": "Chọn một người để câm lặng. Người đó không thể dùng khả năng đêm đó"
+    },
+    "shadowWolf": {
+      "name": "Sói Bóng Đêm",
+      "desc": "Hiển thị là Không Rõ với Tiên Tri. Ẩn náu giữa dân làng dễ dàng hơn"
+    },
+    "bloodMoonWolf": {
+      "name": "Sói Trăng Máu",
+      "desc": "Cứ mỗi 3 đêm, nhân giết không thể bị Bác Sĩ hoặc Phù Thủy cứu"
+    },
+    "howlerWolf": {
+      "name": "Sói Trú",
+      "desc": "Khi sói chết, Sói Trú trú lên tiết lộ một vai trò dân làng ngẫu nhiên"
+    },
+    "loneWolf": {
+      "name": "Sói Cô Độc",
+      "desc": "Ma Sói cũng thắng độc lập nếu là sói cuối cùng còn sống. Có mục tiêu giết riêng"
+    },
+    "venomWolf": {
+      "name": "Sói Độc",
+      "desc": "Một lần mỗi ván, độc một người chơi. Người đó chết đêm sau bất kể"
+    },
+    "headhunter": {
+      "name": "Thợ Săn Người",
+      "desc": "Lừa mục tiêu bị treo cổ ban ngày. Nếu mục tiêu chết cách khác, thắng cùng Dân"
+    },
+    "fool": {
+      "name": "Thằng Ngố",
+      "desc": "Lừa dân làng treo cổ bạn vào ban ngày"
+    },
+    "bomber": {
+      "name": "Kẻ Đặt Bom",
+      "desc": "Đặt bom ban đêm, nổ đêm sau. Không thể bị Sói giết"
+    },
+    "serialKiller": {
+      "name": "Kẻ Giết Người",
+      "desc": "Giết một người mỗi đêm độc lập. Thắng khi bạn là người cuối cùng sống sót"
+    },
+    "cupid": {
+      "name": "Thần Tình Yêu",
+      "desc": "Đêm đầu tiên, ghép đôi hai người thành tình nhân. Nếu một người chết, người kia cũng chết. Tình nhân thắng nếu là 2 người cuối cùng"
+    },
+    "arsonist": {
+      "name": "Kẻ Phóng Hoả",
+      "desc": "Tẩm xăng một người mỗi đêm. Đốt cháy để giết tất cả người bị tẩm xăng. Thắng khi tất cả đã chết"
+    },
+    "survivor": {
+      "name": "Người Sống Sót",
+      "desc": "Có 2 áo chống đạn. Thắng bằng cách sống sót đến cuối game"
+    },
+    "amnesiac": {
+      "name": "Kẻ Mất Trí",
+      "desc": "Không nhớ vai trò của mình. Chọn một người đã chết để sao chép vai trò và phe của họ"
+    },
+    "doppelganger": {
+      "name": "Kẻ Giả Mạo",
+      "desc": "Chọn một người đêm đầu tiên. Khi người đó chết, bạn trở thành vai trò của họ"
+    },
+    "jester": {
+      "name": "Hề Cười",
+      "desc": "Thắng bằng cách bị treo cổ. Khi bị treo cổ, một người đã bỏ phiếu cho bạn chết theo"
+    },
+    "vigilante": {
+      "name": "Dân Quân",
+      "desc": "Có 1 viên đạn để bận kẻ tình nghi ban đêm. Cẩn thận — có thể giết nhầm dân làng!"
+    },
+    "spy": {
+      "name": "Gián Điệp",
+      "desc": "Mỗi đêm, biết được sói đã nhắm ai. Thông tin là sức mạnh!"
+    },
+    "jailer": {
+      "name": "Cai Ngục",
+      "desc": "Giam một người mỗi đêm. Người đó không thể bị giết hoặc dùng khả năng. Không giam cùng người hai đêm liên"
+    },
+    "graveRobber": {
+      "name": "Kẻ Trộm Mộ",
+      "desc": "Mỗi đêm, nhìn vào mộ của người chết để biết vai trò của họ. Rất hữu ích cho suy luận!"
+    },
+    "infectorWolf": {
+      "name": "Sói Lây Nhiễm",
+      "desc": "Một lần mỗi ván, lây nhiễm thay vì giết. Người bị nhiễm xuất hiện là Ác với Tiên Tri trong 2 đêm"
+    },
+    "stalkerWolf": {
+      "name": "Sói Theo Dõi",
+      "desc": "Mỗi đêm, theo dõi một người để biết họ đã thăm ai. Chia sẻ thông tin với đàn sói"
+    },
+    "cursedWolf": {
+      "name": "Sói Nguyền Rủa",
+      "desc": "Nếu bị treo cổ ban ngày, một người ngẫu nhiên đã bỏ phiếu cho bạn cũng chết"
+    },
+    "pirate": {
+      "name": "Hải Tặc",
+      "desc": "Đấu tay đôi mỗi đêm — nạn nhân chết trừ khi được bảo vệ. Thắng sau 2 lần đấu thành công"
+    },
+    "plagueDoctor": {
+      "name": "Bác Sĩ Dịch",
+      "desc": "Lan truyền dịch mỗi đêm. Khi bạn chết, tất cả người nhiễm dịch chết theo. Thắng nếu 3+ người bị nhiễm khi bạn chết"
+    },
+    "corruptor": {
+      "name": "Kẻ Tha Hoá",
+      "desc": "Tha hoá một người mỗi đêm — họ vĩnh viễn xuất hiện là Ác với Tiên Tri. Thắng khi 3 người bị tha hoá"
+    }
   },
   "team": {
     "village": "Phe Dân Làng",
@@ -248,8 +423,13 @@
     "trap": "{player} đã chết bởi bẫy Thợ Săn Quái Thú",
     "serialKiller": "{player} đã bị Kẻ Giết Người sát hại",
     "arsonist": "{player} đã bị Kẻ Phóng Hoả đốt cháy",
-    "venom": "{player} đã chết vì độc của Sói Độc",
-    "lovers": "{player} đã chết vì đau tim"
+    "venom": "{player} đã chết vì độc của Sói Đอc",
+    "lovers": "{player} đã chết vì đau tim",
+    "vigilante": "{player} đã bị Dân Quân bắn",
+    "jailer": "{player} đã bị hành hình trong ngục",
+    "pirate": "{player} đã bị giết trong trận đấu tay đôi",
+    "plague": "{player} đã chết vì dịch bệnh",
+    "cursedWolfRevenge": "{player} đã bị nguyền rủa và chết sau khi bỏ phiếu"
   },
   "win": {
     "village": "Dân Làng Chiến Thắng!",
@@ -262,6 +442,9 @@
     "survivor": "Người Sống Sót Chiến Thắng!",
     "jester": "Hề Cười Chiến Thắng!",
     "lovers": "Tình Nhân Chiến Thắng!",
-    "loneWolf": "Sói Cô Độc Chiến Thắng!"
+    "loneWolf": "Sói Cô Độc Chiến Thắng!",
+    "pirate": "Hải Tặc Chiến Thắng!",
+    "plagueDoctor": "Bác Sĩ Dịch Chiến Thắng!",
+    "corruptor": "Kẻ Tha Hoá Chiến Thắng!"
   }
 }
