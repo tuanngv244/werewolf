@@ -111,34 +111,20 @@ cmd_setup() {
         git clone "$GIT_REPO" "$APP_DIR"
         log_ok "Repository cloned to $APP_DIR"
     else
-        log_ok "Repository already exists at $APP_DIR"
+        log_info "Pulling latest code..."
+        cd "$APP_DIR"
+        git pull origin "$GIT_BRANCH"
+        log_ok "Repository updated at $APP_DIR"
     fi
 
-    # Setup env file
-    if [ ! -f "$APP_DIR/$ENV_FILE" ]; then
-        log_info "Creating production environment file..."
-        cd "$APP_DIR"
-
-        # Generate secure secrets
-        JWT_SECRET=$(openssl rand -base64 64 | tr -d '\n')
-        JWT_REFRESH_SECRET=$(openssl rand -base64 64 | tr -d '\n')
-        POSTGRES_PW=$(openssl rand -base64 32 | tr -d '\n' | tr -d '/' | head -c 32)
-        REDIS_PW=$(openssl rand -base64 32 | tr -d '\n' | tr -d '/' | head -c 32)
-
-        # Get server IP
-        SERVER_IP=$(curl -s ifconfig.me 2>/dev/null || hostname -I | awk '{print $1}')
-
-        # Replace placeholders
-        sed -i "s|CHANGE_ME_strong_password_here|$POSTGRES_PW|g" "$ENV_FILE"
-        sed -i "s|CHANGE_ME_strong_redis_password|$REDIS_PW|g" "$ENV_FILE"
-        sed -i "s|CHANGE_ME_generate_with_openssl_rand_base64_64|$JWT_SECRET|" "$ENV_FILE"
-        sed -i "0,/CHANGE_ME_generate_with_openssl_rand_base64_64/s|CHANGE_ME_generate_with_openssl_rand_base64_64|$JWT_REFRESH_SECRET|" "$ENV_FILE"
-        sed -i "s|YOUR_DOMAIN_OR_IP|$SERVER_IP|g" "$ENV_FILE"
-
-        log_ok "Environment file created with auto-generated secrets"
-        log_warn "Review $APP_DIR/$ENV_FILE and update domain/IP if needed"
+    # Check env file (committed in repo, available after git clone)
+    cd "$APP_DIR"
+    if [ -f "$ENV_FILE" ]; then
+        log_ok "Environment file found: $APP_DIR/$ENV_FILE"
     else
-        log_ok "Environment file already exists"
+        log_error "Missing $ENV_FILE in repository!"
+        log_error "Make sure .env.production is committed and pushed to git."
+        exit 1
     fi
 
     echo ""
@@ -147,8 +133,7 @@ cmd_setup() {
     log_ok "═══════════════════════════════════════"
     echo ""
     echo "  Next steps:"
-    echo "  1. Review: nano $APP_DIR/$ENV_FILE"
-    echo "  2. Deploy: cd $APP_DIR && ./deploy.sh deploy"
+    echo "  1. Deploy: cd $APP_DIR && ./deploy.sh deploy"
     echo ""
     if groups "$USER" | grep -q docker; then
         true
@@ -348,7 +333,7 @@ case "${1:-help}" in
         echo "  Usage: ./deploy.sh <command>"
         echo ""
         echo "  Commands:"
-        echo "    setup      First-time server setup (Docker, Git, firewall, env)"
+        echo "    setup      First-time server setup (Docker, Git, firewall)"
         echo "    deploy     Full build and deploy (pull + build + start)"
         echo "    update     Quick update (pull + rebuild changed + restart)"
         echo "    logs       View logs (optional: ./deploy.sh logs server)"

@@ -9,10 +9,11 @@ build/
 .next/
 out/
 
-# Environment
+# Environment (local dev only — .env.production is committed for deployment)
 .env
 .env.local
 .env.*.local
+!.env.production
 
 # IDE
 .vscode/

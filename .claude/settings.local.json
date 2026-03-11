@@ -35,7 +35,8 @@
       "Bash(cat:*)",
       "Bash(pnpm:*)",
       "Bash(chmod +x /Users/cyan/Workspace/Personal/werewolf-game/deploy.sh)",
-      "Bash(echo \"=== Files Created ===\" && ls -la .dockerignore deploy.sh .env.production.example docker-compose.prod.yml nginx/nginx.conf client/Dockerfile server/Dockerfile Deploy.md && echo \"\" && echo \"=== deploy.sh is executable ===\" && test -x deploy.sh && echo \"YES\" || echo \"NO\" && echo \"\" && echo \"=== next.config.ts standalone ===\" && grep -n \"standalone\" client/next.config.ts)"
+      "Bash(echo \"=== Files Created ===\" && ls -la .dockerignore deploy.sh .env.production.example docker-compose.prod.yml nginx/nginx.conf client/Dockerfile server/Dockerfile Deploy.md && echo \"\" && echo \"=== deploy.sh is executable ===\" && test -x deploy.sh && echo \"YES\" || echo \"NO\" && echo \"\" && echo \"=== next.config.ts standalone ===\" && grep -n \"standalone\" client/next.config.ts)",
+      "Bash(git check-ignore -v .env.production 2>&1 || echo \"NOT IGNORED \\(will be committed\\) ✅\")"
     ]
   }
 }
