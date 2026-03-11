@@ -118,7 +118,6 @@ cmd_setup() {
     if [ ! -f "$APP_DIR/$ENV_FILE" ]; then
         log_info "Creating production environment file..."
         cd "$APP_DIR"
-        cp .env.production.example "$ENV_FILE"
 
         # Generate secure secrets
         JWT_SECRET=$(openssl rand -base64 64 | tr -d '\n')
