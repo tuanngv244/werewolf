@@ -3,7 +3,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import { v4 as uuid } from 'uuid';
 import { User } from '../../database/entities/user.entity';
 import { GUEST_NAMES } from '@shared/constants/game-config';
 
@@ -16,27 +15,51 @@ export class AuthService {
   ) {}
 
   async guestLogin(customName?: string) {
-    let username: string;
-    if (customName && customName.trim().length >= 2) {
-      // Use the player's chosen name directly (no suffix for clean display)
-      username = customName.trim().slice(0, 20);
-    } else {
-      const guestName = GUEST_NAMES[Math.floor(Math.random() * GUEST_NAMES.length)];
-      const suffix = Math.floor(Math.random() * 9999).toString().padStart(4, '0');
-      username = `${guestName}${suffix}`;
+    const MAX_RETRIES = 5;
+
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      let username: string;
+      if (customName && customName.trim().length >= 2) {
+        username = customName.trim().slice(0, 20);
+        // For custom names, add suffix on retry to avoid collision
+        if (attempt > 0) {
+          const suffix = Math.floor(Math.random() * 9999).toString().padStart(4, '0');
+          username = `${username.slice(0, 15)}#${suffix}`;
+        }
+      } else {
+        const guestName = GUEST_NAMES[Math.floor(Math.random() * GUEST_NAMES.length)];
+        const suffix = Math.floor(Math.random() * 9999).toString().padStart(4, '0');
+        username = `${guestName}${suffix}`;
+      }
+
+      // Check if username already exists
+      const existing = await this.userRepo.findOne({ where: { username } });
+      if (existing) {
+        continue; // Try again with different name
+      }
+
+      try {
+        const user = this.userRepo.create({
+          username,
+          isGuest: true,
+        });
+        await this.userRepo.save(user);
+
+        const tokens = this.generateTokens(user);
+        return {
+          ...tokens,
+          user: { id: user.id, username: user.username },
+        };
+      } catch (error: any) {
+        // Handle race condition: another request inserted the same username between our check and insert
+        if (error?.code === '23505' || error?.message?.includes('duplicate')) {
+          continue; // Retry with a different name
+        }
+        throw error;
+      }
     }
 
-    const user = this.userRepo.create({
-      username,
-      isGuest: true,
-    });
-    await this.userRepo.save(user);
-
-    const tokens = this.generateTokens(user);
-    return {
-      ...tokens,
-      user: { id: user.id, username: user.username },
-    };
+    throw new ConflictException('Could not generate a unique username. Please try again.');
   }
 
   async register(username: string, email: string, password: string) {

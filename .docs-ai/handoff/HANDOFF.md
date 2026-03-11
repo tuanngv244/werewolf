@@ -1,24 +1,40 @@
 # Werewolf Game — Session Handoff
 
-> Last updated: 2026-03-10
+> Last updated: 2026-03-11
 
 ---
 
 ## Current Session
 
-**Status:** CHARACTER INTERACTION & GAME FLOW IMPROVEMENTS — COMPLETE
-**Date:** 2026-03-10
-**Summary:** Added arrow key movement, improved character animations, chat speech bubbles above characters, and fixed demo room game flow (round tracking).
+**Status:** PRODUCTION DEPLOYMENT BUG FIXES — COMPLETE
+**Date:** 2026-03-11
+**Summary:** Fixed 4 critical bugs preventing the server from running in production Docker deployment at http://159.223.65.161.
 
 ---
 
 ## Active Tasks
 
-*No active tasks. All 4 improvements complete.*
+*No active tasks. All 4 bug fixes complete.*
 
 ---
 
 ## Completed (Recent)
+
+### Production Deployment Bug Fixes (2026-03-11)
+- **Stage:** DONE
+- **Symptoms:** `POST /api/auth/guest` → 500, `create-room` → connection timeout
+- **Root Causes & Fixes:**
+  1. **Wrong entry point path in Dockerfile** — CMD was `server/dist/server/src/main.js` but NestJS compiles to `server/dist/main.js`. Server container crashed on startup. Fixed in Dockerfile, nest-cli.json (`entryFile: "main"`), and package.json start scripts.
+  2. **Missing PassportModule in AuthModule** — `JwtStrategy` extends `PassportStrategy` but `PassportModule` was never imported, causing DI failure. Added `PassportModule.register({ defaultStrategy: 'jwt' })` to AuthModule imports.
+  3. **Guest username collision → unhandled 500** — `username` column is UNIQUE but `guestLogin` did no collision check. Added retry loop (5 attempts) with pre-check and catch for Postgres error code 23505.
+  4. **TypeORM synchronize disabled in production** — No migrations exist, so tables were never created. Temporarily enabled `synchronize: true` (TODO: replace with proper migrations before scaling).
+- **Files Modified:**
+  - `server/Dockerfile` — Fixed CMD path
+  - `server/nest-cli.json` — Fixed entryFile from `server/src/main` to `main`
+  - `server/package.json` — Fixed start/start:prod scripts
+  - `server/src/modules/auth/auth.module.ts` — Added PassportModule import
+  - `server/src/modules/auth/auth.service.ts` — Added retry logic for guest username collisions
+  - `server/src/app.module.ts` — Enabled TypeORM synchronize for initial deployment
 
 ### Character Interaction & Game Flow Improvements (2026-03-10)
 - **Stage:** DONE

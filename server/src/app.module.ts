@@ -16,7 +16,7 @@ import { GameRecord } from './database/entities/game-record.entity';
       type: 'postgres',
       url: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/werewolf',
       entities: [User, GameRecord],
-      synchronize: process.env.NODE_ENV !== 'production',
+      synchronize: true, // TODO: Replace with migrations before scaling to production
       logging: process.env.NODE_ENV === 'development',
     }),
     JwtModule.register({
