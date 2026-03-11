@@ -2,6 +2,8 @@
 
 Complete deployment guide for Ubuntu server with Docker.
 
+**Live URL:** https://wolf.nguynchupanh.com
+
 ---
 
 ## Table of Contents
@@ -26,11 +28,12 @@ Complete deployment guide for Ubuntu server with Docker.
 ```
                     ┌──────────────────────────────────────────┐
                     │            Ubuntu Server                  │
+                    │        wolf.nguynchupanh.com              │
                     │                                          │
-  User ──► :80 ──► │  ┌─────────┐                             │
-                    │  │  Nginx  │──► /          → Client:3000 │
-                    │  │ (proxy) │──► /api/      → Server:3001 │
-                    │  │         │──► /socket.io → Server:3001 │
+  User ──► :443 ─► │  ┌─────────┐                             │
+       ──► :80  ─► │  │  Nginx  │──► /          → Client:3000 │
+     (redirect)    │  │ (proxy) │──► /api/      → Server:3001 │
+                    │  │  + SSL  │──► /socket.io → Server:3001 │
                     │  └─────────┘                             │
                     │       │                                   │
                     │  ┌────┴────────────────────────────┐     │
@@ -52,13 +55,13 @@ Complete deployment guide for Ubuntu server with Docker.
 
 **Services:**
 
-| Service  | Technology    | Port | Purpose                        |
-| -------- | ------------- | ---- | ------------------------------ |
-| nginx    | Nginx Alpine  | 80   | Reverse proxy, static caching  |
-| client   | Next.js 15    | 3000 | Frontend (SSR + 3D game)       |
-| server   | NestJS        | 3001 | API + Socket.io game engine    |
-| postgres | PostgreSQL 16 | 5432 | User data, game records, stats |
-| redis    | Redis 7       | 6379 | Game state, sessions, cache    |
+| Service  | Technology    | Port     | Purpose                            |
+| -------- | ------------- | -------- | ---------------------------------- |
+| nginx    | Nginx Alpine  | 80 + 443 | Reverse proxy, SSL, static caching |
+| client   | Next.js 15    | 3000     | Frontend (SSR + 3D game)           |
+| server   | NestJS        | 3001     | API + Socket.io game engine        |
+| postgres | PostgreSQL 16 | 5432     | User data, game records, stats     |
+| redis    | Redis 7       | 6379     | Game state, sessions, cache        |
 
 ---
 
@@ -72,6 +75,10 @@ Complete deployment guide for Ubuntu server with Docker.
 - SSH access with sudo privileges
 - Port 80 (HTTP) and 443 (HTTPS) open
 
+**DNS:**
+
+- `wolf.nguynchupanh.com` A record pointing to your server IP (159.223.65.161)
+
 **Local Machine:**
 
 - Git installed
@@ -81,7 +88,7 @@ Complete deployment guide for Ubuntu server with Docker.
 
 ## Quick Deploy
 
-If you want to deploy fast, SSH into your server and run:
+SSH into your server and run:
 
 ```bash
 # 1. Download and run setup
@@ -89,15 +96,15 @@ curl -fsSL https://raw.githubusercontent.com/tuanngv244/werewolf/main/deploy.sh 
 chmod +x deploy.sh
 sudo ./deploy.sh setup
 
-# 2. Review generated config
-nano /opt/werewolf-game/.env.production
+# 2. Get SSL certificate
+cd ~/app/werewolf
+./deploy.sh ssl
 
 # 3. Deploy
-cd /opt/werewolf-game
 ./deploy.sh deploy
 ```
 
-That's it! Your game is live at `http://YOUR_SERVER_IP`
+That's it! Your game is live at `https://wolf.nguynchupanh.com`
 
 ---
 
@@ -106,11 +113,7 @@ That's it! Your game is live at `http://YOUR_SERVER_IP`
 ### Step 1: Connect to Your Server
 
 ```bash
-# From your local machine
-ssh root@YOUR_SERVER_IP
-
-# Or with a user
-ssh your-user@YOUR_SERVER_IP
+ssh root@159.223.65.161
 ```
 
 ### Step 2: Update System
@@ -139,10 +142,10 @@ docker --version
 docker compose version
 ```
 
-### Step 4: Install Git
+### Step 4: Install Git & Certbot
 
 ```bash
-sudo apt install -y git
+sudo apt install -y git certbot
 ```
 
 ### Step 5: Configure Firewall
@@ -159,67 +162,30 @@ sudo ufw status
 
 ```bash
 # Create app directory
-sudo mkdir -p /opt/werewolf-game
-sudo chown $USER:$USER /opt/werewolf-game
+mkdir -p ~/app/werewolf
 
 # Clone
-git clone https://github.com/tuanngv244/werewolf.git /opt/werewolf-game
-cd /opt/werewolf-game
+git clone https://github.com/tuanngv244/werewolf.git ~/app/werewolf
+cd ~/app/werewolf
 ```
 
-### Step 7: Configure Environment
+### Step 7: Get SSL Certificate
 
 ```bash
-# Copy template
-cp .env.production.example .env.production
-
-# Generate secure secrets
-echo "JWT_SECRET: $(openssl rand -base64 64 | tr -d '\n')"
-echo "JWT_REFRESH: $(openssl rand -base64 64 | tr -d '\n')"
-echo "DB_PASSWORD: $(openssl rand -base64 32 | tr -d '\n/' | head -c 32)"
-echo "REDIS_PASS: $(openssl rand -base64 32 | tr -d '\n/' | head -c 32)"
-
-# Edit and paste the generated secrets
-nano .env.production
-```
-
-**Fill in `.env.production`:**
-
-```env
-# Database
-POSTGRES_DB=werewolf
-POSTGRES_USER=werewolf
-POSTGRES_PASSWORD=<paste DB_PASSWORD here>
-
-# Redis
-REDIS_PASSWORD=<paste REDIS_PASS here>
-
-# JWT (paste generated values)
-JWT_SECRET=<paste JWT_SECRET here>
-JWT_REFRESH_SECRET=<paste JWT_REFRESH here>
-
-# URLs — Replace with your server IP or domain
-CORS_ORIGIN=http://YOUR_SERVER_IP
-NEXT_PUBLIC_API_URL=http://YOUR_SERVER_IP/api
-NEXT_PUBLIC_WS_URL=http://YOUR_SERVER_IP
-NEXT_PUBLIC_APP_NAME=Werewolf Game
-NEXT_PUBLIC_DEFAULT_LOCALE=en
-
-# Port
-APP_PORT=80
+# Make sure DNS is pointing wolf.nguynchupanh.com → your server IP
+# Then get certificate:
+./deploy.sh ssl
 ```
 
 ### Step 8: Build and Deploy
 
 ```bash
 # Build all containers (first time takes 5-10 minutes)
+./deploy.sh deploy
+
+# Or manually:
 docker compose -f docker-compose.prod.yml --env-file .env.production build
-
-# Start all services
 docker compose -f docker-compose.prod.yml --env-file .env.production up -d
-
-# Check status
-docker compose -f docker-compose.prod.yml --env-file .env.production ps
 ```
 
 ### Step 9: Verify
@@ -233,11 +199,10 @@ docker compose -f docker-compose.prod.yml --env-file .env.production logs server
 docker compose -f docker-compose.prod.yml --env-file .env.production logs client
 
 # Test from server
-curl http://localhost
-curl http://localhost/health
+curl -s https://wolf.nguynchupanh.com/health
 ```
 
-Open your browser: `http://YOUR_SERVER_IP` — You should see the Werewolf Game!
+Open your browser: `https://wolf.nguynchupanh.com`
 
 ---
 
@@ -262,16 +227,16 @@ git push origin main
 **Option A: Using deploy script (recommended)**
 
 ```bash
-ssh your-user@YOUR_SERVER_IP
-cd /opt/werewolf-game
+ssh root@159.223.65.161
+cd ~/app/werewolf
 ./deploy.sh update
 ```
 
 **Option B: Manual commands**
 
 ```bash
-ssh your-user@YOUR_SERVER_IP
-cd /opt/werewolf-game
+ssh root@159.223.65.161
+cd ~/app/werewolf
 
 # Pull latest code
 git pull origin main
@@ -284,7 +249,7 @@ docker compose -f docker-compose.prod.yml --env-file .env.production up -d
 **Option C: One-liner from local machine (SSH command)**
 
 ```bash
-ssh your-user@YOUR_SERVER_IP "cd /opt/werewolf-game && ./deploy.sh update"
+ssh root@159.223.65.161 "cd ~/app/werewolf && ./deploy.sh update"
 ```
 
 ### Auto-Deploy with Git Hook (Optional)
@@ -298,130 +263,65 @@ You can set up automatic deployment when you push to GitHub:
 crontab -e
 
 # Add this line:
-*/5 * * * * cd /opt/werewolf-game && git fetch origin main && [ $(git rev-parse HEAD) != $(git rev-parse origin/main) ] && ./deploy.sh update >> /var/log/werewolf-deploy.log 2>&1
+*/5 * * * * cd ~/app/werewolf && git fetch origin main && [ $(git rev-parse HEAD) != $(git rev-parse origin/main) ] && ./deploy.sh update >> /var/log/werewolf-deploy.log 2>&1
 ```
 
 ---
 
 ## SSL/HTTPS Setup
 
-### Option A: Certbot (Free SSL with Let's Encrypt)
+SSL is **already configured** for `wolf.nguynchupanh.com`. The deploy script handles everything:
 
-**Requirements:** A domain name pointing to your server IP.
-
-```bash
-# Install Certbot
-sudo apt install -y certbot
-
-# Stop nginx temporarily
-cd /opt/werewolf-game
-docker compose -f docker-compose.prod.yml --env-file .env.production stop nginx
-
-# Get certificate
-sudo certbot certonly --standalone -d yourdomain.com -d www.yourdomain.com
-
-# Certificate files will be at:
-#   /etc/letsencrypt/live/yourdomain.com/fullchain.pem
-#   /etc/letsencrypt/live/yourdomain.com/privkey.pem
-```
-
-**Update `nginx/nginx.conf`** — replace the server block:
-
-```nginx
-# Redirect HTTP to HTTPS
-server {
-    listen 80;
-    server_name yourdomain.com www.yourdomain.com;
-    return 301 https://$server_name$request_uri;
-}
-
-server {
-    listen 443 ssl http2;
-    server_name yourdomain.com www.yourdomain.com;
-
-    ssl_certificate     /etc/letsencrypt/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/privkey.pem;
-    ssl_protocols       TLSv1.2 TLSv1.3;
-
-    # ... rest of nginx config stays the same ...
-}
-```
-
-**Update `docker-compose.prod.yml`** — add SSL volumes to nginx:
-
-```yaml
-nginx:
-  ports:
-    - '80:80'
-    - '443:443'
-  volumes:
-    - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-    - /etc/letsencrypt/live/yourdomain.com/fullchain.pem:/etc/letsencrypt/fullchain.pem:ro
-    - /etc/letsencrypt/live/yourdomain.com/privkey.pem:/etc/letsencrypt/privkey.pem:ro
-```
-
-**Update `.env.production`** URLs to use https:
-
-```env
-CORS_ORIGIN=https://yourdomain.com
-NEXT_PUBLIC_API_URL=https://yourdomain.com/api
-NEXT_PUBLIC_WS_URL=https://yourdomain.com
-```
-
-**Rebuild client** (NEXT_PUBLIC vars are baked at build time):
+### Get SSL Certificate (first time)
 
 ```bash
-docker compose -f docker-compose.prod.yml --env-file .env.production build client
-docker compose -f docker-compose.prod.yml --env-file .env.production up -d
+cd ~/app/werewolf
+./deploy.sh ssl
 ```
 
-**Auto-renew SSL:**
+This will:
+1. Install Certbot if not present
+2. Stop nginx temporarily
+3. Obtain certificate from Let's Encrypt for `wolf.nguynchupanh.com`
+4. Set up auto-renewal cron job (runs every 2 months)
+
+### Force Renew SSL
 
 ```bash
-# Add cron job for auto-renewal
-sudo crontab -e
-
-# Add:
-0 3 * * * certbot renew --pre-hook "docker stop werewolf-nginx" --post-hook "docker start werewolf-nginx" >> /var/log/certbot-renew.log 2>&1
+./deploy.sh ssl-renew
 ```
 
-### Option B: Cloudflare (Easiest)
+### Check SSL Status
 
-1. Add your domain to Cloudflare (free plan)
-2. Point DNS A record to your server IP
-3. Enable "Flexible SSL" in Cloudflare SSL/TLS settings
-4. No changes needed on server — Cloudflare handles HTTPS
+```bash
+./deploy.sh status
+# Shows SSL expiry date
+```
+
+### Auto-Renewal
+
+The `ssl` command automatically sets up a cron job:
+```
+0 3 1 */2 * certbot renew --pre-hook "docker stop werewolf-nginx" --post-hook "docker start werewolf-nginx"
+```
 
 ---
 
 ## Domain Setup
 
-### Point Domain to Server
+### DNS Records
 
-1. Go to your domain registrar (Namecheap, GoDaddy, Cloudflare, etc.)
-2. Add/edit DNS records:
+The domain `wolf.nguynchupanh.com` should have the following DNS record:
 
-| Type | Name | Value          | TTL  |
-| ---- | ---- | -------------- | ---- |
-| A    | @    | YOUR_SERVER_IP | Auto |
-| A    | www  | YOUR_SERVER_IP | Auto |
+| Type | Name | Value           | TTL  |
+| ---- | ---- | --------------- | ---- |
+| A    | wolf | 159.223.65.161  | Auto |
 
-3. Wait for DNS propagation (5 min — 48 hours)
-
-4. Update `.env.production`:
-
-```env
-CORS_ORIGIN=http://yourdomain.com
-NEXT_PUBLIC_API_URL=http://yourdomain.com/api
-NEXT_PUBLIC_WS_URL=http://yourdomain.com
-```
-
-5. Rebuild client (because NEXT_PUBLIC vars are embedded at build time):
+### Verify DNS
 
 ```bash
-cd /opt/werewolf-game
-docker compose -f docker-compose.prod.yml --env-file .env.production build client
-docker compose -f docker-compose.prod.yml --env-file .env.production up -d
+dig wolf.nguynchupanh.com +short
+# Should return: 159.223.65.161
 ```
 
 ---
@@ -431,10 +331,16 @@ docker compose -f docker-compose.prod.yml --env-file .env.production up -d
 All commands are available via `deploy.sh`:
 
 ```bash
-cd /opt/werewolf-game
+cd ~/app/werewolf
 
 # First-time setup
 ./deploy.sh setup
+
+# Get SSL certificate
+./deploy.sh ssl
+
+# Force renew SSL
+./deploy.sh ssl-renew
 
 # Full deploy (pull + build from scratch + start)
 ./deploy.sh deploy
@@ -452,7 +358,7 @@ cd /opt/werewolf-game
 ./deploy.sh logs postgres
 ./deploy.sh logs redis
 
-# Check status
+# Check status + SSL info
 ./deploy.sh status
 
 # Stop everything
@@ -471,7 +377,7 @@ cd /opt/werewolf-game
 ### Direct Docker Compose Commands
 
 ```bash
-cd /opt/werewolf-game
+cd ~/app/werewolf
 
 # Shorthand alias (add to ~/.bashrc)
 alias ww="docker compose -f docker-compose.prod.yml --env-file .env.production"
@@ -518,7 +424,7 @@ docker system prune -a --volumes
 
 ```bash
 # Nginx health
-curl -s http://localhost/health
+curl -s https://wolf.nguynchupanh.com/health
 
 # Check individual services
 docker compose -f docker-compose.prod.yml --env-file .env.production ps
@@ -558,20 +464,20 @@ gunzip -c backup_20260311_120000.sql.gz | \
 
 ```bash
 # Full backup
-mkdir -p /opt/werewolf-backups/full_$(date +%Y%m%d)
-cd /opt/werewolf-game
+mkdir -p ~/backups/werewolf/full_$(date +%Y%m%d)
+cd ~/app/werewolf
 
 # Database
 docker compose -f docker-compose.prod.yml --env-file .env.production exec -T postgres \
-  pg_dump -U werewolf werewolf | gzip > /opt/werewolf-backups/full_$(date +%Y%m%d)/db.sql.gz
+  pg_dump -U werewolf werewolf | gzip > ~/backups/werewolf/full_$(date +%Y%m%d)/db.sql.gz
 
 # Redis
 docker compose -f docker-compose.prod.yml --env-file .env.production exec -T redis \
   redis-cli -a YOUR_REDIS_PASSWORD BGSAVE
 
 # Config
-cp .env.production /opt/werewolf-backups/full_$(date +%Y%m%d)/
-cp nginx/nginx.conf /opt/werewolf-backups/full_$(date +%Y%m%d)/
+cp .env.production ~/backups/werewolf/full_$(date +%Y%m%d)/
+cp nginx/nginx.conf ~/backups/werewolf/full_$(date +%Y%m%d)/
 ```
 
 ---
@@ -586,11 +492,25 @@ docker compose -f docker-compose.prod.yml --env-file .env.production logs server
 
 # Check if port is in use
 sudo lsof -i :80
+sudo lsof -i :443
 sudo lsof -i :3001
 
 # Restart from scratch
 docker compose -f docker-compose.prod.yml --env-file .env.production down
 docker compose -f docker-compose.prod.yml --env-file .env.production up -d
+```
+
+### SSL certificate issues
+
+```bash
+# Check certificate
+sudo certbot certificates
+
+# Test SSL
+curl -vI https://wolf.nguynchupanh.com 2>&1 | grep -E "SSL|subject|expire"
+
+# Re-obtain certificate
+./deploy.sh ssl-renew
 ```
 
 ### Build fails
@@ -623,7 +543,7 @@ docker compose -f docker-compose.prod.yml --env-file .env.production exec postgr
 docker compose -f docker-compose.prod.yml --env-file .env.production logs nginx | grep -i upgrade
 
 # Verify Socket.io endpoint
-curl -s http://localhost/socket.io/?EIO=4&transport=polling
+curl -s https://wolf.nguynchupanh.com/socket.io/?EIO=4&transport=polling
 ```
 
 ### Out of disk space
@@ -655,7 +575,7 @@ docker stats --no-stream
 ### Reset everything (nuclear option)
 
 ```bash
-cd /opt/werewolf-game
+cd ~/app/werewolf
 
 # Stop and remove everything (WARNING: deletes database!)
 docker compose -f docker-compose.prod.yml --env-file .env.production down -v
@@ -676,31 +596,32 @@ werewolf-game/
 ├── server/
 │   └── Dockerfile              ← NestJS multi-stage build
 ├── nginx/
-│   └── nginx.conf              ← Reverse proxy + WebSocket + caching
+│   └── nginx.conf              ← Reverse proxy + SSL + WebSocket + caching
 ├── docker-compose.dev.yml      ← Dev: Postgres + Redis only
-├── docker-compose.prod.yml     ← Prod: All 5 services
-├── .env.production.example     ← Template for production env vars
-├── .env.production             ← Actual production env (gitignored)
+├── docker-compose.prod.yml     ← Prod: All 5 services + SSL volumes
+├── .env.production             ← Production env vars (domain: wolf.nguynchupanh.com)
 ├── .dockerignore               ← Docker build exclusions
-├── deploy.sh                   ← Deployment automation script
+├── deploy.sh                   ← Deployment automation script (with SSL)
 └── Deploy.md                   ← This file
 ```
 
 ### Environment Variables Reference
 
-| Variable                     | Where Used          | Description           |
-| ---------------------------- | ------------------- | --------------------- |
-| `POSTGRES_DB`                | docker-compose      | Database name         |
-| `POSTGRES_USER`              | docker-compose      | Database user         |
-| `POSTGRES_PASSWORD`          | docker-compose      | Database password     |
-| `REDIS_PASSWORD`             | docker-compose      | Redis auth password   |
-| `JWT_SECRET`                 | server              | JWT token signing     |
-| `JWT_REFRESH_SECRET`         | server              | Refresh token signing |
-| `CORS_ORIGIN`                | server              | Allowed CORS origin   |
-| `NEXT_PUBLIC_API_URL`        | client (build-time) | API endpoint URL      |
-| `NEXT_PUBLIC_WS_URL`         | client (build-time) | WebSocket server URL  |
-| `NEXT_PUBLIC_APP_NAME`       | client (build-time) | App display name      |
-| `NEXT_PUBLIC_DEFAULT_LOCALE` | client (build-time) | Default language      |
-| `APP_PORT`                   | docker-compose      | Host port for nginx   |
+| Variable                     | Where Used          | Description               |
+| ---------------------------- | ------------------- | ------------------------- |
+| `POSTGRES_DB`                | docker-compose      | Database name             |
+| `POSTGRES_USER`              | docker-compose      | Database user             |
+| `POSTGRES_PASSWORD`          | docker-compose      | Database password         |
+| `REDIS_PASSWORD`             | docker-compose      | Redis auth password       |
+| `JWT_SECRET`                 | server              | JWT token signing         |
+| `JWT_REFRESH_SECRET`         | server              | Refresh token signing     |
+| `DOMAIN`                     | deploy.sh           | Domain name               |
+| `CORS_ORIGIN`                | server              | Allowed CORS origin       |
+| `NEXT_PUBLIC_API_URL`        | client (build-time) | API endpoint URL          |
+| `NEXT_PUBLIC_WS_URL`         | client (build-time) | WebSocket server URL      |
+| `NEXT_PUBLIC_APP_NAME`       | client (build-time) | App display name          |
+| `NEXT_PUBLIC_DEFAULT_LOCALE` | client (build-time) | Default language          |
+| `APP_PORT`                   | docker-compose      | Host port for HTTP (80)   |
+| `APP_SSL_PORT`               | docker-compose      | Host port for HTTPS (443) |
 
 > **Note:** `NEXT_PUBLIC_*` variables are embedded into the client at **build time**. If you change them, you must rebuild the client container.

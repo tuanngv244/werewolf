@@ -3,7 +3,9 @@
 # Werewolf Game — Deploy Script
 # ============================================
 # Usage: ./deploy.sh [command]
-# Commands: setup | deploy | update | logs | status | stop | restart | backup | rollback
+# Commands: setup | deploy | update | ssl | ssl-renew | logs | status | stop | restart | backup | rollback
+#
+# SSL is optional. If certs exist → HTTPS. If not → HTTP still works.
 
 set -euo pipefail
 
@@ -14,6 +16,7 @@ ENV_FILE=".env.production"
 BACKUP_DIR="$HOME/backups/werewolf"
 GIT_REPO="https://github.com/tuanngv244/werewolf.git"
 GIT_BRANCH="main"
+DOMAIN="wolf.nguynchupanh.com"
 
 # Colors
 RED='\033[0;31m'
@@ -26,6 +29,77 @@ log_info()  { echo -e "${BLUE}[INFO]${NC} $1"; }
 log_ok()    { echo -e "${GREEN}[OK]${NC} $1"; }
 log_warn()  { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
+
+# ─── Check if SSL certs exist ───
+has_ssl() {
+    [ -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ] && [ -f "/etc/letsencrypt/live/$DOMAIN/privkey.pem" ]
+}
+
+# ─── Configure nginx for SSL or HTTP ───
+configure_nginx() {
+    cd "$APP_DIR"
+    if has_ssl; then
+        log_ok "SSL certs found → using HTTPS config"
+        cp nginx/nginx-ssl.conf nginx/nginx.conf
+    else
+        log_warn "No SSL certs → using HTTP-only config"
+        # nginx.conf is already the HTTP-only version in the repo
+        # Make sure it's not the SSL version
+        if grep -q "listen 443 ssl" nginx/nginx.conf 2>/dev/null; then
+            git checkout nginx/nginx.conf 2>/dev/null || true
+        fi
+    fi
+}
+
+# ─── Configure docker-compose volumes for SSL ───
+# Generates a docker-compose.ssl.yml override when SSL certs exist
+configure_ssl_compose() {
+    cd "$APP_DIR"
+    local override_file="docker-compose.ssl.yml"
+
+    if has_ssl; then
+        cat > "$override_file" <<'SSLEOF'
+services:
+  nginx:
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - /etc/letsencrypt/live/wolf.nguynchupanh.com/fullchain.pem:/etc/letsencrypt/live/wolf.nguynchupanh.com/fullchain.pem:ro
+      - /etc/letsencrypt/live/wolf.nguynchupanh.com/privkey.pem:/etc/letsencrypt/live/wolf.nguynchupanh.com/privkey.pem:ro
+      - /etc/letsencrypt/archive/wolf.nguynchupanh.com/:/etc/letsencrypt/archive/wolf.nguynchupanh.com/:ro
+SSLEOF
+        log_ok "SSL compose override created"
+    else
+        # Remove override if it exists
+        rm -f "$override_file"
+    fi
+}
+
+# ─── Update .env.production URLs for http/https ───
+configure_env_urls() {
+    cd "$APP_DIR"
+    if has_ssl; then
+        local scheme="https"
+    else
+        local scheme="http"
+    fi
+
+    # Update CORS_ORIGIN, NEXT_PUBLIC_API_URL, NEXT_PUBLIC_WS_URL
+    sed -i "s|CORS_ORIGIN=http[s]*://$DOMAIN|CORS_ORIGIN=${scheme}://$DOMAIN|" "$ENV_FILE"
+    sed -i "s|NEXT_PUBLIC_API_URL=http[s]*://$DOMAIN|NEXT_PUBLIC_API_URL=${scheme}://$DOMAIN|" "$ENV_FILE"
+    sed -i "s|NEXT_PUBLIC_WS_URL=http[s]*://$DOMAIN|NEXT_PUBLIC_WS_URL=${scheme}://$DOMAIN|" "$ENV_FILE"
+
+    log_ok "URLs set to ${scheme}://$DOMAIN"
+}
+
+# ─── Get docker compose command with optional SSL override ───
+dc() {
+    cd "$APP_DIR"
+    if [ -f "docker-compose.ssl.yml" ]; then
+        docker compose -f "$COMPOSE_FILE" -f docker-compose.ssl.yml --env-file "$ENV_FILE" "$@"
+    else
+        docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" "$@"
+    fi
+}
 
 # ─── Check prerequisites ───
 check_deps() {
@@ -54,6 +128,7 @@ check_deps() {
 # ============================================
 cmd_setup() {
     log_info "Setting up Ubuntu server for Werewolf Game..."
+    log_info "Domain: $DOMAIN"
 
     # Update system
     log_info "Updating system packages..."
@@ -89,6 +164,14 @@ cmd_setup() {
         log_ok "Git already installed"
     fi
 
+    # Install Certbot (optional, for SSL later)
+    if ! command -v certbot &>/dev/null; then
+        log_info "Installing Certbot for SSL (optional)..."
+        sudo apt install -y certbot || log_warn "Certbot install failed — SSL will not be available"
+    else
+        log_ok "Certbot already installed"
+    fi
+
     # Setup firewall
     log_info "Configuring firewall..."
     sudo ufw allow OpenSSH
@@ -115,7 +198,7 @@ cmd_setup() {
         log_ok "Repository updated at $APP_DIR"
     fi
 
-    # Check env file (committed in repo, available after git clone)
+    # Check env file
     cd "$APP_DIR"
     if [ -f "$ENV_FILE" ]; then
         log_ok "Environment file found: $APP_DIR/$ENV_FILE"
@@ -133,9 +216,89 @@ cmd_setup() {
     echo "  Next steps:"
     echo "  1. Deploy: cd $APP_DIR && ./deploy.sh deploy"
     echo ""
+    echo "  Optional (for HTTPS):"
+    echo "  - Make sure DNS A record for $DOMAIN points to this server"
+    echo "  - Run: ./deploy.sh ssl"
+    echo "  - Then: ./deploy.sh deploy"
+    echo ""
     if ! groups "$USER" | grep -q docker; then
         log_warn "Log out and back in for docker group to take effect!"
     fi
+}
+
+# ============================================
+# Command: ssl
+# Obtain SSL certificate with Let's Encrypt
+# ============================================
+cmd_ssl() {
+    log_info "Obtaining SSL certificate for $DOMAIN..."
+
+    # Check if certificate already exists
+    if has_ssl; then
+        log_ok "SSL certificate already exists for $DOMAIN"
+        log_info "To renew, run: ./deploy.sh ssl-renew"
+        return 0
+    fi
+
+    # Check certbot
+    if ! command -v certbot &>/dev/null; then
+        log_error "Certbot not installed. Run: sudo apt install -y certbot"
+        exit 1
+    fi
+
+    # Stop nginx if running (certbot needs port 80)
+    log_info "Stopping nginx container if running..."
+    cd "$APP_DIR"
+    dc stop nginx 2>/dev/null || true
+
+    # Get certificate using standalone mode
+    log_info "Requesting certificate from Let's Encrypt..."
+    sudo certbot certonly \
+        --standalone \
+        --non-interactive \
+        --agree-tos \
+        --email admin@nguynchupanh.com \
+        -d "$DOMAIN"
+
+    if has_ssl; then
+        log_ok "SSL certificate obtained successfully!"
+
+        # Setup auto-renewal cron job
+        log_info "Setting up SSL auto-renewal..."
+        local cron_job="0 3 1 */2 * certbot renew --pre-hook \"docker stop werewolf-nginx 2>/dev/null || true\" --post-hook \"docker start werewolf-nginx 2>/dev/null || true\" >> /var/log/certbot-renew.log 2>&1"
+
+        if ! sudo crontab -l 2>/dev/null | grep -q "certbot renew"; then
+            (sudo crontab -l 2>/dev/null; echo "$cron_job") | sudo crontab -
+            log_ok "SSL auto-renewal cron job configured"
+        fi
+
+        echo ""
+        log_ok "SSL setup complete! Run './deploy.sh deploy' to apply."
+    else
+        log_error "Failed to obtain SSL certificate!"
+        log_warn "The app will still work over HTTP at http://$DOMAIN"
+    fi
+}
+
+# ============================================
+# Command: ssl-renew
+# Renew SSL certificate
+# ============================================
+cmd_ssl_renew() {
+    log_info "Renewing SSL certificate for $DOMAIN..."
+
+    cd "$APP_DIR"
+    dc stop nginx 2>/dev/null || true
+
+    sudo certbot renew --force-renewal
+
+    # Reconfigure and restart
+    configure_nginx
+    configure_ssl_compose
+    configure_env_urls
+    dc start nginx 2>/dev/null || true
+
+    log_ok "SSL certificate renewed!"
 }
 
 # ============================================
@@ -154,9 +317,14 @@ cmd_deploy() {
     log_info "Pulling latest code..."
     git pull origin "$GIT_BRANCH"
 
+    # Auto-detect SSL and configure
+    configure_nginx
+    configure_ssl_compose
+    configure_env_urls
+
     log_info "Building and starting containers..."
-    docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" build --no-cache
-    docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d
+    dc build --no-cache
+    dc up -d
 
     # Wait for health checks
     log_info "Waiting for services to be healthy..."
@@ -165,9 +333,13 @@ cmd_deploy() {
     # Show status
     cmd_status
 
+    local scheme="http"
+    has_ssl && scheme="https"
+
     echo ""
     log_ok "═══════════════════════════════════════"
     log_ok "  Deployment complete!"
+    log_ok "  ${scheme}://$DOMAIN"
     log_ok "═══════════════════════════════════════"
 }
 
@@ -187,9 +359,14 @@ cmd_update() {
     log_info "Pulling latest code..."
     git pull origin "$GIT_BRANCH"
 
+    # Auto-detect SSL and configure
+    configure_nginx
+    configure_ssl_compose
+    configure_env_urls
+
     log_info "Rebuilding and restarting containers..."
-    docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" build
-    docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d
+    dc build
+    dc up -d
 
     # Cleanup old images
     docker image prune -f
@@ -199,8 +376,11 @@ cmd_update() {
 
     cmd_status
 
+    local scheme="http"
+    has_ssl && scheme="https"
+
     echo ""
-    log_ok "Update complete!"
+    log_ok "Update complete! ${scheme}://$DOMAIN"
 }
 
 # ============================================
@@ -212,9 +392,9 @@ cmd_logs() {
     cd "$APP_DIR"
     local service="${1:-}"
     if [ -n "$service" ]; then
-        docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs -f "$service"
+        dc logs -f "$service"
     else
-        docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs -f
+        dc logs -f
     fi
 }
 
@@ -228,7 +408,20 @@ cmd_status() {
     echo ""
     log_info "Service Status:"
     echo "────────────────────────────────────────"
-    docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps
+    dc ps
+    echo ""
+
+    if has_ssl; then
+        log_info "Mode: HTTPS"
+        log_info "URL: https://$DOMAIN"
+        local expiry
+        expiry=$(sudo openssl x509 -enddate -noout -in "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" 2>/dev/null | cut -d= -f2)
+        log_info "SSL expires: $expiry"
+    else
+        log_info "Mode: HTTP (no SSL)"
+        log_info "URL: http://$DOMAIN"
+        log_warn "Run './deploy.sh ssl' to enable HTTPS"
+    fi
     echo ""
 }
 
@@ -240,7 +433,7 @@ cmd_stop() {
     check_deps
     cd "$APP_DIR"
     log_info "Stopping all services..."
-    docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" down
+    dc down
     log_ok "All services stopped"
 }
 
@@ -251,8 +444,14 @@ cmd_stop() {
 cmd_restart() {
     check_deps
     cd "$APP_DIR"
+
+    # Re-detect SSL on restart
+    configure_nginx
+    configure_ssl_compose
+    configure_env_urls
+
     log_info "Restarting all services..."
-    docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" restart
+    dc restart
     sleep 5
     cmd_status
     log_ok "All services restarted"
@@ -274,7 +473,7 @@ cmd_backup() {
     # Source env vars
     source "$ENV_FILE"
 
-    docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T postgres \
+    dc exec -T postgres \
         pg_dump -U "${POSTGRES_USER:-werewolf}" "${POSTGRES_DB:-werewolf}" | gzip > "$backup_file"
 
     log_ok "Backup saved: $backup_file"
@@ -298,9 +497,14 @@ cmd_rollback() {
 
     git checkout HEAD~1
 
+    # Re-detect SSL
+    configure_nginx
+    configure_ssl_compose
+    configure_env_urls
+
     log_info "Rebuilding..."
-    docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" build
-    docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d
+    dc build
+    dc up -d
 
     sleep 10
     cmd_status
@@ -312,19 +516,27 @@ cmd_rollback() {
 # Main
 # ============================================
 case "${1:-help}" in
-    setup)    cmd_setup ;;
-    deploy)   cmd_deploy ;;
-    update)   cmd_update ;;
-    logs)     cmd_logs "${2:-}" ;;
-    status)   cmd_status ;;
-    stop)     cmd_stop ;;
-    restart)  cmd_restart ;;
-    backup)   cmd_backup ;;
-    rollback) cmd_rollback ;;
+    setup)      cmd_setup ;;
+    deploy)     cmd_deploy ;;
+    update)     cmd_update ;;
+    ssl)        cmd_ssl ;;
+    ssl-renew)  cmd_ssl_renew ;;
+    logs)       cmd_logs "${2:-}" ;;
+    status)     cmd_status ;;
+    stop)       cmd_stop ;;
+    restart)    cmd_restart ;;
+    backup)     cmd_backup ;;
+    rollback)   cmd_rollback ;;
     help|*)
         echo ""
         echo "  Werewolf Game — Deploy Tool"
         echo "  ──────────────────────────────"
+        echo "  Domain: $DOMAIN"
+        if has_ssl; then
+            echo "  Mode:   HTTPS (SSL active)"
+        else
+            echo "  Mode:   HTTP (no SSL — run './deploy.sh ssl' to enable)"
+        fi
         echo ""
         echo "  Usage: ./deploy.sh <command>"
         echo ""
@@ -332,6 +544,8 @@ case "${1:-help}" in
         echo "    setup      First-time server setup (Docker, Git, firewall)"
         echo "    deploy     Full build and deploy (pull + build + start)"
         echo "    update     Quick update (pull + rebuild changed + restart)"
+        echo "    ssl        Obtain SSL certificate (optional, for HTTPS)"
+        echo "    ssl-renew  Force renew SSL certificate"
         echo "    logs       View logs (optional: ./deploy.sh logs server)"
         echo "    status     Check service status"
         echo "    stop       Stop all services"
