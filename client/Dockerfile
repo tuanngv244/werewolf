@@ -46,6 +46,9 @@ ENV NEXT_PUBLIC_WS_URL=$NEXT_PUBLIC_WS_URL
 ENV NEXT_PUBLIC_APP_NAME=$NEXT_PUBLIC_APP_NAME
 ENV NEXT_PUBLIC_DEFAULT_LOCALE=$NEXT_PUBLIC_DEFAULT_LOCALE
 
+# Ensure public directory exists (may be empty)
+RUN mkdir -p client/public
+
 # Build shared first, then client
 RUN cd shared && pnpm build
 RUN cd client && pnpm build
