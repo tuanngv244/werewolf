@@ -136,6 +136,14 @@
     "witchHealDesc": "Dùng bình cứu để cứu nạn nhân của sói đêm nay. Chỉ dùng được một lần.",
     "deadCantChat": "Người chết chỉ có thể chat với hồn ma 👻"
   },
+  "voice": {
+    "muteSound": "Tắt âm thanh",
+    "unmuteSound": "Bật âm thanh",
+    "muteMic": "Tắt micro",
+    "unmuteMic": "Bật micro",
+    "micBlocked": "Không có quyền truy cập micro",
+    "deadCantTalk": "Người chết không thể nói"
+  },
   "chat": {
     "placeholder": "Nhập tin nhắn...",
     "send": "Gửi"

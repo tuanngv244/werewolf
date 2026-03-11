@@ -470,6 +470,89 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     });
   }
 
+  // ─── Voice Chat Signaling (WebRTC) ────────────────────────────
+
+  @SubscribeMessage('voice:join')
+  async handleVoiceJoin(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() data: { roomCode: string },
+  ) {
+    const roomCode = await this.roomsService.getPlayerRoom(client.user.id);
+    if (!roomCode) return;
+
+    // Notify everyone else in the room that a new voice peer joined
+    client.to(`room:${roomCode}`).emit('voice:joined', {
+      userId: client.user.id,
+    });
+  }
+
+  @SubscribeMessage('voice:leave')
+  async handleVoiceLeave(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() data: { roomCode: string },
+  ) {
+    const roomCode = await this.roomsService.getPlayerRoom(client.user.id);
+    if (!roomCode) return;
+
+    client.to(`room:${roomCode}`).emit('voice:left', {
+      userId: client.user.id,
+    });
+  }
+
+  @SubscribeMessage('voice:offer')
+  async handleVoiceOffer(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() data: { targetId: string; sdp: any },
+  ) {
+    // Relay the SDP offer to the target peer
+    const sockets = await this.server.fetchSockets();
+    const target = sockets.find(
+      (s) => (s as unknown as AuthenticatedSocket).user?.id === data.targetId,
+    );
+    if (target) {
+      target.emit('voice:offer', {
+        fromId: client.user.id,
+        sdp: data.sdp,
+      });
+    }
+  }
+
+  @SubscribeMessage('voice:answer')
+  async handleVoiceAnswer(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() data: { targetId: string; sdp: any },
+  ) {
+    // Relay the SDP answer to the target peer
+    const sockets = await this.server.fetchSockets();
+    const target = sockets.find(
+      (s) => (s as unknown as AuthenticatedSocket).user?.id === data.targetId,
+    );
+    if (target) {
+      target.emit('voice:answer', {
+        fromId: client.user.id,
+        sdp: data.sdp,
+      });
+    }
+  }
+
+  @SubscribeMessage('voice:ice-candidate')
+  async handleVoiceIceCandidate(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() data: { targetId: string; candidate: any },
+  ) {
+    // Relay ICE candidate to the target peer
+    const sockets = await this.server.fetchSockets();
+    const target = sockets.find(
+      (s) => (s as unknown as AuthenticatedSocket).user?.id === data.targetId,
+    );
+    if (target) {
+      target.emit('voice:ice-candidate', {
+        fromId: client.user.id,
+        candidate: data.candidate,
+      });
+    }
+  }
+
   // ─── Phase Timer ────────────────────────────────
 
   private startPhaseTimer(gameId: string, endAt: number) {

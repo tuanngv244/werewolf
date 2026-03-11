@@ -38,3 +38,6 @@ coverage/
 # Misc
 *.tsbuildinfo
 .turbo/
+
+ssl/cert.pem
+ssl/private.key

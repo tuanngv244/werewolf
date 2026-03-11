@@ -15,6 +15,9 @@ import { Button, Badge } from '@/components/ui';
 import React, { useState, useEffect, useRef, useCallback, useMemo, Suspense } from 'react';
 import { useRouter } from '@/lib/navigation';
 import dynamic from 'next/dynamic';
+import { useVoiceChat } from '@/hooks/useVoiceChat';
+import { VoiceControls } from '@/components/game/VoiceControls';
+import { useRoomStore } from '@/stores/room-store';
 
 // Convert snake_case role to camelCase i18n key: 'alpha_werewolf' -> 'alphaWerewolf'
 function roleToCamel(role: string): string {
@@ -248,7 +251,7 @@ const ChatPanel = React.memo(function ChatPanel({ isNight }: { isNight: boolean 
         ))}
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex gap-2 items-center">
         <input
           className={`flex-1 px-3 py-2 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary ${
             isNight
@@ -263,6 +266,7 @@ const ChatPanel = React.memo(function ChatPanel({ isNight }: { isNight: boolean 
           }
           disabled={!canSendMessage}
         />
+        <VoiceControls isNight={isNight} />
         <Button size="sm" onClick={handleSend} disabled={!canSendMessage}>
           {t('chat.send')}
         </Button>
@@ -852,6 +856,10 @@ export default function GamePage() {
   const { phase, myRole, myTeam, phaseEndAt, winners, round, gameId, players } = useGameStore();
   const isAlive = useGameStore((s) => s.isAlive);
   const { emit } = useSocket();
+
+  // ── Voice chat ──
+  const roomCode = useRoomStore((s) => s.currentRoom?.code ?? null);
+  useVoiceChat(roomCode);
 
   // ── Sound effects (subscribe to game state changes) ──
   useGameSounds();

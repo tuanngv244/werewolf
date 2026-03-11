@@ -136,6 +136,14 @@
     "witchHealDesc": "Use your heal potion to save the werewolves' target tonight. One-time use.",
     "deadCantChat": "Dead players can only use ghost chat 👻"
   },
+  "voice": {
+    "muteSound": "Mute sound",
+    "unmuteSound": "Unmute sound",
+    "muteMic": "Mute microphone",
+    "unmuteMic": "Unmute microphone",
+    "micBlocked": "Microphone access denied",
+    "deadCantTalk": "Dead players cannot talk"
+  },
   "chat": {
     "placeholder": "Type a message...",
     "send": "Send"
