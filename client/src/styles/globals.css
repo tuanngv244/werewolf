@@ -1,0 +1,122 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: #FFF8E7;
+    --foreground: #2C1810;
+  }
+
+  .dark {
+    --background: #1A1A2E;
+    --foreground: #E8E8E8;
+  }
+
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-nunito), 'Nunito', sans-serif;
+  }
+
+  * {
+    @apply border-wood/20;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-primary hover:bg-primary-hover text-white font-heading
+      px-6 py-3 rounded-button font-bold text-lg
+      transition-all duration-200 ease-out
+      hover:scale-105 hover:shadow-lg
+      active:scale-95;
+  }
+
+  .btn-secondary {
+    @apply bg-transparent border-2 border-wood text-day-text font-heading
+      px-6 py-3 rounded-button font-bold text-lg
+      transition-all duration-200 ease-out
+      hover:bg-wood/10 hover:scale-105
+      active:scale-95;
+  }
+
+  .btn-danger {
+    @apply bg-danger hover:bg-danger-hover text-white font-heading
+      px-6 py-3 rounded-button font-bold text-lg
+      transition-all duration-200 ease-out
+      hover:scale-105
+      active:scale-95;
+  }
+
+  .btn-ghost {
+    @apply bg-transparent text-day-text-secondary font-body
+      px-4 py-2 rounded-button
+      transition-all duration-200
+      hover:bg-wood/10
+      active:scale-95;
+  }
+
+  .card-game {
+    @apply bg-white rounded-game shadow-lg border border-wood/20
+      p-6 transition-all duration-200;
+  }
+
+  .card-game-hover {
+    @apply card-game hover:shadow-xl hover:-translate-y-1;
+  }
+
+  .input-game {
+    @apply w-full px-4 py-3 rounded-lg border-2 border-wood/30
+      bg-white text-day-text font-body
+      focus:border-day-accent focus:outline-none focus:ring-2 focus:ring-day-accent/20
+      transition-all duration-200
+      placeholder:text-day-text-secondary/50;
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full
+      text-xs font-bold uppercase tracking-wider;
+  }
+
+  .badge-village {
+    @apply badge bg-seer-good/10 text-seer-good;
+  }
+
+  .badge-werewolf {
+    @apply badge bg-seer-evil/10 text-seer-evil;
+  }
+
+  .badge-solo {
+    @apply badge bg-seer-unknown/10 text-seer-unknown;
+  }
+
+  /* Night mode overrides */
+  .night-mode .card-game {
+    @apply bg-night-card border-night-accent/20;
+  }
+
+  .night-mode .input-game {
+    @apply bg-night-card border-night-accent/30 text-night-text
+      focus:border-night-accent focus:ring-night-accent/20
+      placeholder:text-night-text-secondary/50;
+  }
+}
+
+@layer utilities {
+  .text-shadow-glow {
+    text-shadow: 0 0 10px currentColor, 0 0 20px currentColor;
+  }
+
+  .text-shadow-sm {
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}

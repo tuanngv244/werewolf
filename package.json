@@ -1,0 +1,22 @@
+{
+  "name": "werewolf-game",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Real-time multiplayer Werewolf (Ma Soi) game with 3D characters",
+  "scripts": {
+    "dev": "concurrently \"pnpm --filter client dev\" \"pnpm --filter server dev\"",
+    "build": "pnpm --filter shared build && pnpm --filter client build && pnpm --filter server build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "clean": "pnpm -r clean"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "typescript": "^5.7.3"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.15.4"
+}

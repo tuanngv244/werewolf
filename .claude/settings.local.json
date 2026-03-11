@@ -1,0 +1,39 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(echo \"=== Role counts in each file ===\" && echo \"CLAUDE.md:\" && grep -c \"role\\\\|Role\" /Users/cyan/Workspace/Personal/werewolf-game/CLAUDE.md | head -1 && echo \"ROLES.md roles:\" && tail -n +2 /Users/cyan/Workspace/Personal/werewolf-game/ROLES.md | wc -l && echo \"---\" && echo \"16-role mentions:\" && grep -l \"16 role\\\\|16 Role\\\\|16 roles\" /Users/cyan/Workspace/Personal/werewolf-game/*.md /Users/cyan/Workspace/Personal/werewolf-game/.docs-ai/*.md /Users/cyan/Workspace/Personal/werewolf-game/.docs-ai/**/*.md 2>/dev/null)",
+      "Bash(ls /Users/cyan/Workspace/Personal/werewolf-game/client/src/app/\\\\[locale\\\\] 2>&1)",
+      "Bash(pnpm install 2>&1)",
+      "Bash(pnpm --filter client build 2>&1 | tail -80)",
+      "Bash(pnpm --filter server build 2>&1 | tail -80)",
+      "Bash(pnpm --filter server build 2>&1 | tail -40)",
+      "Bash(pnpm --filter client build 2>&1 | tail -40)",
+      "Bash(pnpm --filter server build 2>&1 | tail -20)",
+      "Bash(docker-compose:*)",
+      "Bash(docker compose:*)",
+      "Bash(pnpm dev:*)",
+      "Bash(lsof:*)",
+      "Bash(pnpm build:*)",
+      "Bash(ps:*)",
+      "Bash(kill 12200:*)",
+      "Bash(pnpm add:*)",
+      "Bash(grep:*)",
+      "Bash(curl:*)",
+      "Bash(npx tsc:*)",
+      "Bash(pkill:*)",
+      "Bash(ls:*)",
+      "Bash(npx next:*)",
+      "Bash(python3:*)",
+      "Bash(pnpm ls:*)",
+      "Bash(read f:*)",
+      "Bash(node:*)",
+      "Bash(pnpm why:*)",
+      "WebSearch",
+      "Bash(npm view:*)",
+      "Bash(pnpm remove:*)",
+      "Bash(pnpm typecheck:*)",
+      "Bash(cat:*)",
+      "Bash(pnpm:*)"
+    ]
+  }
+}
