@@ -52,19 +52,20 @@ Complete deployment guide for Ubuntu server with Docker.
 
 **Services:**
 
-| Service    | Technology       | Port | Purpose                          |
-|------------|-----------------|------|----------------------------------|
-| nginx      | Nginx Alpine     | 80   | Reverse proxy, static caching    |
-| client     | Next.js 15       | 3000 | Frontend (SSR + 3D game)         |
-| server     | NestJS           | 3001 | API + Socket.io game engine      |
-| postgres   | PostgreSQL 16    | 5432 | User data, game records, stats   |
-| redis      | Redis 7          | 6379 | Game state, sessions, cache      |
+| Service  | Technology    | Port | Purpose                        |
+| -------- | ------------- | ---- | ------------------------------ |
+| nginx    | Nginx Alpine  | 80   | Reverse proxy, static caching  |
+| client   | Next.js 15    | 3000 | Frontend (SSR + 3D game)       |
+| server   | NestJS        | 3001 | API + Socket.io game engine    |
+| postgres | PostgreSQL 16 | 5432 | User data, game records, stats |
+| redis    | Redis 7       | 6379 | Game state, sessions, cache    |
 
 ---
 
 ## Prerequisites
 
 **Server Requirements:**
+
 - Ubuntu 20.04+ (22.04 or 24.04 recommended)
 - Minimum 2 CPU, 4GB RAM (recommended: 4 CPU, 8GB RAM)
 - 20GB+ disk space
@@ -72,6 +73,7 @@ Complete deployment guide for Ubuntu server with Docker.
 - Port 80 (HTTP) and 443 (HTTPS) open
 
 **Local Machine:**
+
 - Git installed
 - SSH key configured for server access
 
@@ -349,13 +351,13 @@ server {
 
 ```yaml
 nginx:
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - /etc/letsencrypt/live/yourdomain.com/fullchain.pem:/etc/letsencrypt/fullchain.pem:ro
-      - /etc/letsencrypt/live/yourdomain.com/privkey.pem:/etc/letsencrypt/privkey.pem:ro
+  ports:
+    - '80:80'
+    - '443:443'
+  volumes:
+    - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    - /etc/letsencrypt/live/yourdomain.com/fullchain.pem:/etc/letsencrypt/fullchain.pem:ro
+    - /etc/letsencrypt/live/yourdomain.com/privkey.pem:/etc/letsencrypt/privkey.pem:ro
 ```
 
 **Update `.env.production`** URLs to use https:
@@ -399,10 +401,10 @@ sudo crontab -e
 1. Go to your domain registrar (Namecheap, GoDaddy, Cloudflare, etc.)
 2. Add/edit DNS records:
 
-| Type | Name | Value           | TTL  |
-|------|------|-----------------|------|
-| A    | @    | YOUR_SERVER_IP  | Auto |
-| A    | www  | YOUR_SERVER_IP  | Auto |
+| Type | Name | Value          | TTL  |
+| ---- | ---- | -------------- | ---- |
+| A    | @    | YOUR_SERVER_IP | Auto |
+| A    | www  | YOUR_SERVER_IP | Auto |
 
 3. Wait for DNS propagation (5 min — 48 hours)
 
@@ -686,19 +688,19 @@ werewolf-game/
 
 ### Environment Variables Reference
 
-| Variable | Where Used | Description |
-|----------|-----------|-------------|
-| `POSTGRES_DB` | docker-compose | Database name |
-| `POSTGRES_USER` | docker-compose | Database user |
-| `POSTGRES_PASSWORD` | docker-compose | Database password |
-| `REDIS_PASSWORD` | docker-compose | Redis auth password |
-| `JWT_SECRET` | server | JWT token signing |
-| `JWT_REFRESH_SECRET` | server | Refresh token signing |
-| `CORS_ORIGIN` | server | Allowed CORS origin |
-| `NEXT_PUBLIC_API_URL` | client (build-time) | API endpoint URL |
-| `NEXT_PUBLIC_WS_URL` | client (build-time) | WebSocket server URL |
-| `NEXT_PUBLIC_APP_NAME` | client (build-time) | App display name |
-| `NEXT_PUBLIC_DEFAULT_LOCALE` | client (build-time) | Default language |
-| `APP_PORT` | docker-compose | Host port for nginx |
+| Variable                     | Where Used          | Description           |
+| ---------------------------- | ------------------- | --------------------- |
+| `POSTGRES_DB`                | docker-compose      | Database name         |
+| `POSTGRES_USER`              | docker-compose      | Database user         |
+| `POSTGRES_PASSWORD`          | docker-compose      | Database password     |
+| `REDIS_PASSWORD`             | docker-compose      | Redis auth password   |
+| `JWT_SECRET`                 | server              | JWT token signing     |
+| `JWT_REFRESH_SECRET`         | server              | Refresh token signing |
+| `CORS_ORIGIN`                | server              | Allowed CORS origin   |
+| `NEXT_PUBLIC_API_URL`        | client (build-time) | API endpoint URL      |
+| `NEXT_PUBLIC_WS_URL`         | client (build-time) | WebSocket server URL  |
+| `NEXT_PUBLIC_APP_NAME`       | client (build-time) | App display name      |
+| `NEXT_PUBLIC_DEFAULT_LOCALE` | client (build-time) | Default language      |
+| `APP_PORT`                   | docker-compose      | Host port for nginx   |
 
 > **Note:** `NEXT_PUBLIC_*` variables are embedded into the client at **build time**. If you change them, you must rebuild the client container.
