@@ -1,10 +1,7 @@
 import createMiddleware from 'next-intl/middleware';
-import { locales, defaultLocale } from '@/lib/i18n';
+import { routing } from '@/lib/routing';
 
-export default createMiddleware({
-  locales,
-  defaultLocale,
-});
+export default createMiddleware(routing);
 
 export const config = {
   // Match all paths except Next.js internals, static files, and API/socket routes

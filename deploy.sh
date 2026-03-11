@@ -377,6 +377,77 @@ cmd_rollback() {
 }
 
 # ============================================
+# Command: diagnose
+# Test nginx for redirect loops
+# ============================================
+cmd_diagnose() {
+    check_deps
+    cd "$APP_DIR"
+
+    echo ""
+    log_info "═══ Redirect Loop Diagnostics ═══"
+    echo ""
+
+    # 1. Check what nginx config is actually mounted
+    log_info "1. Checking nginx config for redirects..."
+    if docker exec werewolf-nginx cat /etc/nginx/conf.d/default.conf 2>/dev/null | grep -q "return 301"; then
+        log_error "FOUND 'return 301' redirect in active nginx config! This causes redirect loops with Cloudflare."
+        echo "   Fix: Run './deploy.sh deploy' to rebuild with updated config."
+    else
+        log_ok "No 301 redirects found in active nginx config."
+    fi
+    echo ""
+
+    # 2. Test HTTP port 80 directly (bypassing Cloudflare)
+    log_info "2. Testing HTTP port 80 (direct, no Cloudflare)..."
+    local http_response
+    http_response=$(curl -s -o /dev/null -w "%{http_code} redirect→%{redirect_url}" --max-redirs 0 http://localhost:80/ 2>&1 || true)
+    echo "   Response: $http_response"
+    if echo "$http_response" | grep -q "301\|302\|307\|308"; then
+        log_error "Port 80 is REDIRECTING! This causes loops when Cloudflare connects via HTTP."
+    else
+        log_ok "Port 80 serves content directly (no redirect)."
+    fi
+    echo ""
+
+    # 3. Test HTTPS port 443 directly
+    log_info "3. Testing HTTPS port 443 (direct, no Cloudflare)..."
+    local https_response
+    https_response=$(curl -sk -o /dev/null -w "%{http_code} redirect→%{redirect_url}" --max-redirs 0 https://localhost:443/ 2>&1 || true)
+    echo "   Response: $https_response"
+    if echo "$https_response" | grep -q "301\|302\|307\|308"; then
+        log_warn "Port 443 returned a redirect (could be Next.js locale redirect — OK if it's not back to HTTPS root)."
+    else
+        log_ok "Port 443 serves content directly."
+    fi
+    echo ""
+
+    # 4. Check container health
+    log_info "4. Container status..."
+    dc ps --format "table {{.Name}}\t{{.Status}}" 2>/dev/null || dc ps
+    echo ""
+
+    # 5. Check nginx error logs
+    log_info "5. Recent nginx errors (last 10 lines)..."
+    docker logs werewolf-nginx --tail 10 2>&1 | grep -i "error\|emerg\|warn" || log_ok "No recent nginx errors."
+    echo ""
+
+    # 6. Show what SSL config is in use
+    log_info "6. SSL cert info..."
+    if has_ssl; then
+        local expiry
+        expiry=$(openssl x509 -enddate -noout -in "$APP_DIR/ssl/cert.pem" 2>/dev/null | cut -d= -f2 || echo "unknown")
+        log_ok "SSL cert present, expires: $expiry"
+    else
+        log_warn "No SSL certs found."
+    fi
+    echo ""
+
+    log_info "═══ Diagnostics Complete ═══"
+    echo ""
+}
+
+# ============================================
 # Main
 # ============================================
 case "${1:-help}" in
@@ -389,6 +460,7 @@ case "${1:-help}" in
     restart)    cmd_restart ;;
     backup)     cmd_backup ;;
     rollback)   cmd_rollback ;;
+    diagnose)   cmd_diagnose ;;
     help|*)
         echo ""
         echo "  Werewolf Game — Deploy Tool"
@@ -412,6 +484,7 @@ case "${1:-help}" in
         echo "    restart    Restart all services"
         echo "    backup     Backup PostgreSQL database"
         echo "    rollback   Rollback to previous git commit"
+        echo "    diagnose   Test nginx for redirect loops"
         echo ""
         ;;
 esac

@@ -1,6 +1,5 @@
 import { NextIntlClientProvider } from 'next-intl';
 import { getMessages, setRequestLocale } from 'next-intl/server';
-import { notFound } from 'next/navigation';
 import { locales } from '@/lib/i18n';
 import { SocketProvider } from '@/components/providers/SocketProvider';
 
@@ -16,14 +15,19 @@ export default async function LocaleLayout({
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
-  if (!locales.includes(locale as 'en' | 'vi')) notFound();
 
-  setRequestLocale(locale);
+  // Ensure valid locale — fallback to default instead of notFound()
+  // to prevent redirect loops when locale is invalid
+  const validLocale = locales.includes(locale as 'en' | 'vi')
+    ? locale
+    : 'en';
+
+  setRequestLocale(validLocale);
 
   const messages = await getMessages();
 
   return (
-    <NextIntlClientProvider messages={messages} locale={locale}>
+    <NextIntlClientProvider messages={messages} locale={validLocale}>
       <SocketProvider>
         {children}
       </SocketProvider>
