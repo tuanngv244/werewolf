@@ -24,7 +24,7 @@
 - **Stage:** DONE
 - **Symptoms:** `POST /api/auth/guest` → 500, `create-room` → connection timeout
 - **Root Causes & Fixes:**
-  1. **Wrong entry point path in Dockerfile** — CMD was `server/dist/server/src/main.js` but NestJS compiles to `server/dist/main.js`. Server container crashed on startup. Fixed in Dockerfile, nest-cli.json (`entryFile: "main"`), and package.json start scripts.
+  1. **Dockerfile/nest-cli/package.json entry path is CORRECT as-is** — `server/dist/server/src/main.js` is the correct path because `@shared/*` path alias causes tsc to restructure output with common root. DO NOT change these paths.
   2. **Missing PassportModule in AuthModule** — `JwtStrategy` extends `PassportStrategy` but `PassportModule` was never imported, causing DI failure. Added `PassportModule.register({ defaultStrategy: 'jwt' })` to AuthModule imports.
   3. **Guest username collision → unhandled 500** — `username` column is UNIQUE but `guestLogin` did no collision check. Added retry loop (5 attempts) with pre-check and catch for Postgres error code 23505.
   4. **TypeORM synchronize disabled in production** — No migrations exist, so tables were never created. Temporarily enabled `synchronize: true` (TODO: replace with proper migrations before scaling).

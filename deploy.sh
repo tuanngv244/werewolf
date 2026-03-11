@@ -8,10 +8,10 @@
 set -euo pipefail
 
 # ─── Configuration ───
-APP_DIR="/opt/werewolf-game"
+APP_DIR="$HOME/app/werewolf"
 COMPOSE_FILE="docker-compose.prod.yml"
 ENV_FILE=".env.production"
-BACKUP_DIR="/opt/werewolf-backups"
+BACKUP_DIR="$HOME/backups/werewolf"
 GIT_REPO="https://github.com/tuanngv244/werewolf.git"
 GIT_BRANCH="main"
 
@@ -98,12 +98,10 @@ cmd_setup() {
     log_ok "Firewall configured (SSH + HTTP + HTTPS)"
 
     # Create app directory
-    sudo mkdir -p "$APP_DIR"
-    sudo chown "$USER:$USER" "$APP_DIR"
+    mkdir -p "$APP_DIR"
 
     # Create backup directory
-    sudo mkdir -p "$BACKUP_DIR"
-    sudo chown "$USER:$USER" "$BACKUP_DIR"
+    mkdir -p "$BACKUP_DIR"
 
     # Clone repository
     if [ ! -d "$APP_DIR/.git" ]; then
@@ -135,9 +133,7 @@ cmd_setup() {
     echo "  Next steps:"
     echo "  1. Deploy: cd $APP_DIR && ./deploy.sh deploy"
     echo ""
-    if groups "$USER" | grep -q docker; then
-        true
-    else
+    if ! groups "$USER" | grep -q docker; then
         log_warn "Log out and back in for docker group to take effect!"
     fi
 }
