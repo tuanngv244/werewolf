@@ -1,12 +1,17 @@
 import { io, Socket } from 'socket.io-client';
 
 function getWsUrl(): string {
+  // NEXT_PUBLIC_WS_URL is baked at build time
+  // Production: http://159.223.65.161 (goes through nginx, which handles /socket.io/)
+  // Development: http://localhost:3001 (direct to NestJS)
+  if (process.env.NEXT_PUBLIC_WS_URL) {
+    return process.env.NEXT_PUBLIC_WS_URL;
+  }
   if (typeof window !== 'undefined') {
-    // In browser: use the same hostname the user is on (supports both localhost and LAN IP)
     const hostname = window.location.hostname;
     return `http://${hostname}:3001`;
   }
-  return process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:3001';
+  return 'http://localhost:3001';
 }
 
 const WS_URL = getWsUrl();

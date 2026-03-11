@@ -1,10 +1,15 @@
 function getApiUrl(): string {
+  // NEXT_PUBLIC_API_URL is baked at build time
+  // Production: http://159.223.65.161/api (goes through nginx)
+  // Development: http://localhost:3001 (direct to NestJS)
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
+  }
   if (typeof window !== 'undefined') {
-    // In browser: use the same hostname the user is on (supports both localhost and LAN IP)
     const hostname = window.location.hostname;
     return `http://${hostname}:3001`;
   }
-  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+  return 'http://localhost:3001';
 }
 
 const API_URL = getApiUrl();
