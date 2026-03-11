@@ -38,6 +38,3 @@ coverage/
 # Misc
 *.tsbuildinfo
 .turbo/
-
-# Deploy (generated on server by deploy.sh)
-docker-compose.ssl.yml

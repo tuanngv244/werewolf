@@ -77,8 +77,7 @@ services:
       - werewolf-network
 
   # ─── Nginx Reverse Proxy ───
-  # SSL is configured automatically by deploy.sh
-  # It swaps nginx.conf → nginx-ssl.conf when certs exist
+  # deploy.sh auto-picks nginx.conf (HTTP) or nginx-ssl.conf (HTTPS)
   nginx:
     image: nginx:alpine
     container_name: werewolf-nginx
@@ -88,6 +87,7 @@ services:
       - "${APP_SSL_PORT:-443}:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
     depends_on:
       - client
       - server
