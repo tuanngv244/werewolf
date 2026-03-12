@@ -140,7 +140,9 @@
     "deathLog": "Nhật Ký Tử Vong",
     "deathNight": "Bị giết ban đêm",
     "deathVoted": "Bị treo cổ",
-    "deathGunner": "Bị Xạ Thủ bắn"
+    "deathGunner": "Bị Xạ Thủ bắn",
+    "rolesInGame": "Vai Trò Trong Game",
+    "viewRoles": "Xem Vai Trò"
   },
   "voice": {
     "muteSound": "Tắt âm thanh",

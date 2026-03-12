@@ -140,7 +140,9 @@
     "deathLog": "Death Log",
     "deathNight": "Killed at night",
     "deathVoted": "Voted out",
-    "deathGunner": "Shot by Gunner"
+    "deathGunner": "Shot by Gunner",
+    "rolesInGame": "Roles in Game",
+    "viewRoles": "View Roles"
   },
   "voice": {
     "muteSound": "Mute sound",

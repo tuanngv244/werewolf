@@ -829,11 +829,79 @@ function GunnerPanel({ isNight }: { isNight: boolean }) {
   );
 }
 
-// ─── Death Log Panel ─────────────────────────────
+// ─── Role List Button with Popover ─────────────────────────────
+function RoleListButton({ isNight }: { isNight: boolean }) {
+  const t = useTranslations();
+  const roleList = useGameStore((s) => s.roleList);
+  const [isOpen, setIsOpen] = useState(false);
+
+  if (roleList.length === 0) return null;
+
+  // Count occurrences of each role
+  const roleCounts = roleList.reduce<Record<string, number>>((acc, role) => {
+    acc[role] = (acc[role] || 0) + 1;
+    return acc;
+  }, {});
+
+  return (
+    <div className="pointer-events-auto relative flex justify-center mt-1">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all backdrop-blur-xl border ${
+          isNight
+            ? 'bg-night-card/70 border-night-border/50 text-night-text hover:bg-night-card/90'
+            : 'bg-white/70 border-day-border/50 text-day-text hover:bg-white/90'
+        }`}
+      >
+        <span>🎭</span>
+        <span>{t('game.viewRoles')}</span>
+        <Badge variant={isNight ? 'warning' : 'info'}>{roleList.length}</Badge>
+        <span className="text-[10px]">{isOpen ? '▲' : '▼'}</span>
+      </button>
+
+      {isOpen && (
+        <>
+          {/* Backdrop to close */}
+          <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
+
+          {/* Popover panel */}
+          <div className={`absolute top-full mt-2 z-50 min-w-[200px] max-w-[320px] rounded-xl border backdrop-blur-xl shadow-xl ${
+            isNight
+              ? 'bg-night-card/90 border-night-border/50'
+              : 'bg-white/90 border-day-border/50'
+          }`}>
+            <div className="px-3 py-2 border-b border-inherit">
+              <p className={`text-xs font-semibold ${isNight ? 'text-night-text' : 'text-day-text'}`}>
+                🎭 {t('game.rolesInGame')} ({roleList.length})
+              </p>
+            </div>
+            <div className="p-2 grid grid-cols-2 gap-1">
+              {Object.entries(roleCounts).map(([role, count]) => (
+                <div
+                  key={role}
+                  className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs ${
+                    isNight
+                      ? 'bg-night-bg/50 text-night-text'
+                      : 'bg-day-bg/50 text-day-text'
+                  }`}
+                >
+                  <span className="text-sm">{ROLE_ICONS[role] || '❓'}</span>
+                  <span className="truncate">{t(`roles.${roleToCamel(role)}`)}</span>
+                  {count > 1 && (
+                    <Badge variant="info" className="ml-auto">×{count}</Badge>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 function DeathLog({ isNight }: { isNight: boolean }) {
   const t = useTranslations();
   const deathLog = useGameStore((s) => s.deathLog);
-  const [isCollapsed, setIsCollapsed] = useState(true);
 
   if (deathLog.length === 0) return null;
 
@@ -851,37 +919,29 @@ function DeathLog({ isNight }: { isNight: boolean }) {
 
   return (
     <div className="pointer-events-auto">
-      <button
-        onClick={() => setIsCollapsed(!isCollapsed)}
-        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-t-xl text-xs font-semibold transition-all backdrop-blur-xl border border-b-0 ${
-          isNight
-            ? 'bg-night-card/70 border-night-border/50 text-night-text'
-            : 'bg-white/70 border-day-border/50 text-day-text'
-        }`}
-      >
-        <span>💀</span>
-        <span>{t('game.deathLog')}</span>
-        <Badge variant="danger">{deathLog.length}</Badge>
-        <span className="text-[10px]">{isCollapsed ? '▲' : '▼'}</span>
-      </button>
-      {!isCollapsed && (
-        <GlassCard isNight={isNight} className="!rounded-tl-none !py-2 max-h-40 overflow-y-auto">
-          <div className="space-y-1.5">
-            {deathLog.map((entry, i) => (
-              <div key={`${entry.playerId}-${i}`} className="flex items-center gap-2 text-xs">
-                <span>{causeIcons[entry.cause] || '💀'}</span>
-                <span className="font-semibold text-danger">{entry.playerName}</span>
-                <span className={isNight ? 'text-night-muted' : 'text-day-muted'}>
-                  {causeLabels[entry.cause] || entry.cause}
-                </span>
-                <span className={`ml-auto text-[10px] ${isNight ? 'text-night-muted' : 'text-day-muted'}`}>
-                  R{entry.round}
-                </span>
-              </div>
-            ))}
-          </div>
-        </GlassCard>
-      )}
+      <GlassCard isNight={isNight} className="!py-2 !px-3 w-56">
+        <div className="flex items-center gap-1.5 mb-2">
+          <span>💀</span>
+          <span className={`text-xs font-semibold ${isNight ? 'text-night-text' : 'text-day-text'}`}>
+            {t('game.deathLog')}
+          </span>
+          <Badge variant="danger">{deathLog.length}</Badge>
+        </div>
+        <div className="space-y-1.5 max-h-32 overflow-y-auto scrollbar-thin">
+          {deathLog.map((entry, i) => (
+            <div key={`${entry.playerId}-${i}`} className="flex items-center gap-2 text-xs">
+              <span>{causeIcons[entry.cause] || '💀'}</span>
+              <span className="font-semibold text-danger truncate">{entry.playerName}</span>
+              <span className={`truncate ${isNight ? 'text-night-muted' : 'text-day-muted'}`}>
+                {causeLabels[entry.cause] || entry.cause}
+              </span>
+              <span className={`ml-auto text-[10px] flex-shrink-0 ${isNight ? 'text-night-muted' : 'text-day-muted'}`}>
+                R{entry.round}
+              </span>
+            </div>
+          ))}
+        </div>
+      </GlassCard>
     </div>
   );
 }
@@ -920,7 +980,6 @@ export default function GamePage() {
   const t = useTranslations();
   const router = useRouter();
   const { phase, myRole, myTeam, phaseEndAt, winners, round, gameId, players } = useGameStore();
-  const roleList = useGameStore((s) => s.roleList);
   const isAlive = useGameStore((s) => s.isAlive);
   const { emit } = useSocket();
 
@@ -1117,26 +1176,14 @@ export default function GamePage() {
           </div>
         )}
 
-        {/* Role list */}
-        {roleList.length > 0 && (
-          <div className="pointer-events-auto flex justify-center mt-1">
-            <GlassCard isNight={isNight} className="!py-1.5 !px-3">
-              <div className="flex gap-1 items-center flex-wrap justify-center">
-                {roleList.map((role, i) => (
-                  <span key={`${role}-${i}`} className="text-sm" title={t(`roles.${roleToCamel(role)}`)}>
-                    {ROLE_ICONS[role] || '❓'}
-                  </span>
-                ))}
-              </div>
-            </GlassCard>
-          </div>
-        )}
+        {/* Role list button */}
+        <RoleListButton isNight={isNight} />
 
         {/* Spacer */}
         <div className="flex-1" />
 
-        {/* Death Log (bottom-right, above action panels) */}
-        <div className="flex justify-end px-3 mb-1">
+        {/* Death Log (fixed bottom-right frame) */}
+        <div className="fixed bottom-20 right-3 z-20">
           <DeathLog isNight={isNight} />
         </div>
 
