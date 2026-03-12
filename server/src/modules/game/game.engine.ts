@@ -21,9 +21,11 @@ interface NightResolution {
   deaths: { playerId: string; cause: DeathCause }[];
   saved: string[];
   messages: string[];
-  seerResult?: { targetId: string; role: Role };
+  seerResult?: { targetId: string; alignment: SeerResult };
   auraSeerResult?: { targetId: string; result: SeerResult };
   werewolfSeerResult?: { targetId: string; role: Role };
+  witchTarget?: string; // The player the werewolves targeted (for Witch notification)
+  cursedTransformed?: string; // Player ID of Cursed who transformed into Werewolf
 }
 
 @Injectable()
@@ -185,11 +187,10 @@ export class GameEngine {
       if (seer && !seer.nightmareBlocked) {
         const target = game.players.find((p) => p.id === actions.seerTarget);
         if (target) {
-          let role = target.role;
-          if (target.cursedByShaman) {
-            role = Role.WEREWOLF;
-          }
-          result.seerResult = { targetId: target.id, role };
+          const alignment = target.cursedByShaman
+            ? SeerResult.EVIL
+            : getRoleSeerResult(target.role);
+          result.seerResult = { targetId: target.id, alignment };
         }
       }
     }
@@ -312,6 +313,11 @@ export class GameEngine {
       }
     }
 
+    // ─── 7.5 Record witch target BEFORE witch acts (so she can see who was attacked) ───
+    // This is the werewolf target after beast hunter trap and bodyguard/doctor resolution
+    // but before witch heal/kill — the witch sees the current target to decide
+    result.witchTarget = werewolfTarget || undefined;
+
     // ─── 8. Witch actions (not on Blood Moon night for heal) ───
     const witch = alive.find((p) => p.role === Role.WITCH);
     if (witch?.witchState && !witch.nightmareBlocked) {
@@ -340,6 +346,7 @@ export class GameEngine {
           target.cursedState.isTransformed = true;
           target.team = Team.WEREWOLF;
           target.role = Role.WEREWOLF;
+          result.cursedTransformed = target.id;
           result.messages.push('cursed_transformed');
         } else if (target.role === Role.BOMBER) {
           // Bomber can't be killed by werewolves

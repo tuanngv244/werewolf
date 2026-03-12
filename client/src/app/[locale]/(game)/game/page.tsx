@@ -47,7 +47,7 @@ function GlassCard({
 }) {
   return (
     <div
-      className={`rounded-2xl p-4 backdrop-blur-xl border ${
+      className={`rounded-xl md:rounded-2xl p-3 md:p-4 backdrop-blur-xl border ${
         isNight
           ? 'bg-night-card/70 border-night-border/50 text-night-text'
           : 'bg-white/70 border-day-border/50 text-day-text'
@@ -76,7 +76,7 @@ function PhaseTimer({ endAt, isNight }: { endAt: number | null; isNight: boolean
 
   return (
     <div
-      className={`text-3xl font-heading font-bold tabular-nums ${
+      className={`text-xl md:text-3xl font-heading font-bold tabular-nums ${
         isUrgent ? 'text-danger animate-pulse' : isNight ? 'text-night-accent' : 'text-day-accent'
       }`}
     >
@@ -163,6 +163,8 @@ const ChatPanel = React.memo(function ChatPanel({ isNight }: { isNight: boolean 
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [channelMessages.length]);
 
+  const isWolf = myRole ? isWerewolfRole(myRole) : false;
+
   const availableChannels = useMemo(() => {
     const channels: { key: string; label: string }[] = [];
     if (!isAlive) {
@@ -170,6 +172,11 @@ const ChatPanel = React.memo(function ChatPanel({ isNight }: { isNight: boolean 
       channels.push({ key: 'DAY', label: '💬' });
       channels.push({ key: 'WEREWOLF', label: '🐺' });
       channels.push({ key: 'DEAD', label: '👻' });
+    } else if (phase === GamePhase.NIGHT) {
+      // Night: only wolves get the wolf chat, non-wolves get no chat
+      if (isWolf) {
+        channels.push({ key: 'WEREWOLF', label: '🐺' });
+      }
     } else {
       if (
         phase === GamePhase.DAY ||
@@ -179,15 +186,9 @@ const ChatPanel = React.memo(function ChatPanel({ isNight }: { isNight: boolean 
       ) {
         channels.push({ key: 'DAY', label: '💬' });
       }
-      if (myRole && isWerewolfRole(myRole) && phase === GamePhase.NIGHT) {
-        channels.push({ key: 'WEREWOLF', label: '🐺' });
-      }
-    }
-    if (channels.length === 0) {
-      channels.push({ key: 'DAY', label: '💬' });
     }
     return channels;
-  }, [isAlive, phase, myRole]);
+  }, [isAlive, phase, isWolf]);
 
   const canSendMessage = useMemo(() => {
     if (!isAlive) {
@@ -202,6 +203,8 @@ const ChatPanel = React.memo(function ChatPanel({ isNight }: { isNight: boolean 
     emit('chat:send', { channel: activeChannel, content: input.trim() });
     setInput('');
   };
+
+  const noChatAvailable = availableChannels.length === 0;
 
   return (
     <GlassCard isNight={isNight} className="flex flex-col h-full">
@@ -224,34 +227,48 @@ const ChatPanel = React.memo(function ChatPanel({ isNight }: { isNight: boolean 
           ))}
         </div>
       )}
+      {availableChannels.length === 1 && activeChannel === 'WEREWOLF' && (
+        <div className="flex items-center gap-1.5 mb-2">
+          <span className="text-sm">🐺</span>
+          <span className="text-xs font-semibold text-red-400">{t('chat.wolfChat')}</span>
+        </div>
+      )}
 
       <div
         ref={scrollRef}
         className="flex-1 overflow-y-auto [scrollbar-color:transparent_transparent] space-y-1.5 mb-2 min-h-0"
       >
-        {channelMessages.length === 0 && (
+        {noChatAvailable ? (
+          <div className="flex flex-col items-center justify-center h-full py-8 gap-2">
+            <span className="text-2xl">🌙</span>
+            <p className={`text-xs text-center ${isNight ? 'text-night-muted' : 'text-day-muted'}`}>
+              {t('game.nightSilence')}
+            </p>
+          </div>
+        ) : channelMessages.length === 0 ? (
           <p
             className={`text-xs text-center py-4 ${isNight ? 'text-night-muted' : 'text-day-muted'}`}
           >
             {t('game.noMessages')}
           </p>
+        ) : (
+          channelMessages.map((msg) => (
+            <div key={msg.id} className={msg.isSystem ? 'text-center' : ''}>
+              {msg.isSystem ? (
+                <p
+                  className={`text-[10px] italic ${isNight ? 'text-night-muted' : 'text-day-muted'}`}
+                >
+                  {msg.content}
+                </p>
+              ) : (
+                <p className="text-xs">
+                  <span className="font-semibold text-primary">{msg.senderName}: </span>
+                  {msg.content}
+                </p>
+              )}
+            </div>
+          ))
         )}
-        {channelMessages.map((msg) => (
-          <div key={msg.id} className={msg.isSystem ? 'text-center' : ''}>
-            {msg.isSystem ? (
-              <p
-                className={`text-[10px] italic ${isNight ? 'text-night-muted' : 'text-day-muted'}`}
-              >
-                {msg.content}
-              </p>
-            ) : (
-              <p className="text-xs">
-                <span className="font-semibold text-primary">{msg.senderName}: </span>
-                {msg.content}
-              </p>
-            )}
-          </div>
-        ))}
       </div>
 
       <div className="flex gap-2 items-center">
@@ -260,21 +277,25 @@ const ChatPanel = React.memo(function ChatPanel({ isNight }: { isNight: boolean 
             isNight
               ? 'bg-night-bg/60 border border-night-border/50 text-night-text placeholder-night-muted'
               : 'bg-white/60 border border-day-border/50 text-day-text placeholder-day-muted'
-          } ${!canSendMessage ? 'opacity-50 cursor-not-allowed' : ''}`}
+          } ${!canSendMessage || noChatAvailable ? 'opacity-50 cursor-not-allowed' : ''}`}
           value={input}
-          onChange={(e) => canSendMessage && setInput(e.target.value)}
+          onChange={(e) => canSendMessage && !noChatAvailable && setInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleSend()}
           placeholder={
-            !isAlive && activeChannel !== 'DEAD'
-              ? `👁 ${t('game.observeOnly')}`
-              : !canSendMessage
-                ? t('game.deadCantChat')
-                : t('chat.placeholder')
+            noChatAvailable
+              ? `🌙 ${t('game.nightSilence')}`
+              : !isAlive && activeChannel !== 'DEAD'
+                ? `👁 ${t('game.observeOnly')}`
+                : !canSendMessage
+                  ? t('game.deadCantChat')
+                  : activeChannel === 'WEREWOLF'
+                    ? t('chat.wolfChatPlaceholder')
+                    : t('chat.placeholder')
           }
-          disabled={!canSendMessage}
+          disabled={!canSendMessage || noChatAvailable}
         />
         <VoiceControls isNight={isNight} />
-        <Button size="sm" onClick={handleSend} disabled={!canSendMessage}>
+        <Button size="sm" onClick={handleSend} disabled={!canSendMessage || noChatAvailable}>
           {t('chat.send')}
         </Button>
       </div>
@@ -349,6 +370,7 @@ function NightActionPanel({
   const seerResult = useGameStore((s) => s.seerResult);
   const auraSeerResult = useGameStore((s) => s.auraSeerResult);
   const werewolfSeerResult = useGameStore((s) => s.werewolfSeerResult);
+  const witchAttackedTarget = useGameStore((s) => s.witchAttackedTarget);
   const { user } = useAuthStore();
   const { emit } = useEmit();
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
@@ -381,8 +403,24 @@ function NightActionPanel({
             <p className="text-sm font-semibold text-purple-300">
               {t('game.seerCheckResult', {
                 target: players.find((p) => p.id === seerResult.targetId)?.username || '',
-                role: t(`roles.${roleToCamel(seerResult.role)}`),
+                result: t(`seerResult.${seerResult.alignment}`),
               })}
+            </p>
+            <p
+              className={`text-xs mt-1 font-medium ${
+                seerResult.alignment === 'good'
+                  ? 'text-emerald-400'
+                  : seerResult.alignment === 'evil'
+                    ? 'text-red-400'
+                    : 'text-amber-400'
+              }`}
+            >
+              {seerResult.alignment === 'good'
+                ? '✅'
+                : seerResult.alignment === 'evil'
+                  ? '❌'
+                  : '❓'}{' '}
+              {t(`seerResult.${seerResult.alignment}`)}
             </p>
           </div>
         )}
@@ -403,7 +441,7 @@ function NightActionPanel({
           <div className="mt-3 p-3 bg-red-500/20 rounded-xl border border-red-400/30">
             <span className="text-2xl block mb-1">🐺🔮</span>
             <p className="text-sm font-semibold text-red-300">
-              {t('game.seerCheckResult', {
+              {t('game.wolfSeerCheckResult', {
                 target: players.find((p) => p.id === werewolfSeerResult.targetId)?.username || '',
                 role: t(`roles.${roleToCamel(werewolfSeerResult.role)}`),
               })}
@@ -455,7 +493,8 @@ function NightActionPanel({
   const handleConfirmAction = () => {
     if (!gameId) return;
     let action = 'target';
-    if (isWerewolfRole(myRole)) action = 'werewolf_kill';
+    if (myRole === Role.WEREWOLF_SEER) action = 'seer_check';
+    else if (isWerewolfRole(myRole)) action = 'werewolf_kill';
     else if (myRole === Role.SEER || myRole === Role.APPRENTICE_SEER) action = 'seer_check';
     else if (myRole === Role.AURA_SEER) action = 'aura_check';
     else if (myRole === Role.DOCTOR) action = 'protect';
@@ -559,9 +598,7 @@ function NightActionPanel({
             className="flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all bg-night-bg/40 border-night-border/30 hover:bg-night-bg/60 hover:border-night-accent/50"
           >
             <span className="text-2xl">⏭️</span>
-            <span className="text-xs font-semibold text-night-muted">
-              {t('game.skip')}
-            </span>
+            <span className="text-xs font-semibold text-night-muted">{t('game.skip')}</span>
           </button>
         </div>
 
@@ -581,10 +618,20 @@ function NightActionPanel({
           </>
         )}
 
-        {/* Heal mode info */}
+        {/* Heal mode info — show who was attacked */}
         {witchAction === 'heal' && (
           <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-400/20 mb-2">
-            <p className="text-xs text-emerald-300">{t('game.witchHealDesc')}</p>
+            {witchAttackedTarget ? (
+              <p className="text-xs text-emerald-300">
+                ⚔️{' '}
+                <span className="font-bold">
+                  {players.find((p) => p.id === witchAttackedTarget)?.username || '???'}
+                </span>{' '}
+                {t('game.witchAttackedInfo')}
+              </p>
+            ) : (
+              <p className="text-xs text-emerald-300">{t('game.witchNoAttack')}</p>
+            )}
           </div>
         )}
 
@@ -757,12 +804,71 @@ function VotePanel({
 function DawnPanel() {
   const t = useTranslations();
   const { nightResult, players } = useGameStore();
+  const seerResult = useGameStore((s) => s.seerResult);
+  const auraSeerResult = useGameStore((s) => s.auraSeerResult);
+  const werewolfSeerResult = useGameStore((s) => s.werewolfSeerResult);
 
   return (
     <GlassCard isNight={false}>
       <h3 className="font-heading font-semibold mb-4 text-center text-lg">
         {t('game.dawnResult')}
       </h3>
+
+      {/* Seer result display — persisted from night phase */}
+      {seerResult && (
+        <div className="mb-3 p-3 bg-purple-500/20 rounded-xl border border-purple-400/30">
+          <span className="text-2xl block mb-1">🔮</span>
+          <p className="text-sm font-semibold text-purple-300">
+            {t('game.seerCheckResult', {
+              target: players.find((p) => p.id === seerResult.targetId)?.username || '',
+              result: t(`seerResult.${seerResult.alignment}`),
+            })}
+          </p>
+          <p
+            className={`text-xs mt-1 font-medium ${
+              seerResult.alignment === 'good'
+                ? 'text-emerald-400'
+                : seerResult.alignment === 'evil'
+                  ? 'text-red-400'
+                  : 'text-amber-400'
+            }`}
+          >
+            {seerResult.alignment === 'good'
+              ? '✅'
+              : seerResult.alignment === 'evil'
+                ? '❌'
+                : '❓'}{' '}
+            {t(`seerResult.${seerResult.alignment}`)}
+          </p>
+        </div>
+      )}
+
+      {/* Aura Seer result display */}
+      {auraSeerResult && (
+        <div className="mb-3 p-3 bg-cyan-500/20 rounded-xl border border-cyan-400/30">
+          <span className="text-2xl block mb-1">✨</span>
+          <p className="text-sm font-semibold text-cyan-300">
+            {t('game.auraSeerCheckResult', {
+              target: players.find((p) => p.id === auraSeerResult.targetId)?.username || '',
+              result: t(`seerResult.${auraSeerResult.result.toLowerCase()}`),
+            })}
+          </p>
+        </div>
+      )}
+
+      {/* Werewolf Seer result (shared with all wolves) */}
+      {werewolfSeerResult && (
+        <div className="mb-3 p-3 bg-red-500/20 rounded-xl border border-red-400/30">
+          <span className="text-2xl block mb-1">🐺🔮</span>
+          <p className="text-sm font-semibold text-red-300">
+            {t('game.wolfSeerCheckResult', {
+              target: players.find((p) => p.id === werewolfSeerResult.targetId)?.username || '',
+              role: t(`roles.${roleToCamel(werewolfSeerResult.role)}`),
+            })}
+          </p>
+        </div>
+      )}
+
       {nightResult && nightResult.killed.length > 0 ? (
         <div className="space-y-2">
           {nightResult.killed.map((playerId) => {
@@ -844,7 +950,7 @@ function RoleListButton({ isNight }: { isNight: boolean }) {
   }, {});
 
   return (
-    <div className="pointer-events-auto relative flex justify-center mt-1">
+    <div className="pointer-events-auto relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all backdrop-blur-xl border ${
@@ -865,13 +971,17 @@ function RoleListButton({ isNight }: { isNight: boolean }) {
           <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
 
           {/* Popover panel */}
-          <div className={`absolute top-full mt-2 z-50 min-w-[200px] max-w-[320px] rounded-xl border backdrop-blur-xl shadow-xl ${
-            isNight
-              ? 'bg-night-card/90 border-night-border/50'
-              : 'bg-white/90 border-day-border/50'
-          }`}>
+          <div
+            className={`absolute top-full mt-2 z-50 min-w-[200px] max-w-[320px] rounded-xl border backdrop-blur-xl shadow-xl ${
+              isNight
+                ? 'bg-night-card/90 border-night-border/50'
+                : 'bg-white/90 border-day-border/50'
+            }`}
+          >
             <div className="px-3 py-2 border-b border-inherit">
-              <p className={`text-xs font-semibold ${isNight ? 'text-night-text' : 'text-day-text'}`}>
+              <p
+                className={`text-xs font-semibold ${isNight ? 'text-night-text' : 'text-day-text'}`}
+              >
                 🎭 {t('game.rolesInGame')} ({roleList.length})
               </p>
             </div>
@@ -880,15 +990,15 @@ function RoleListButton({ isNight }: { isNight: boolean }) {
                 <div
                   key={role}
                   className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs ${
-                    isNight
-                      ? 'bg-night-bg/50 text-night-text'
-                      : 'bg-day-bg/50 text-day-text'
+                    isNight ? 'bg-night-bg/50 text-night-text' : 'bg-day-bg/50 text-day-text'
                   }`}
                 >
                   <span className="text-sm">{ROLE_ICONS[role] || '❓'}</span>
                   <span className="truncate">{t(`roles.${roleToCamel(role)}`)}</span>
                   {count > 1 && (
-                    <Badge variant="info" className="ml-auto">×{count}</Badge>
+                    <Badge variant="info" className="ml-auto">
+                      ×{count}
+                    </Badge>
                   )}
                 </div>
               ))}
@@ -922,7 +1032,9 @@ function DeathLog({ isNight }: { isNight: boolean }) {
       <GlassCard isNight={isNight} className="!py-2 !px-3 w-56">
         <div className="flex items-center gap-1.5 mb-2">
           <span>💀</span>
-          <span className={`text-xs font-semibold ${isNight ? 'text-night-text' : 'text-day-text'}`}>
+          <span
+            className={`text-xs font-semibold ${isNight ? 'text-night-text' : 'text-day-text'}`}
+          >
             {t('game.deathLog')}
           </span>
           <Badge variant="danger">{deathLog.length}</Badge>
@@ -935,13 +1047,85 @@ function DeathLog({ isNight }: { isNight: boolean }) {
               <span className={`truncate ${isNight ? 'text-night-muted' : 'text-day-muted'}`}>
                 {causeLabels[entry.cause] || entry.cause}
               </span>
-              <span className={`ml-auto text-[10px] flex-shrink-0 ${isNight ? 'text-night-muted' : 'text-day-muted'}`}>
+              <span
+                className={`ml-auto text-[10px] flex-shrink-0 ${isNight ? 'text-night-muted' : 'text-day-muted'}`}
+              >
                 R{entry.round}
               </span>
             </div>
           ))}
         </div>
       </GlassCard>
+    </div>
+  );
+}
+
+// ─── Intro Story Overlay — Cinematic line-by-line ─────────────────────────────
+const INTRO_LINE_COUNT = 6;
+const LINE_DELAY_MS = 1800; // time between each line appearing
+const INTRO_TOTAL_DURATION_MS = INTRO_LINE_COUNT * LINE_DELAY_MS + 2000; // total display time
+
+function IntroStoryOverlay() {
+  const t = useTranslations();
+  const [visibleLines, setVisibleLines] = useState(0);
+  const [fadeOut, setFadeOut] = useState(false);
+
+  useEffect(() => {
+    // Show title immediately, then stagger story lines
+    const timers: NodeJS.Timeout[] = [];
+    for (let i = 1; i <= INTRO_LINE_COUNT; i++) {
+      timers.push(setTimeout(() => setVisibleLines(i), i * LINE_DELAY_MS));
+    }
+    // Start fade-out near the end
+    timers.push(setTimeout(() => setFadeOut(true), INTRO_TOTAL_DURATION_MS - 800));
+    // Auto-dismiss the intro overlay after total duration
+    timers.push(
+      setTimeout(() => {
+        useGameStore.getState().setShouldShowIntro(false);
+      }, INTRO_TOTAL_DURATION_MS),
+    );
+    return () => timers.forEach(clearTimeout);
+  }, []);
+
+  const lines = Array.from({ length: INTRO_LINE_COUNT }, (_, i) => t(`game.introLine${i + 1}`));
+
+  return (
+    <div
+      className={`absolute inset-0 z-30 flex items-center justify-center bg-black/95 transition-opacity duration-700 ${fadeOut ? 'opacity-0' : 'opacity-100'}`}
+    >
+      <div className="w-full max-w-lg px-8">
+        {/* Moon + Title */}
+        <div className="text-center mb-8 animate-fade-in">
+          <span className="text-6xl block mb-4 animate-pulse drop-shadow-[0_0_40px_rgba(255,200,50,0.6)]">
+            🌕
+          </span>
+          <h2 className="font-heading font-bold text-2xl text-amber-100 drop-shadow-lg">
+            {t('game.introTitle')}
+          </h2>
+        </div>
+
+        {/* Story lines — appear one by one */}
+        <div className="space-y-3">
+          {lines.map((line, idx) => (
+            <p
+              key={idx}
+              className="text-sm leading-relaxed drop-shadow-md transition-all duration-700"
+              style={{
+                opacity: idx < visibleLines ? 1 : 0,
+                transform: idx < visibleLines ? 'translateY(0)' : 'translateY(12px)',
+                color:
+                  idx === INTRO_LINE_COUNT - 1 && idx < visibleLines
+                    ? '#fbbf24' // amber highlight for last line
+                    : '#d1d5db', // gray-300
+                fontWeight: idx === INTRO_LINE_COUNT - 1 ? 600 : 400,
+                fontStyle: idx === 0 ? 'italic' : 'normal',
+              }}
+            >
+              {line}
+            </p>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -981,7 +1165,9 @@ export default function GamePage() {
   const router = useRouter();
   const { phase, myRole, myTeam, phaseEndAt, winners, round, gameId, players } = useGameStore();
   const isAlive = useGameStore((s) => s.isAlive);
-  const { emit } = useSocket();
+  const shouldShowIntro = useGameStore((s) => s.shouldShowIntro);
+  const lastRoomCode = useGameStore((s) => s.lastRoomCode);
+  const { emit } = useEmit();
 
   // ── Voice chat ──
   const roomCode = useRoomStore((s) => s.currentRoom?.code ?? null);
@@ -992,6 +1178,8 @@ export default function GamePage() {
 
   // ── Player selection state (used for voting + night actions + 3D highlight) ──
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
+  // ── Mobile bottom panel tab (toggle action panel vs chat) ──
+  const [mobileTab, setMobileTab] = useState<'action' | 'chat'>('action');
 
   // Clear selection when phase changes
   useEffect(() => {
@@ -1048,8 +1236,16 @@ export default function GamePage() {
   useEffect(() => {
     if (!gameId && !winners) {
       const timer = setTimeout(() => {
-        if (!useGameStore.getState().gameId) {
-          router.push('/rooms');
+        const state = useGameStore.getState();
+        if (!state.gameId) {
+          // Navigate back to room if we know which room, otherwise go to room list
+          if (state.lastRoomCode) {
+            const roomCode = state.lastRoomCode;
+            state.resetGame();
+            router.push(`/room/${roomCode}`);
+          } else {
+            router.push('/rooms');
+          }
         }
       }, 3000);
       return () => clearTimeout(timer);
@@ -1057,6 +1253,7 @@ export default function GamePage() {
   }, [gameId, winners, router]);
 
   const phaseLabels: Record<string, string> = {
+    [GamePhase.INTRO]: `📖 ${t('game.introTitle')}`,
     [GamePhase.STARTING]: `🎭 ${t('game.gameStarting')}`,
     [GamePhase.NIGHT]: t('phases.night'),
     [GamePhase.DAWN]: t('phases.dawn'),
@@ -1067,12 +1264,13 @@ export default function GamePage() {
     [GamePhase.GAME_OVER]: t('phases.gameOver'),
   };
 
-  const isNight = phase === GamePhase.NIGHT || phase === GamePhase.STARTING;
+  const isNight =
+    phase === GamePhase.NIGHT || phase === GamePhase.STARTING || phase === GamePhase.INTRO;
 
   // ── Game Over screen ──
   if (winners) {
     return (
-      <div className="relative w-full h-screen overflow-hidden">
+      <div className="relative w-full h-screen-safe overflow-hidden">
         <Suspense fallback={null}>
           <Game3DScene isNight={false} players={players} />
         </Suspense>
@@ -1092,11 +1290,16 @@ export default function GamePage() {
             )}
             <Button
               onClick={() => {
+                const roomCode = useGameStore.getState().lastRoomCode;
                 useGameStore.getState().resetGame();
-                router.push('/rooms');
+                if (roomCode) {
+                  router.push(`/room/${roomCode}`);
+                } else {
+                  router.push('/rooms');
+                }
               }}
             >
-              {t('game.backToLobby')}
+              {lastRoomCode ? t('game.backToRoom') : t('game.backToLobby')}
             </Button>
           </GlassCard>
         </div>
@@ -1107,7 +1310,7 @@ export default function GamePage() {
   // ── Loading screen ──
   if (!gameId) {
     return (
-      <div className="w-full h-screen flex items-center justify-center bg-day-bg">
+      <div className="w-full h-screen-safe flex items-center justify-center bg-day-bg">
         <div className="text-center">
           <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4" />
           <p className="text-day-muted">{t('common.loading')}</p>
@@ -1118,7 +1321,7 @@ export default function GamePage() {
 
   // ── Main game view ──
   return (
-    <div className="relative w-full h-screen overflow-hidden">
+    <div className="relative w-full h-screen-safe overflow-hidden">
       {/* 3D Background + Player Circle */}
       <Suspense
         fallback={<div className={`absolute inset-0 ${isNight ? 'bg-night-sky' : 'bg-day-sky'}`} />}
@@ -1137,15 +1340,41 @@ export default function GamePage() {
         />
       </Suspense>
 
+      {/* ── INTRO Phase: Cinematic line-by-line story overlay (client-side tracked) ── */}
+      {shouldShowIntro && <IntroStoryOverlay />}
+
+      {/* ── STARTING Phase: Full-screen role reveal ── */}
+      {phase === GamePhase.STARTING && (
+        <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="text-center px-6 max-w-md animate-fade-in">
+            <span className="text-6xl block mb-4 animate-bounce">🎭</span>
+            <h2 className="font-heading font-bold text-2xl mb-3 text-white drop-shadow-lg">
+              {t('game.gameStarting')}
+            </h2>
+            {myRole && (
+              <div className="mt-4 p-5 bg-primary/20 backdrop-blur-xl rounded-2xl border border-primary/30 inline-block">
+                <p className="text-sm text-gray-300 mb-2">{t('game.yourRole')}</p>
+                <p className="text-3xl font-heading font-bold text-primary drop-shadow-lg">
+                  {ROLE_ICONS[myRole] || '❓'} {t(`roles.${roleToCamel(myRole)}`)}
+                </p>
+              </div>
+            )}
+            <div className="mt-6">
+              <PhaseTimer endAt={phaseEndAt} isNight />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* UI Overlay */}
       <div className="absolute inset-0 z-10 flex flex-col pointer-events-none">
         {/* Top Bar: Phase + Timer + Role */}
         <div className="pointer-events-auto">
-          <div className="flex items-center justify-between px-4 py-3">
-            <div className="flex items-center gap-3">
-              <GlassCard isNight={isNight} className="!py-2 !px-4">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-sm font-heading font-bold">
+          <div className="flex items-center justify-between px-2 py-2 md:px-4 md:py-3 gap-2">
+            <div className="flex items-center gap-1.5 md:gap-3 flex-wrap min-w-0">
+              <GlassCard isNight={isNight} className="!py-1.5 !px-2.5 md:!py-2 md:!px-4">
+                <div className="flex items-center gap-1.5 md:gap-2">
+                  <h2 className="text-xs md:text-sm font-heading font-bold truncate">
                     {phase ? phaseLabels[phase] || phase : '...'}
                   </h2>
                   <Badge variant={isNight ? 'warning' : 'info'}>{t('game.round', { round })}</Badge>
@@ -1153,18 +1382,31 @@ export default function GamePage() {
               </GlassCard>
 
               {myRole && (
-                <GlassCard isNight={isNight} className="!py-2 !px-3">
-                  <p className="text-xs font-semibold opacity-80">
+                <GlassCard isNight={isNight} className="!py-1.5 !px-2 md:!py-2 md:!px-3 hidden sm:block">
+                  <p className="text-xs font-semibold opacity-80 truncate">
                     {t('game.yourRole')}: {t(`roles.${roleToCamel(myRole)}`)}
                   </p>
                 </GlassCard>
               )}
+
+              {/* Role list button - positioned near the role display */}
+              <RoleListButton isNight={isNight} />
             </div>
 
-            <GlassCard isNight={isNight} className="!py-1 !px-4">
+            <GlassCard isNight={isNight} className="!py-1 !px-3 md:!px-4 flex-shrink-0">
               <PhaseTimer endAt={phaseEndAt} isNight={isNight} />
             </GlassCard>
           </div>
+          {/* Mobile-only compact role badge */}
+          {myRole && (
+            <div className="sm:hidden px-2 pb-1">
+              <GlassCard isNight={isNight} className="!py-1 !px-2.5 inline-block">
+                <p className="text-[10px] font-semibold opacity-80">
+                  {t('game.yourRole')}: {t(`roles.${roleToCamel(myRole)}`)}
+                </p>
+              </GlassCard>
+            </div>
+          )}
         </div>
 
         {/* Dead indicator */}
@@ -1176,22 +1418,47 @@ export default function GamePage() {
           </div>
         )}
 
-        {/* Role list button */}
-        <RoleListButton isNight={isNight} />
-
         {/* Spacer */}
         <div className="flex-1" />
 
-        {/* Death Log (fixed bottom-right frame) */}
-        <div className="fixed bottom-20 right-3 z-20">
+        {/* Death Log (fixed positioning — adjusts for mobile) */}
+        <div className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+12rem)] right-2 md:bottom-3 md:right-3 z-20">
           <DeathLog isNight={isNight} />
         </div>
 
-        {/* Bottom: Action Panel + Chat (side by side on desktop) */}
-        <div className="pointer-events-auto p-3">
-          <div className="flex gap-3 items-end max-w-7xl mx-auto w-full">
-            {/* Action Panel (left side) */}
-            <div className="flex-1 max-w-md">
+        {/* Bottom: Action Panel + Chat */}
+        <div className="pointer-events-auto p-2 md:p-3 pb-[env(safe-area-inset-bottom,8px)]">
+          {/* Mobile tab switcher (visible only on small screens) */}
+          <div className="flex gap-1 mb-2 md:hidden">
+            <button
+              onClick={() => setMobileTab('action')}
+              className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                mobileTab === 'action'
+                  ? 'bg-primary text-white'
+                  : isNight
+                    ? 'bg-night-card/50 text-night-muted'
+                    : 'bg-white/50 text-day-muted'
+              }`}
+            >
+              🎮 {t('game.actions')}
+            </button>
+            <button
+              onClick={() => setMobileTab('chat')}
+              className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                mobileTab === 'chat'
+                  ? 'bg-primary text-white'
+                  : isNight
+                    ? 'bg-night-card/50 text-night-muted'
+                    : 'bg-white/50 text-day-muted'
+              }`}
+            >
+              💬 {t('chat.title')}
+            </button>
+          </div>
+
+          <div className="flex flex-col md:flex-row gap-2 md:gap-3 items-stretch md:items-end max-w-7xl mx-auto w-full">
+            {/* Action Panel — always visible on md+, toggleable on mobile */}
+            <div className={`flex-1 max-w-none md:max-w-md ${mobileTab !== 'action' ? 'hidden md:block' : ''}`}>
               {phase === GamePhase.NIGHT && isAlive && (
                 <NightActionPanel
                   selectedPlayerId={selectedPlayerId}
@@ -1199,16 +1466,16 @@ export default function GamePage() {
                 />
               )}
               {phase === GamePhase.NIGHT && !isAlive && (
-                <GlassCard isNight className="text-center py-6">
-                  <span className="text-4xl block mb-2">💀</span>
-                  <p className="text-night-muted text-sm">{t('game.dead')}</p>
+                <GlassCard isNight className="text-center py-4 md:py-6">
+                  <span className="text-3xl md:text-4xl block mb-2">💀</span>
+                  <p className="text-night-muted text-xs md:text-sm">{t('game.dead')}</p>
                 </GlassCard>
               )}
               {phase === GamePhase.DAWN && <DawnPanel />}
               {phase === GamePhase.DAY && (
-                <div className="space-y-3">
+                <div className="space-y-2 md:space-y-3">
                   <GlassCard isNight={false}>
-                    <h3 className="font-heading font-semibold mb-2 text-sm">
+                    <h3 className="font-heading font-semibold mb-2 text-xs md:text-sm">
                       {t('game.discussion')}
                     </h3>
                     <PlayerList isNight={false} />
@@ -1224,37 +1491,22 @@ export default function GamePage() {
                 />
               )}
               {phase === GamePhase.VOTE_RESULT && (
-                <GlassCard isNight={false} className="text-center py-6">
-                  <span className="text-4xl block mb-2">🗳️</span>
-                  <h3 className="font-heading font-semibold text-lg">{t('phases.voteResult')}</h3>
+                <GlassCard isNight={false} className="text-center py-4 md:py-6">
+                  <span className="text-3xl md:text-4xl block mb-2">🗳️</span>
+                  <h3 className="font-heading font-semibold text-base md:text-lg">{t('phases.voteResult')}</h3>
                 </GlassCard>
               )}
               {phase === GamePhase.LAST_WORDS && (
-                <GlassCard isNight={false} className="text-center py-6">
-                  <span className="text-4xl block mb-2">💬</span>
-                  <h3 className="font-heading font-semibold text-lg">{t('phases.lastWords')}</h3>
+                <GlassCard isNight={false} className="text-center py-4 md:py-6">
+                  <span className="text-3xl md:text-4xl block mb-2">💬</span>
+                  <h3 className="font-heading font-semibold text-base md:text-lg">{t('phases.lastWords')}</h3>
                 </GlassCard>
               )}
-              {phase === GamePhase.STARTING && (
-                <GlassCard isNight className="text-center py-6">
-                  <span className="text-4xl block mb-2 animate-bounce">🎭</span>
-                  <h3 className="font-heading font-semibold text-lg mb-2">
-                    {t('game.gameStarting')}
-                  </h3>
-                  {myRole && (
-                    <div className="mt-3 p-3 bg-primary/15 rounded-xl inline-block">
-                      <p className="text-xs opacity-70 mb-1">{t('game.yourRole')}</p>
-                      <p className="text-xl font-heading font-bold text-primary">
-                        {t(`roles.${roleToCamel(myRole)}`)}
-                      </p>
-                    </div>
-                  )}
-                </GlassCard>
-              )}
+              {/* INTRO and STARTING phases render as full-screen overlays below */}
             </div>
 
-            {/* Chat Panel (right side) */}
-            <div className="flex-1 max-w-sm h-72">
+            {/* Chat Panel — always visible on md+, toggleable on mobile */}
+            <div className={`flex-1 max-w-none md:max-w-sm h-48 md:h-72 ${mobileTab !== 'chat' ? 'hidden md:block' : ''}`}>
               <ChatPanel isNight={isNight} />
             </div>
           </div>

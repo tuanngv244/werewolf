@@ -6,6 +6,8 @@ import { useGameStore } from '@/stores/game-store';
 import { useRoomStore } from '@/stores/room-store';
 import { useChatStore } from '@/stores/chat-store';
 import { useAuthStore } from '@/stores/auth-store';
+import { GamePhase } from '@shared/types/game.types';
+import { isWerewolfRole } from '@shared/constants/roles';
 import type { Socket } from 'socket.io-client';
 
 export function useSocket() {
@@ -19,6 +21,8 @@ export function useSocket() {
   const updateRoomPlayer = useRoomStore((s) => s.updateRoomPlayer);
   const removeRoomPlayer = useRoomStore((s) => s.removeRoomPlayer);
   const updateRoomSettings = useRoomStore((s) => s.updateRoomSettings);
+  const leaveRoom = useRoomStore((s) => s.leaveRoom);
+  const removeRoom = useRoomStore((s) => s.removeRoom);
 
   const setGame = useGameStore((s) => s.setGame);
   const setMyRole = useGameStore((s) => s.setMyRole);
@@ -32,6 +36,7 @@ export function useSocket() {
   const setWerewolfSeerResult = useGameStore((s) => s.setWerewolfSeerResult);
   const setWerewolfTeam = useGameStore((s) => s.setWerewolfTeam);
   const setIsAlive = useGameStore((s) => s.setIsAlive);
+  const setWitchAttackedTarget = useGameStore((s) => s.setWitchAttackedTarget);
 
   const addDeathLogEntry = useGameStore((s) => s.addDeathLogEntry);
 
@@ -41,167 +46,220 @@ export function useSocket() {
   useEffect(() => {
     const socket: Socket = getSocket();
 
-    function registerListeners() {
-      // Room events
-      socket.on('room:state', (room) => setCurrentRoom(room));
-      socket.on('room:player_joined', (player) => updateRoomPlayer(player));
-      socket.on('room:player_left', ({ playerId }) => removeRoomPlayer(playerId));
-      socket.on('room:settings_updated', (settings) => updateRoomSettings(settings));
-
-      // Room errors
-      socket.on('room:error', (err) => {
-        // room:error is handled by page-level socket.once listeners
-        // this is a fallback — store it if needed
-        console.warn('[socket] room:error:', err?.message);
-      });
-
-      // Game events
-      socket.on('game:started', ({ gameId, players, timers, phase, phaseEndAt, roleList }) => {
-        setGame(gameId, players, timers, phase, phaseEndAt, roleList);
-      });
-
-      socket.on('game:role_assigned', ({ role, team, headhunterTarget }) => {
-        setMyRole(role, team, headhunterTarget);
-      });
-
-      socket.on('game:phase_changed', ({ phase, endAt, round }) => {
-        setPhase(phase, endAt, round);
-      });
-
-      socket.on('game:dawn_result', (result) => {
-        setNightResult(result);
-        // Mark ALL killed players as dead in the store + log deaths
-        if (result.killed && Array.isArray(result.killed)) {
-          const currentPlayers = useGameStore.getState().players;
-          const currentRound = useGameStore.getState().round;
-          for (const killedId of result.killed) {
-            updatePlayer(killedId, { isAlive: false });
-            const player = currentPlayers.find((p) => p.id === killedId);
-            addDeathLogEntry({
-              playerId: killedId,
-              playerName: player?.username || 'Unknown',
-              cause: 'night',
-              round: currentRound,
-              phase: 'DAWN',
-            });
-          }
+    // Named handler references so cleanup removes only THIS instance's listeners
+    const handleRoomState = (room: any) => setCurrentRoom(room);
+    const handlePlayerJoined = (player: any) => updateRoomPlayer(player);
+    const handlePlayerLeft = ({ playerId }: any) => removeRoomPlayer(playerId);
+    const handlePlayerDisconnected = ({ playerId }: any) => {
+      // Mark player as disconnected in room store
+      const room = useRoomStore.getState().currentRoom;
+      if (room) {
+        const player = room.players.find((p) => p.id === playerId);
+        if (player) {
+          updateRoomPlayer({ ...player, isConnected: false });
         }
-        // Check if local player was killed in dawn results
-        const userId = useAuthStore.getState().user?.id;
-        if (userId && result.killed && result.killed.includes(userId)) {
-          setIsAlive(false);
-          setActiveChannel('DEAD');
+      }
+    };
+    const handlePlayerReconnected = ({ playerId }: any) => {
+      // Mark player as reconnected in room store
+      const room = useRoomStore.getState().currentRoom;
+      if (room) {
+        const player = room.players.find((p) => p.id === playerId);
+        if (player) {
+          updateRoomPlayer({ ...player, isConnected: true });
         }
-      });
-
-      socket.on('game:vote_update', (voteState) => {
-        setVoteState(voteState);
-      });
-
-      socket.on('game:vote_result', (result) => {
-        setVoteState({ votes: {}, result });
-        // Mark eliminated player as dead + log death
-        if (result.eliminatedId) {
-          updatePlayer(result.eliminatedId, { isAlive: false });
-          const currentPlayers = useGameStore.getState().players;
-          const currentRound = useGameStore.getState().round;
-          const player = currentPlayers.find((p) => p.id === result.eliminatedId);
-          addDeathLogEntry({
-            playerId: result.eliminatedId,
-            playerName: player?.username || 'Unknown',
-            cause: 'voted',
-            round: currentRound,
-            phase: 'VOTE',
-          });
-          const userId = useAuthStore.getState().user?.id;
-          if (userId && result.eliminatedId === userId) {
-            setIsAlive(false);
-            setActiveChannel('DEAD');
-          }
-        }
-      });
-
-      socket.on('game:player_died', ({ playerId }) => {
-        updatePlayer(playerId, { isAlive: false });
-        // Check if local player died
-        const userId = useAuthStore.getState().user?.id;
-        if (userId && playerId === userId) {
-          setIsAlive(false);
-          setActiveChannel('DEAD');
-        }
-      });
-
-      socket.on('game:over', ({ winningTeam, winners }) => {
-        setWinners(winningTeam, winners);
-      });
-
-      // Seer results
-      socket.on('game:seer_result', (result) => {
-        setSeerResult(result);
-      });
-
-      socket.on('game:aura_seer_result', (result) => {
-        setAuraSeerResult(result);
-      });
-
-      socket.on('game:werewolf_seer_result', (result) => {
-        setWerewolfSeerResult(result);
-      });
-
-      socket.on('game:werewolf_team', ({ wolves }) => {
-        setWerewolfTeam(wolves);
-      });
-
-      socket.on('game:gunner_shot', ({ targetId }) => {
-        updatePlayer(targetId, { isAlive: false });
+      }
+    };
+    const handleSettingsUpdated = (settings: any) => updateRoomSettings(settings);
+    const handleRoomError = (err: any) => {
+      console.warn('[socket] room:error:', err?.message);
+    };
+    const handleRoomDeleted = () => {
+      leaveRoom();
+    };
+    const handleRoomRemoved = ({ code }: { code: string }) => {
+      removeRoom(code);
+    };
+    const handleGameStarted = ({ gameId, players, timers, phase, phaseEndAt, roleList }: any) => {
+      setGame(gameId, players, timers, phase, phaseEndAt, roleList);
+      // Store the current room code for post-game navigation
+      const roomCode = useRoomStore.getState().currentRoom?.code;
+      if (roomCode) {
+        useGameStore.setState({ lastRoomCode: roomCode });
+      }
+    };
+    const handleRoleAssigned = ({ role, team, headhunterTarget }: any) => {
+      setMyRole(role, team, headhunterTarget);
+    };
+    const handlePhaseChanged = ({ phase, endAt, round }: any) => {
+      setPhase(phase, endAt, round);
+      // Auto-switch wolves to WEREWOLF chat channel when NIGHT starts
+      const gameState = useGameStore.getState();
+      if (phase === GamePhase.NIGHT && gameState.myRole && isWerewolfRole(gameState.myRole) && gameState.isAlive) {
+        setActiveChannel('WEREWOLF');
+      } else if (phase === GamePhase.DAY || phase === GamePhase.DAWN) {
+        // Switch back to DAY chat when leaving night
+        setActiveChannel('DAY');
+      }
+    };
+    const handleDawnResult = (result: any) => {
+      setNightResult(result);
+      if (result.killed && Array.isArray(result.killed)) {
         const currentPlayers = useGameStore.getState().players;
         const currentRound = useGameStore.getState().round;
-        const player = currentPlayers.find((p) => p.id === targetId);
+        for (const killedId of result.killed) {
+          updatePlayer(killedId, { isAlive: false });
+          const player = currentPlayers.find((p) => p.id === killedId);
+          addDeathLogEntry({
+            playerId: killedId,
+            playerName: player?.username || 'Unknown',
+            cause: 'night',
+            round: currentRound,
+            phase: 'DAWN',
+          });
+        }
+      }
+      const userId = useAuthStore.getState().user?.id;
+      if (userId && result.killed && result.killed.includes(userId)) {
+        setIsAlive(false);
+        setActiveChannel('DEAD');
+      }
+    };
+    const handleVoteUpdate = (voteState: any) => {
+      setVoteState(voteState);
+    };
+    const handleVoteResult = (result: any) => {
+      setVoteState({ votes: {}, result });
+      if (result.eliminatedId) {
+        updatePlayer(result.eliminatedId, { isAlive: false });
+        const currentPlayers = useGameStore.getState().players;
+        const currentRound = useGameStore.getState().round;
+        const player = currentPlayers.find((p) => p.id === result.eliminatedId);
         addDeathLogEntry({
-          playerId: targetId,
+          playerId: result.eliminatedId,
           playerName: player?.username || 'Unknown',
-          cause: 'gunner',
+          cause: 'voted',
           round: currentRound,
-          phase: 'DAY',
+          phase: 'VOTE',
         });
         const userId = useAuthStore.getState().user?.id;
-        if (userId && targetId === userId) {
+        if (userId && result.eliminatedId === userId) {
           setIsAlive(false);
           setActiveChannel('DEAD');
         }
+      }
+    };
+    const handlePlayerDied = ({ playerId }: any) => {
+      updatePlayer(playerId, { isAlive: false });
+      const userId = useAuthStore.getState().user?.id;
+      if (userId && playerId === userId) {
+        setIsAlive(false);
+        setActiveChannel('DEAD');
+      }
+    };
+    const handleGameOver = ({ winningTeam, winners }: any) => {
+      setWinners(winningTeam, winners);
+    };
+    const handleSeerResult = (result: any) => {
+      setSeerResult(result);
+    };
+    const handleAuraSeerResult = (result: any) => {
+      setAuraSeerResult(result);
+    };
+    const handleWerewolfSeerResult = (result: any) => {
+      setWerewolfSeerResult(result);
+    };
+    const handleWerewolfTeam = ({ wolves }: any) => {
+      setWerewolfTeam(wolves);
+      // If receiving werewolf team info during NIGHT (e.g., Cursed transformation),
+      // auto-switch to WEREWOLF chat channel
+      const gameState = useGameStore.getState();
+      if (gameState.phase === GamePhase.NIGHT && gameState.isAlive) {
+        setActiveChannel('WEREWOLF');
+      }
+    };
+    const handleWitchTarget = ({ targetId }: any) => {
+      setWitchAttackedTarget(targetId);
+    };
+    const handleGunnerShot = ({ targetId }: any) => {
+      updatePlayer(targetId, { isAlive: false });
+      const currentPlayers = useGameStore.getState().players;
+      const currentRound = useGameStore.getState().round;
+      const player = currentPlayers.find((p) => p.id === targetId);
+      addDeathLogEntry({
+        playerId: targetId,
+        playerName: player?.username || 'Unknown',
+        cause: 'gunner',
+        round: currentRound,
+        phase: 'DAY',
       });
+      const userId = useAuthStore.getState().user?.id;
+      if (userId && targetId === userId) {
+        setIsAlive(false);
+        setActiveChannel('DEAD');
+      }
+    };
+    const handleActionConfirmed = () => {
+      // Action was confirmed by server
+    };
+    const handleChatMessage = (message: any) => {
+      addMessage(message);
+    };
 
-      socket.on('game:action_confirmed', () => {
-        // Action was confirmed by server
-      });
-
-      // Chat events
-      socket.on('chat:message', (message) => {
-        addMessage(message);
-      });
+    function registerListeners() {
+      socket.on('room:state', handleRoomState);
+      socket.on('room:player_joined', handlePlayerJoined);
+      socket.on('room:player_left', handlePlayerLeft);
+      socket.on('room:player_disconnected', handlePlayerDisconnected);
+      socket.on('room:player_reconnected', handlePlayerReconnected);
+      socket.on('room:settings_updated', handleSettingsUpdated);
+      socket.on('room:error', handleRoomError);
+      socket.on('room:deleted', handleRoomDeleted);
+      socket.on('room:removed', handleRoomRemoved);
+      socket.on('game:started', handleGameStarted);
+      socket.on('game:role_assigned', handleRoleAssigned);
+      socket.on('game:phase_changed', handlePhaseChanged);
+      socket.on('game:dawn_result', handleDawnResult);
+      socket.on('game:vote_update', handleVoteUpdate);
+      socket.on('game:vote_result', handleVoteResult);
+      socket.on('game:player_died', handlePlayerDied);
+      socket.on('game:over', handleGameOver);
+      socket.on('game:seer_result', handleSeerResult);
+      socket.on('game:aura_seer_result', handleAuraSeerResult);
+      socket.on('game:werewolf_seer_result', handleWerewolfSeerResult);
+      socket.on('game:werewolf_team', handleWerewolfTeam);
+      socket.on('game:witch_target', handleWitchTarget);
+      socket.on('game:gunner_shot', handleGunnerShot);
+      socket.on('game:action_confirmed', handleActionConfirmed);
+      socket.on('chat:message', handleChatMessage);
     }
 
     function cleanupListeners() {
-      socket.off('room:state');
-      socket.off('room:player_joined');
-      socket.off('room:player_left');
-      socket.off('room:settings_updated');
-      socket.off('room:error');
-      socket.off('game:started');
-      socket.off('game:role_assigned');
-      socket.off('game:phase_changed');
-      socket.off('game:dawn_result');
-      socket.off('game:vote_update');
-      socket.off('game:vote_result');
-      socket.off('game:player_died');
-      socket.off('game:over');
-      socket.off('game:seer_result');
-      socket.off('game:aura_seer_result');
-      socket.off('game:werewolf_seer_result');
-      socket.off('game:werewolf_team');
-      socket.off('game:gunner_shot');
-      socket.off('game:action_confirmed');
-      socket.off('chat:message');
+      socket.off('room:state', handleRoomState);
+      socket.off('room:player_joined', handlePlayerJoined);
+      socket.off('room:player_left', handlePlayerLeft);
+      socket.off('room:player_disconnected', handlePlayerDisconnected);
+      socket.off('room:player_reconnected', handlePlayerReconnected);
+      socket.off('room:settings_updated', handleSettingsUpdated);
+      socket.off('room:error', handleRoomError);
+      socket.off('room:deleted', handleRoomDeleted);
+      socket.off('room:removed', handleRoomRemoved);
+      socket.off('game:started', handleGameStarted);
+      socket.off('game:role_assigned', handleRoleAssigned);
+      socket.off('game:phase_changed', handlePhaseChanged);
+      socket.off('game:dawn_result', handleDawnResult);
+      socket.off('game:vote_update', handleVoteUpdate);
+      socket.off('game:vote_result', handleVoteResult);
+      socket.off('game:player_died', handlePlayerDied);
+      socket.off('game:over', handleGameOver);
+      socket.off('game:seer_result', handleSeerResult);
+      socket.off('game:aura_seer_result', handleAuraSeerResult);
+      socket.off('game:werewolf_seer_result', handleWerewolfSeerResult);
+      socket.off('game:werewolf_team', handleWerewolfTeam);
+      socket.off('game:witch_target', handleWitchTarget);
+      socket.off('game:gunner_shot', handleGunnerShot);
+      socket.off('game:action_confirmed', handleActionConfirmed);
+      socket.off('chat:message', handleChatMessage);
     }
 
     // Track connection state
@@ -225,6 +283,8 @@ export function useSocket() {
     updateRoomPlayer,
     removeRoomPlayer,
     updateRoomSettings,
+    leaveRoom,
+    removeRoom,
     setGame,
     setMyRole,
     setPhase,
@@ -237,6 +297,7 @@ export function useSocket() {
     setWerewolfSeerResult,
     setWerewolfTeam,
     setIsAlive,
+    setWitchAttackedTarget,
     addDeathLogEntry,
     addMessage,
     setActiveChannel,

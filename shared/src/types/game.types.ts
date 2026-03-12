@@ -69,6 +69,7 @@ export enum Role {
 
 export enum GamePhase {
   WAITING = 'waiting',
+  INTRO = 'intro',
   STARTING = 'starting',
   NIGHT = 'night',
   DAWN = 'dawn',

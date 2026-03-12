@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Nunito, Fredoka } from 'next/font/google';
 import '@/styles/globals.css';
 
@@ -15,6 +15,14 @@ const fredoka = Fredoka({
   display: 'swap',
 });
 
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: 'cover',
+};
+
 export const metadata: Metadata = {
   title: 'Werewolf Game | Ma Soi',
   description: 'A real-time multiplayer social deduction game with cute 3D characters',
@@ -28,6 +36,11 @@ export const metadata: Metadata = {
     ],
   },
   manifest: '/site.webmanifest',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'Werewolf Game',
+  },
 };
 
 export default function RootLayout({

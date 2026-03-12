@@ -63,11 +63,11 @@ export class GameService {
     const game: GameState = {
       id,
       roomCode: room.code,
-      phase: GamePhase.STARTING,
+      phase: GamePhase.INTRO,
       round: 0,
       players,
       timers: room.settings.timers as GameTimers,
-      phaseEndAt: Date.now() + 5000,
+      phaseEndAt: Date.now() + 15000, // 15s intro phase (12s story + 3s buffer)
       nightActions: { werewolfVotes: {} },
       startedAt: Date.now(),
     };
@@ -99,6 +99,14 @@ export class GameService {
     const events: GameEvent[] = [];
 
     switch (game.phase) {
+      case GamePhase.INTRO: {
+        // After intro story, transition to STARTING (role reveal)
+        game.phase = GamePhase.STARTING;
+        game.phaseEndAt = Date.now() + 5000; // 5s role reveal
+        events.push({ type: 'phase_changed', phase: GamePhase.STARTING, endAt: game.phaseEndAt });
+        break;
+      }
+
       case GamePhase.STARTING: {
         game.phase = GamePhase.NIGHT;
         game.round = 1;
@@ -140,6 +148,14 @@ export class GameService {
         }
         if (nightResult.werewolfSeerResult) {
           events.push({ type: 'werewolf_seer_result', ...nightResult.werewolfSeerResult });
+        }
+        // Notify the Witch who was attacked so she can decide to heal
+        if (nightResult.witchTarget) {
+          events.push({ type: 'witch_target', targetId: nightResult.witchTarget });
+        }
+        // Notify the transformed Cursed player of their new role + werewolf team
+        if (nightResult.cursedTransformed) {
+          events.push({ type: 'cursed_transformed', playerId: nightResult.cursedTransformed });
         }
         break;
       }
@@ -415,6 +431,32 @@ export class GameService {
 
   async clearVotes(gameId: string): Promise<void> {
     await this.redis.del(`game:${gameId}:votes`);
+  }
+
+  /**
+   * Compute the preliminary werewolf kill target from current votes.
+   * Used to notify the Witch mid-night so she can decide to heal.
+   */
+  getWerewolfTarget(game: GameState): string | null {
+    const votes = game.nightActions.werewolfVotes;
+    if (Object.keys(votes).length === 0) return null;
+
+    const voteCounts: Record<string, number> = {};
+    for (const [wolfId, targetId] of Object.entries(votes)) {
+      const wolf = game.players.find((p) => p.id === wolfId);
+      const weight = wolf?.role === Role.ALPHA_WEREWOLF ? 2 : 1;
+      voteCounts[targetId] = (voteCounts[targetId] || 0) + weight;
+    }
+
+    let maxVotes = 0;
+    let target: string | null = null;
+    for (const [targetId, count] of Object.entries(voteCounts)) {
+      if (count > maxVotes) {
+        maxVotes = count;
+        target = targetId;
+      }
+    }
+    return target;
   }
 
   async saveGameRecord(game: GameState, winCondition: WinCondition, winningTeam: Team): Promise<void> {

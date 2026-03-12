@@ -4,6 +4,7 @@ import {
   SubscribeMessage,
   OnGatewayConnection,
   OnGatewayDisconnect,
+  OnGatewayInit,
   ConnectedSocket,
   MessageBody,
 } from '@nestjs/websockets';
@@ -33,11 +34,12 @@ interface AuthenticatedSocket extends Socket {
     credentials: true,
   },
 })
-export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, OnGatewayInit {
   @WebSocketServer()
   server: Server;
 
   private phaseTimers = new Map<string, NodeJS.Timeout>();
+  private witchNotifyTimers = new Map<string, NodeJS.Timeout>();
 
   constructor(
     private readonly jwtService: JwtService,
@@ -47,6 +49,13 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly chatService: ChatService,
     private readonly usersService: UsersService,
   ) {}
+
+  afterInit() {
+    // Register the vote update callback so bots can broadcast vote updates
+    this.botService.setVoteUpdateCallback((gameId, roomCode, votes) => {
+      this.server.to(`room:${roomCode}`).emit('game:vote_update', { votes });
+    });
+  }
 
   async handleConnection(client: AuthenticatedSocket) {
     try {
@@ -59,10 +68,25 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const payload = this.jwtService.verify(token);
       client.user = { id: payload.sub, username: payload.username };
 
-      // Rejoin room if player was in one
+      // Rejoin room if player was in one — validate Redis state first
       const roomCode = await this.roomsService.getPlayerRoom(client.user.id);
       if (roomCode) {
-        client.join(`room:${roomCode}`);
+        const room = await this.roomsService.getRoom(roomCode);
+        if (room && room.players.some((p) => p.id === client.user.id)) {
+          client.join(`room:${roomCode}`);
+          // Mark player as reconnected in Redis
+          const player = room.players.find((p) => p.id === client.user.id);
+          if (player && !player.isConnected) {
+            player.isConnected = true;
+            await this.roomsService.updateRoom(roomCode, room);
+            this.server.to(`room:${roomCode}`).emit('room:player_reconnected', {
+              playerId: client.user.id,
+            });
+          }
+        } else {
+          // Room doesn't exist or player not in it — clean up stale pointer
+          await this.roomsService.setPlayerRoom(client.user.id, null);
+        }
       }
     } catch (error) {
       console.warn('Socket connection rejected: JWT verification failed', error?.message || error);
@@ -74,6 +98,15 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (!client.user) return;
     const roomCode = await this.roomsService.getPlayerRoom(client.user.id);
     if (roomCode) {
+      // Mark player as disconnected in Redis room state
+      const room = await this.roomsService.getRoom(roomCode);
+      if (room) {
+        const player = room.players.find((p) => p.id === client.user.id);
+        if (player) {
+          player.isConnected = false;
+          await this.roomsService.updateRoom(roomCode, room);
+        }
+      }
       this.server.to(`room:${roomCode}`).emit('room:player_disconnected', {
         playerId: client.user.id,
       });
@@ -134,6 +167,9 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       const game = await this.gameService.createGame(room);
 
+      // Send room state first so client has room context (needed for post-game navigation)
+      client.emit('room:state', room);
+
       // Send game started
       client.emit('game:started', {
         gameId: game.id,
@@ -181,6 +217,20 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() data: { code: string },
   ) {
+    // Evict from previous room before joining a new one
+    const prevRoom = await this.roomsService.getPlayerRoom(client.user.id);
+    if (prevRoom && prevRoom !== data.code) {
+      const leftRoom = await this.roomsService.leaveRoom(prevRoom, client.user.id);
+      await this.roomsService.setPlayerRoom(client.user.id, null);
+      client.leave(`room:${prevRoom}`);
+      if (leftRoom) {
+        this.server.to(`room:${prevRoom}`).emit('room:player_left', {
+          playerId: client.user.id,
+        });
+        this.server.to(`room:${prevRoom}`).emit('room:state', leftRoom);
+      }
+    }
+
     const room = await this.roomsService.joinRoom(data.code, client.user);
     if (!room) {
       client.emit('room:error', { message: 'Room not found or cannot join' });
@@ -190,7 +240,8 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     await this.roomsService.setPlayerRoom(client.user.id, data.code);
     client.join(`room:${data.code}`);
     client.emit('room:state', room);
-    this.server.to(`room:${data.code}`).emit('room:player_joined', {
+    // Broadcast to others in the room (not self — self already got room:state)
+    client.to(`room:${data.code}`).emit('room:player_joined', {
       id: client.user.id,
       username: client.user.username,
       isReady: false,
@@ -206,6 +257,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     const room = await this.roomsService.leaveRoom(roomCode, client.user.id);
     await this.roomsService.setPlayerRoom(client.user.id, null);
+    // Leave Socket.io room BEFORE broadcasting so we don't receive our own events
     client.leave(`room:${roomCode}`);
 
     if (room) {
@@ -214,6 +266,41 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
       });
       this.server.to(`room:${roomCode}`).emit('room:state', room);
     }
+  }
+
+  @SubscribeMessage('room:delete')
+  async handleDeleteRoom(@ConnectedSocket() client: AuthenticatedSocket) {
+    const roomCode = await this.roomsService.getPlayerRoom(client.user.id);
+    if (!roomCode) return;
+
+    const room = await this.roomsService.getRoom(roomCode);
+    if (!room || room.hostId !== client.user.id) return;
+
+    // Cannot delete a room while a game is in progress
+    if (room.status === RoomStatus.IN_GAME) {
+      client.emit('room:error', { message: 'Cannot delete a room while a game is in progress' });
+      return;
+    }
+
+    // Clear player→room pointers for all members
+    for (const player of room.players) {
+      await this.roomsService.setPlayerRoom(player.id, null);
+    }
+
+    // Broadcast to all members BEFORE deleting so they can redirect
+    this.server.to(`room:${roomCode}`).emit('room:deleted', { code: roomCode });
+
+    // Also broadcast to ALL connected sockets so room browser updates
+    this.server.emit('room:removed', { code: roomCode });
+
+    // Remove all sockets from the room channel
+    const sockets = await this.server.in(`room:${roomCode}`).fetchSockets();
+    for (const s of sockets) {
+      s.leave(`room:${roomCode}`);
+    }
+
+    // Tear down the room
+    await this.roomsService.deleteRoom(roomCode);
   }
 
   @SubscribeMessage('room:list')
@@ -332,6 +419,27 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
       data.targetId,
     );
     client.emit('game:action_confirmed', { action: data.action });
+
+    // After a werewolf votes, notify the Witch of the current target
+    const game = await this.gameService.getGame(data.gameId);
+    if (game && game.phase === GamePhase.NIGHT) {
+      const player = game.players.find((p) => p.id === client.user.id);
+      if (player && isWerewolfRole(player.role)) {
+        const werewolfTarget = this.gameService.getWerewolfTarget(game);
+        if (werewolfTarget) {
+          const witch = game.players.find((p) => p.role === Role.WITCH && p.isAlive);
+          if (witch) {
+            const sockets = await this.server.in(`room:${game.roomCode}`).fetchSockets();
+            const witchSocket = sockets.find(
+              (s) => (s as unknown as AuthenticatedSocket).user?.id === witch.id,
+            );
+            if (witchSocket) {
+              witchSocket.emit('game:witch_target', { targetId: werewolfTarget });
+            }
+          }
+        }
+      }
+    }
   }
 
   @SubscribeMessage('game:vote')
@@ -423,6 +531,9 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const game = await this.gameService.getGameByRoom(roomCode);
       if (!game) return;
 
+      // Wolf chat is ONLY allowed during the night phase
+      if (game.phase !== GamePhase.NIGHT) return;
+
       const wolfIds = new Set(
         game.players.filter((p) => isWerewolfRole(p.role) && p.isAlive).map((p) => p.id),
       );
@@ -464,6 +575,8 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
       if (game) {
         const sender = game.players.find((p) => p.id === client.user.id);
         if (sender && !sender.isAlive) return; // Dead players cannot send in DAY channel
+        // No chatting during NIGHT phase — only wolf chat is allowed at night
+        if (game.phase === GamePhase.NIGHT) return;
       }
       this.server.to(`room:${roomCode}`).emit('chat:message', message);
     }
@@ -482,6 +595,20 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.server.to(`room:${roomCode}`).emit('fun:slapped', {
       attackerId: client.user.id,
       targetId: data.targetId,
+    });
+  }
+
+  // ─── Fun: Jump (purely cosmetic) ────────────────────────
+  @SubscribeMessage('fun:jump')
+  async handleJump(
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ) {
+    const roomCode = await this.roomsService.getPlayerRoom(client.user.id);
+    if (!roomCode) return;
+
+    // Broadcast to other players in the room (exclude sender — they already animate locally)
+    client.to(`room:${roomCode}`).emit('fun:jumped', {
+      playerId: client.user.id,
     });
   }
 
@@ -583,6 +710,45 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.phaseTimers.set(gameId, timer);
   }
 
+  /**
+   * Schedule a delayed Witch notification during the NIGHT phase.
+   * Waits for werewolves (including bots) to submit their votes, then
+   * computes the preliminary target and notifies the Witch.
+   */
+  private scheduleWitchNotify(gameId: string, roomCode: string) {
+    const existing = this.witchNotifyTimers.get(gameId);
+    if (existing) clearTimeout(existing);
+
+    // Wait 5 seconds into the night for wolves to vote, then notify Witch
+    const timer = setTimeout(async () => {
+      await this.notifyWitchTarget(gameId, roomCode);
+    }, 5000);
+
+    this.witchNotifyTimers.set(gameId, timer);
+  }
+
+  /**
+   * Compute the current werewolf target and notify the Witch player.
+   */
+  private async notifyWitchTarget(gameId: string, roomCode: string) {
+    const game = await this.gameService.getGame(gameId);
+    if (!game || game.phase !== GamePhase.NIGHT) return;
+
+    const witch = game.players.find((p) => p.role === Role.WITCH && p.isAlive);
+    if (!witch) return;
+
+    const werewolfTarget = this.gameService.getWerewolfTarget(game);
+    if (!werewolfTarget) return;
+
+    const sockets = await this.server.in(`room:${roomCode}`).fetchSockets();
+    const witchSocket = sockets.find(
+      (s) => (s as unknown as AuthenticatedSocket).user?.id === witch.id,
+    );
+    if (witchSocket) {
+      witchSocket.emit('game:witch_target', { targetId: werewolfTarget });
+    }
+  }
+
   private async handlePhaseEnd(gameId: string) {
     const game = await this.gameService.getGame(gameId);
     if (!game || game.phase === GamePhase.GAME_OVER) {
@@ -610,6 +776,10 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
           });
           // Trigger bot actions for the new phase
           this.botService.onPhaseChanged(gameId, event.phase as GamePhase);
+          // Schedule Witch notification when night starts
+          if (event.phase === GamePhase.NIGHT) {
+            this.scheduleWitchNotify(gameId, game.roomCode);
+          }
           break;
         case 'dawn_result':
           this.server.to(`room:${game.roomCode}`).emit('game:dawn_result', {
@@ -635,7 +805,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
             if (seerSocket) {
               seerSocket.emit('game:seer_result', {
                 targetId: event.targetId,
-                role: event.role,
+                alignment: event.alignment,
               });
             }
           }
@@ -658,8 +828,8 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
           break;
         }
         case 'werewolf_seer_result': {
-          // Send to all werewolves
-          const wolves = updatedGame.players.filter((p) => isWerewolfRole(p.role));
+          // Send to all living werewolves
+          const wolves = updatedGame.players.filter((p) => isWerewolfRole(p.role) && p.isAlive);
           const sockets = await this.server.in(`room:${game.roomCode}`).fetchSockets();
           for (const wolf of wolves) {
             const wolfSocket = sockets.find(
@@ -670,6 +840,45 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
                 targetId: event.targetId,
                 role: event.role,
               });
+            }
+          }
+          break;
+        }
+        case 'witch_target': {
+          // Send to the Witch so she knows who was attacked
+          const witch = updatedGame.players.find((p) => p.role === Role.WITCH && p.isAlive);
+          if (witch) {
+            const sockets = await this.server.in(`room:${game.roomCode}`).fetchSockets();
+            const witchSocket = sockets.find(
+              (s) => (s as unknown as AuthenticatedSocket).user?.id === witch.id,
+            );
+            if (witchSocket) {
+              witchSocket.emit('game:witch_target', {
+                targetId: event.targetId,
+              });
+            }
+          }
+          break;
+        }
+        case 'cursed_transformed': {
+          // Notify the transformed Cursed player of their new role and werewolf team
+          const transformedPlayer = updatedGame.players.find((p) => p.id === event.playerId);
+          if (transformedPlayer) {
+            const sockets = await this.server.in(`room:${game.roomCode}`).fetchSockets();
+            const playerSocket = sockets.find(
+              (s) => (s as unknown as AuthenticatedSocket).user?.id === event.playerId,
+            );
+            if (playerSocket) {
+              // Send new role assignment
+              playerSocket.emit('game:role_assigned', {
+                role: Role.WEREWOLF,
+                team: 'werewolf',
+              });
+              // Send werewolf team info
+              const wolfIds = updatedGame.players
+                .filter((p) => isWerewolfRole(p.role) && p.isAlive)
+                .map((p) => ({ id: p.id, username: p.username, role: p.role }));
+              playerSocket.emit('game:werewolf_team', { wolves: wolfIds });
             }
           }
           break;
@@ -692,11 +901,20 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
           // Clean up bot timers
           this.botService.onGameEnd(gameId);
 
+          // Clean up witch notify timer
+          const witchTimer = this.witchNotifyTimers.get(gameId);
+          if (witchTimer) {
+            clearTimeout(witchTimer);
+            this.witchNotifyTimers.delete(gameId);
+          }
+
           // Reset room status back to WAITING
           const currentRoom = await this.roomsService.getRoom(game.roomCode);
           if (currentRoom) {
             currentRoom.status = RoomStatus.WAITING;
             await this.roomsService.updateRoom(game.roomCode, currentRoom);
+            // Broadcast updated room state so clients can navigate back to the room
+            this.server.to(`room:${game.roomCode}`).emit('room:state', currentRoom);
           }
 
           this.phaseTimers.delete(gameId);

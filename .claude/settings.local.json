@@ -38,7 +38,13 @@
       "Bash(echo \"=== Files Created ===\" && ls -la .dockerignore deploy.sh .env.production.example docker-compose.prod.yml nginx/nginx.conf client/Dockerfile server/Dockerfile Deploy.md && echo \"\" && echo \"=== deploy.sh is executable ===\" && test -x deploy.sh && echo \"YES\" || echo \"NO\" && echo \"\" && echo \"=== next.config.ts standalone ===\" && grep -n \"standalone\" client/next.config.ts)",
       "Bash(git check-ignore -v .env.production 2>&1 || echo \"NOT IGNORED \\(will be committed\\) ✅\")",
       "Bash(bash -n /Users/cyan/Workspace/Personal/werewolf-game/deploy.sh && echo \"✅ deploy.sh syntax OK\" || echo \"❌ syntax error\")",
-      "Bash(ls /Users/cyan/Workspace/Personal/werewolf-game/client/src/app/ 2>/dev/null && find /Users/cyan/Workspace/Personal/werewolf-game/client/src/app -name \"*.tsx\" -o -name \"*.ts\" | sort)"
+      "Bash(ls /Users/cyan/Workspace/Personal/werewolf-game/client/src/app/ 2>/dev/null && find /Users/cyan/Workspace/Personal/werewolf-game/client/src/app -name \"*.tsx\" -o -name \"*.ts\" | sort)",
+      "Bash(find /Users/cyan/Workspace/Personal/werewolf-game/server -type f -name \"*.ts\" 2>/dev/null | sort)",
+      "Bash(find /Users/cyan/Workspace/Personal/werewolf-game/client -type f -name \"*.ts\" -o -name \"*.tsx\" 2>/dev/null | sort)",
+      "Bash(wc -l /Users/cyan/Workspace/Personal/werewolf-game/client/src/app/[locale]/\\\\\\(game\\\\\\)/game/page.tsx)",
+      "Bash(wc -l \"/Users/cyan/Workspace/Personal/werewolf-game/client/src/app/[locale]/\\(game\\)/game/page.tsx\")",
+      "Bash(find /Users/cyan/Workspace/Personal/werewolf-game -maxdepth 2 -name \".env*\" -o -name \"*.env.example\" 2>/dev/null | head -20)",
+      "Bash(find /Users/cyan/Workspace/Personal/werewolf-game/shared -name \"*.ts\" 2>/dev/null | head -20)"
     ]
   }
 }

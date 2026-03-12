@@ -14,33 +14,28 @@ export default function HomePage() {
   const pathname = usePathname();
   const locale = useLocale();
   const { user, guestLogin, isLoading } = useAuthStore();
-  // Pre-fill with existing username (strip #NNNN suffix if present)
   const [playerName, setPlayerName] = useState('');
   const [roomCode, setRoomCode] = useState('');
   const [joinError, setJoinError] = useState('');
+  const [nameError, setNameError] = useState('');
   const [isJoining, setIsJoining] = useState(false);
   const [isDemoLoading, setIsDemoLoading] = useState(false);
   const joinListenersRef = useRef<(() => void) | null>(null);
   const demoListenersRef = useRef<(() => void) | null>(null);
 
   // Modal states
-  const [selectedRole, setSelectedRole] = useState<{ icon: string; key: string; team: string; color: string } | null>(null);
+  const [selectedRole, setSelectedRole] = useState<{
+    icon: string;
+    key: string;
+    team: string;
+    color: string;
+  } | null>(null);
   const [showHowToPlay, setShowHowToPlay] = useState(false);
 
   const toggleLocale = () => {
     const nextLocale = locale === 'en' ? 'vi' : 'en';
     router.replace(pathname, { locale: nextLocale });
   };
-
-  // Pre-fill name from existing user (strip #NNNN suffix)
-  useEffect(() => {
-    if (user?.username && !playerName) {
-      const name = user.username.replace(/#\d{4}$/, '');
-      setPlayerName(name);
-    }
-    // Only on mount / when user changes
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.username]);
 
   // Cleanup socket.once listeners on unmount
   useEffect(() => {
@@ -59,8 +54,13 @@ export default function HomePage() {
   };
 
   const handleQuickPlay = async () => {
-    const name = playerName.trim() || undefined;
-    if (!user || needsReLogin(playerName.trim())) {
+    const name = playerName.trim();
+    if (!name || name.length < 2) {
+      setNameError(t('home.nameRequired'));
+      return;
+    }
+    setNameError('');
+    if (!user || needsReLogin(name)) {
       await guestLogin(name);
     }
     router.push('/rooms');
@@ -68,13 +68,19 @@ export default function HomePage() {
 
   const handleJoinByCode = async () => {
     if (!roomCode.trim() || isJoining) return;
+    const name = playerName.trim();
+    if (!name || name.length < 2) {
+      setNameError(t('home.nameRequired'));
+      return;
+    }
+    setNameError('');
     setJoinError('');
     setIsJoining(true);
 
     try {
       // Ensure user is authenticated (re-login if name changed)
-      if (!user || needsReLogin(playerName.trim())) {
-        await guestLogin(playerName.trim() || undefined);
+      if (!user || needsReLogin(name)) {
+        await guestLogin(name);
       }
 
       // Wait for socket to be connected
@@ -125,12 +131,18 @@ export default function HomePage() {
 
   const handleDemoRoom = async () => {
     if (isDemoLoading) return;
+    const name = playerName.trim();
+    if (!name || name.length < 2) {
+      setNameError(t('home.nameRequired'));
+      return;
+    }
+    setNameError('');
     setIsDemoLoading(true);
 
     try {
       // Ensure user is authenticated (re-login if name changed)
-      if (!user || needsReLogin(playerName.trim())) {
-        await guestLogin(playerName.trim() || undefined);
+      if (!user || needsReLogin(name)) {
+        await guestLogin(name);
       }
 
       const socket = await waitForConnection();
@@ -190,8 +202,8 @@ export default function HomePage() {
       {/* Hero Section */}
       <section className="flex-1 flex flex-col items-center justify-center px-4 py-16 text-center">
         <div className="animate-float mb-8">
-          <div className="w-32 h-32 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
-            <span className="text-6xl">🐺</span>
+          <div className="w-32 h-32 rounded-full overflow-hidden mx-auto shadow-lg border-4 border-primary/30">
+            <img src="/wolf-face.jpg" alt="Werewolf" className="w-full h-full object-cover" />
           </div>
         </div>
 
@@ -209,11 +221,15 @@ export default function HomePage() {
           <input
             type="text"
             value={playerName}
-            onChange={(e) => setPlayerName(e.target.value)}
+            onChange={(e) => {
+              setPlayerName(e.target.value);
+              if (nameError) setNameError('');
+            }}
             placeholder={t('home.enterNamePlaceholder')}
             maxLength={20}
             className="w-full px-4 py-3 rounded-xl border-2 border-day-border bg-white text-day-text placeholder-day-muted focus:outline-none focus:border-primary transition-colors"
           />
+          {nameError && <p className="text-sm text-red-500 mt-1 text-left">{nameError}</p>}
         </div>
 
         {/* Play / Login / Demo Buttons */}
@@ -312,18 +328,66 @@ export default function HomePage() {
           </h3>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
             {[
-              { icon: '🏘️', key: 'villager', color: 'bg-green-500/10 text-green-700 hover:bg-green-500/20' },
-              { icon: '💊', key: 'doctor', color: 'bg-role-doctor/10 text-role-doctor hover:bg-role-doctor/20' },
-              { icon: '🔮', key: 'seer', color: 'bg-role-seer/10 text-role-seer hover:bg-role-seer/20' },
-              { icon: '✨', key: 'auraSeer', color: 'bg-cyan-500/10 text-cyan-600 hover:bg-cyan-500/20' },
-              { icon: '🧙', key: 'witch', color: 'bg-role-witch/10 text-role-witch hover:bg-role-witch/20' },
-              { icon: '🔫', key: 'gunner', color: 'bg-role-gunner/10 text-role-gunner hover:bg-role-gunner/20' },
-              { icon: '👻', key: 'medium', color: 'bg-purple-500/10 text-purple-600 hover:bg-purple-500/20' },
-              { icon: '⚔️', key: 'avenger', color: 'bg-red-500/10 text-red-600 hover:bg-red-500/20' },
-              { icon: '🪤', key: 'beastHunter', color: 'bg-amber-500/10 text-amber-700 hover:bg-amber-500/20' },
-              { icon: '🌑', key: 'cursed', color: 'bg-gray-500/10 text-gray-600 hover:bg-gray-500/20' },
-              { icon: '🛡️', key: 'bodyguard', color: 'bg-blue-500/10 text-blue-600 hover:bg-blue-500/20' },
-              { icon: '🌟', key: 'apprenticeSeer', color: 'bg-yellow-500/10 text-yellow-700 hover:bg-yellow-500/20' },
+              {
+                icon: '🏘️',
+                key: 'villager',
+                color: 'bg-green-500/10 text-green-700 hover:bg-green-500/20',
+              },
+              {
+                icon: '💊',
+                key: 'doctor',
+                color: 'bg-role-doctor/10 text-role-doctor hover:bg-role-doctor/20',
+              },
+              {
+                icon: '🔮',
+                key: 'seer',
+                color: 'bg-role-seer/10 text-role-seer hover:bg-role-seer/20',
+              },
+              {
+                icon: '✨',
+                key: 'auraSeer',
+                color: 'bg-cyan-500/10 text-cyan-600 hover:bg-cyan-500/20',
+              },
+              {
+                icon: '🧙',
+                key: 'witch',
+                color: 'bg-role-witch/10 text-role-witch hover:bg-role-witch/20',
+              },
+              {
+                icon: '🔫',
+                key: 'gunner',
+                color: 'bg-role-gunner/10 text-role-gunner hover:bg-role-gunner/20',
+              },
+              {
+                icon: '👻',
+                key: 'medium',
+                color: 'bg-purple-500/10 text-purple-600 hover:bg-purple-500/20',
+              },
+              {
+                icon: '⚔️',
+                key: 'avenger',
+                color: 'bg-red-500/10 text-red-600 hover:bg-red-500/20',
+              },
+              {
+                icon: '🪤',
+                key: 'beastHunter',
+                color: 'bg-amber-500/10 text-amber-700 hover:bg-amber-500/20',
+              },
+              {
+                icon: '🌑',
+                key: 'cursed',
+                color: 'bg-gray-500/10 text-gray-600 hover:bg-gray-500/20',
+              },
+              {
+                icon: '🛡️',
+                key: 'bodyguard',
+                color: 'bg-blue-500/10 text-blue-600 hover:bg-blue-500/20',
+              },
+              {
+                icon: '🌟',
+                key: 'apprenticeSeer',
+                color: 'bg-yellow-500/10 text-yellow-700 hover:bg-yellow-500/20',
+              },
             ].map((role) => (
               <button
                 key={role.key}
@@ -342,10 +406,26 @@ export default function HomePage() {
           </h3>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
             {[
-              { icon: '🐺', key: 'werewolf', color: 'bg-role-werewolf/10 text-role-werewolf hover:bg-role-werewolf/20' },
-              { icon: '🐺', key: 'alphaWerewolf', color: 'bg-red-600/10 text-red-700 hover:bg-red-600/20' },
-              { icon: '🐺', key: 'werewolfShaman', color: 'bg-violet-600/10 text-violet-700 hover:bg-violet-600/20' },
-              { icon: '🐺', key: 'werewolfSeer', color: 'bg-indigo-600/10 text-indigo-700 hover:bg-indigo-600/20' },
+              {
+                icon: '🐺',
+                key: 'werewolf',
+                color: 'bg-role-werewolf/10 text-role-werewolf hover:bg-role-werewolf/20',
+              },
+              {
+                icon: '🐺',
+                key: 'alphaWerewolf',
+                color: 'bg-red-600/10 text-red-700 hover:bg-red-600/20',
+              },
+              {
+                icon: '🐺',
+                key: 'werewolfShaman',
+                color: 'bg-violet-600/10 text-violet-700 hover:bg-violet-600/20',
+              },
+              {
+                icon: '🐺',
+                key: 'werewolfSeer',
+                color: 'bg-indigo-600/10 text-indigo-700 hover:bg-indigo-600/20',
+              },
             ].map((role) => (
               <button
                 key={role.key}
@@ -364,12 +444,36 @@ export default function HomePage() {
           </h3>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {[
-              { icon: '🎯', key: 'headhunter', color: 'bg-role-headhunter/10 text-role-headhunter hover:bg-role-headhunter/20' },
-              { icon: '🃏', key: 'fool', color: 'bg-role-fool/10 text-role-fool hover:bg-role-fool/20' },
-              { icon: '💣', key: 'bomber', color: 'bg-role-bomber/10 text-role-bomber hover:bg-role-bomber/20' },
-              { icon: '🔪', key: 'serialKiller', color: 'bg-gray-800/10 text-gray-700 hover:bg-gray-800/20' },
-              { icon: '💘', key: 'cupid', color: 'bg-pink-400/10 text-pink-500 hover:bg-pink-400/20' },
-              { icon: '🔥', key: 'arsonist', color: 'bg-orange-500/10 text-orange-600 hover:bg-orange-500/20' },
+              {
+                icon: '🎯',
+                key: 'headhunter',
+                color: 'bg-role-headhunter/10 text-role-headhunter hover:bg-role-headhunter/20',
+              },
+              {
+                icon: '🃏',
+                key: 'fool',
+                color: 'bg-role-fool/10 text-role-fool hover:bg-role-fool/20',
+              },
+              {
+                icon: '💣',
+                key: 'bomber',
+                color: 'bg-role-bomber/10 text-role-bomber hover:bg-role-bomber/20',
+              },
+              {
+                icon: '🔪',
+                key: 'serialKiller',
+                color: 'bg-gray-800/10 text-gray-700 hover:bg-gray-800/20',
+              },
+              {
+                icon: '💘',
+                key: 'cupid',
+                color: 'bg-pink-400/10 text-pink-500 hover:bg-pink-400/20',
+              },
+              {
+                icon: '🔥',
+                key: 'arsonist',
+                color: 'bg-orange-500/10 text-orange-600 hover:bg-orange-500/20',
+              },
             ].map((role) => (
               <button
                 key={role.key}
@@ -385,15 +489,24 @@ export default function HomePage() {
       </section>
 
       {/* Role Detail Modal */}
-      <Modal isOpen={!!selectedRole} onClose={() => setSelectedRole(null)} title={selectedRole ? t(`role.${selectedRole.key}.name`) : ''} size="sm">
+      <Modal
+        isOpen={!!selectedRole}
+        onClose={() => setSelectedRole(null)}
+        title={selectedRole ? t(`role.${selectedRole.key}.name`) : ''}
+        size="sm"
+      >
         {selectedRole && (
           <div className="text-center">
             <span className="text-6xl block mb-4">{selectedRole.icon}</span>
-            <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold mb-4 ${
-              selectedRole.team === 'village' ? 'bg-green-100 text-green-700' :
-              selectedRole.team === 'werewolf' ? 'bg-red-100 text-red-700' :
-              'bg-purple-100 text-purple-700'
-            }`}>
+            <span
+              className={`inline-block px-3 py-1 rounded-full text-xs font-semibold mb-4 ${
+                selectedRole.team === 'village'
+                  ? 'bg-green-100 text-green-700'
+                  : selectedRole.team === 'werewolf'
+                    ? 'bg-red-100 text-red-700'
+                    : 'bg-purple-100 text-purple-700'
+              }`}
+            >
               {t(`team.${selectedRole.team}`)}
             </span>
             <p className="text-day-text text-base leading-relaxed">
@@ -404,15 +517,50 @@ export default function HomePage() {
       </Modal>
 
       {/* How to Play Modal */}
-      <Modal isOpen={showHowToPlay} onClose={() => setShowHowToPlay(false)} title={t('home.gameFlow')} size="lg">
+      <Modal
+        isOpen={showHowToPlay}
+        onClose={() => setShowHowToPlay(false)}
+        title={t('home.gameFlow')}
+        size="lg"
+      >
         <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
           {[
-            { icon: '🏠', step: 1, title: t('home.gameFlowStep1Title'), desc: t('home.gameFlowStep1Desc') },
-            { icon: '🌙', step: 2, title: t('home.gameFlowStep2Title'), desc: t('home.gameFlowStep2Desc') },
-            { icon: '🌅', step: 3, title: t('home.gameFlowStep3Title'), desc: t('home.gameFlowStep3Desc') },
-            { icon: '☀️', step: 4, title: t('home.gameFlowStep4Title'), desc: t('home.gameFlowStep4Desc') },
-            { icon: '🗳️', step: 5, title: t('home.gameFlowStep5Title'), desc: t('home.gameFlowStep5Desc') },
-            { icon: '🏆', step: 6, title: t('home.gameFlowStep6Title'), desc: t('home.gameFlowStep6Desc') },
+            {
+              icon: '🏠',
+              step: 1,
+              title: t('home.gameFlowStep1Title'),
+              desc: t('home.gameFlowStep1Desc'),
+            },
+            {
+              icon: '🌙',
+              step: 2,
+              title: t('home.gameFlowStep2Title'),
+              desc: t('home.gameFlowStep2Desc'),
+            },
+            {
+              icon: '🌅',
+              step: 3,
+              title: t('home.gameFlowStep3Title'),
+              desc: t('home.gameFlowStep3Desc'),
+            },
+            {
+              icon: '☀️',
+              step: 4,
+              title: t('home.gameFlowStep4Title'),
+              desc: t('home.gameFlowStep4Desc'),
+            },
+            {
+              icon: '🗳️',
+              step: 5,
+              title: t('home.gameFlowStep5Title'),
+              desc: t('home.gameFlowStep5Desc'),
+            },
+            {
+              icon: '🏆',
+              step: 6,
+              title: t('home.gameFlowStep6Title'),
+              desc: t('home.gameFlowStep6Desc'),
+            },
           ].map((step) => (
             <div key={step.step} className="flex gap-4 items-start p-3 rounded-xl bg-day-card/50">
               <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">

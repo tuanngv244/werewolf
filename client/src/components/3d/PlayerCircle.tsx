@@ -393,18 +393,18 @@ function PointyHat({ color }: { color: string }) {
     <group position={[0, 1.35, 0]}>
       {/* Hat brim */}
       <mesh position={[0, -0.05, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[0.22, 0.38, 12]} />
-        <meshStandardMaterial color={color} roughness={0.7} side={THREE.DoubleSide} />
+        <ringGeometry args={[0.22, 0.38, 20]} />
+        <meshStandardMaterial color={color} roughness={0.65} side={THREE.DoubleSide} />
       </mesh>
       {/* Hat cone */}
       <mesh position={[0, 0.2, 0]}>
-        <coneGeometry args={[0.22, 0.55, 8]} />
-        <meshStandardMaterial color={color} roughness={0.6} />
+        <coneGeometry args={[0.22, 0.55, 16]} />
+        <meshStandardMaterial color={color} roughness={0.55} metalness={0.02} />
       </mesh>
       {/* Hat tip star */}
       <mesh position={[0, 0.5, 0]}>
-        <sphereGeometry args={[0.03, 6, 6]} />
-        <meshBasicMaterial color="#FFD700" />
+        <sphereGeometry args={[0.03, 10, 10]} />
+        <meshStandardMaterial color="#FFD700" roughness={0.2} metalness={0.5} emissive="#FFD700" emissiveIntensity={0.3} />
       </mesh>
     </group>
   );
@@ -414,17 +414,22 @@ function TopHat({ color }: { color: string }) {
   return (
     <group position={[0, 1.35, 0]}>
       <mesh position={[0, -0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[0.18, 0.35, 12]} />
+        <ringGeometry args={[0.18, 0.35, 20]} />
         <meshStandardMaterial
           color={color}
-          roughness={0.4}
+          roughness={0.35}
           metalness={0.1}
           side={THREE.DoubleSide}
         />
       </mesh>
       <mesh position={[0, 0.15, 0]}>
-        <cylinderGeometry args={[0.18, 0.18, 0.3, 8]} />
-        <meshStandardMaterial color={color} roughness={0.4} metalness={0.1} />
+        <cylinderGeometry args={[0.18, 0.18, 0.3, 16]} />
+        <meshStandardMaterial color={color} roughness={0.35} metalness={0.1} />
+      </mesh>
+      {/* Hat band */}
+      <mesh position={[0, 0.02, 0]}>
+        <cylinderGeometry args={[0.185, 0.185, 0.03, 16]} />
+        <meshStandardMaterial color="#333333" roughness={0.4} metalness={0.15} />
       </mesh>
       {/* Red cross band */}
       <mesh position={[0, 0.06, 0.19]}>
@@ -439,8 +444,8 @@ function Hood({ color }: { color: string }) {
   return (
     <group position={[0, 1.25, -0.05]}>
       <mesh>
-        <sphereGeometry args={[0.34, 10, 10, 0, Math.PI * 2, 0, Math.PI * 0.65]} />
-        <meshStandardMaterial color={color} roughness={0.7} side={THREE.DoubleSide} />
+        <sphereGeometry args={[0.34, 16, 16, 0, Math.PI * 2, 0, Math.PI * 0.65]} />
+        <meshStandardMaterial color={color} roughness={0.65} side={THREE.DoubleSide} />
       </mesh>
     </group>
   );
@@ -450,16 +455,26 @@ function Crown({ color }: { color: string }) {
   return (
     <group position={[0, 1.38, 0]}>
       <mesh>
-        <cylinderGeometry args={[0.25, 0.28, 0.12, 6]} />
-        <meshStandardMaterial color={color} roughness={0.3} metalness={0.6} />
+        <cylinderGeometry args={[0.25, 0.28, 0.12, 12]} />
+        <meshStandardMaterial color={color} roughness={0.25} metalness={0.6} />
       </mesh>
       {/* Crown points */}
       {[0, 1, 2, 3, 4, 5].map((i) => {
         const a = (i / 6) * Math.PI * 2;
         return (
           <mesh key={i} position={[Math.cos(a) * 0.22, 0.1, Math.sin(a) * 0.22]}>
-            <coneGeometry args={[0.04, 0.12, 4]} />
-            <meshStandardMaterial color="#FFD700" roughness={0.3} metalness={0.7} />
+            <coneGeometry args={[0.04, 0.12, 6]} />
+            <meshStandardMaterial color="#FFD700" roughness={0.2} metalness={0.7} />
+          </mesh>
+        );
+      })}
+      {/* Gems on crown */}
+      {[0, 2, 4].map((i) => {
+        const a = (i / 6) * Math.PI * 2;
+        return (
+          <mesh key={`gem-${i}`} position={[Math.cos(a) * 0.26, 0.04, Math.sin(a) * 0.26]}>
+            <sphereGeometry args={[0.02, 8, 8]} />
+            <meshStandardMaterial color="#E74C3C" roughness={0.1} metalness={0.3} emissive="#E74C3C" emissiveIntensity={0.2} />
           </mesh>
         );
       })}
@@ -598,23 +613,23 @@ function WolfEars({ color }: { color: string }) {
       {/* Left ear */}
       <group position={[-0.2, 1.38, 0]} rotation={[0, 0, -0.3]}>
         <mesh>
-          <coneGeometry args={[0.08, 0.2, 4]} />
-          <meshStandardMaterial color={color} roughness={0.7} />
+          <coneGeometry args={[0.08, 0.2, 8]} />
+          <meshStandardMaterial color={color} roughness={0.6} />
         </mesh>
         <mesh position={[0, -0.02, 0.01]} scale={0.65}>
-          <coneGeometry args={[0.06, 0.14, 4]} />
-          <meshStandardMaterial color="#FFB0B0" roughness={0.6} />
+          <coneGeometry args={[0.06, 0.14, 8]} />
+          <meshStandardMaterial color="#FFB0B0" roughness={0.5} />
         </mesh>
       </group>
       {/* Right ear */}
       <group position={[0.2, 1.38, 0]} rotation={[0, 0, 0.3]}>
         <mesh>
-          <coneGeometry args={[0.08, 0.2, 4]} />
-          <meshStandardMaterial color={color} roughness={0.7} />
+          <coneGeometry args={[0.08, 0.2, 8]} />
+          <meshStandardMaterial color={color} roughness={0.6} />
         </mesh>
         <mesh position={[0, -0.02, 0.01]} scale={0.65}>
-          <coneGeometry args={[0.06, 0.14, 4]} />
-          <meshStandardMaterial color="#FFB0B0" roughness={0.6} />
+          <coneGeometry args={[0.06, 0.14, 8]} />
+          <meshStandardMaterial color="#FFB0B0" roughness={0.5} />
         </mesh>
       </group>
     </>
@@ -624,10 +639,27 @@ function WolfEars({ color }: { color: string }) {
 // ─── Cape ────────────────────────────────────────
 function Cape({ color }: { color: string }) {
   return (
-    <mesh position={[0, 0.65, -0.22]} rotation={[0.15, 0, 0]}>
-      <boxGeometry args={[0.4, 0.55, 0.04]} />
-      <meshStandardMaterial color={color} roughness={0.7} side={THREE.DoubleSide} />
-    </mesh>
+    <group position={[0, 0.65, -0.22]} rotation={[0.15, 0, 0]}>
+      {/* Main cape body */}
+      <mesh>
+        <boxGeometry args={[0.4, 0.55, 0.04]} />
+        <meshStandardMaterial color={color} roughness={0.65} side={THREE.DoubleSide} />
+      </mesh>
+      {/* Cape collar/shoulder piece */}
+      <mesh position={[0, 0.28, 0.02]}>
+        <boxGeometry args={[0.44, 0.06, 0.05]} />
+        <meshStandardMaterial
+          color={new THREE.Color(color).lerp(new THREE.Color('#FFFFFF'), 0.15)}
+          roughness={0.5}
+          metalness={0.05}
+        />
+      </mesh>
+      {/* Cape bottom rounded edge */}
+      <mesh position={[0, -0.29, 0]} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[0.02, 0.02, 0.4, 8]} />
+        <meshStandardMaterial color={color} roughness={0.65} />
+      </mesh>
+    </group>
   );
 }
 
@@ -777,7 +809,7 @@ function useKeyboard() {
   useEffect(() => {
     const onDown = (e: KeyboardEvent) => {
       // Capture arrow keys + F for attack, avoid interfering with chat input
-      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'f', 'F'].includes(e.key)) {
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'f', 'F', ' '].includes(e.key)) {
         // Don't capture if user is typing in an input/textarea
         const tag = (e.target as HTMLElement)?.tagName;
         if (tag === 'INPUT' || tag === 'TEXTAREA') return;
@@ -929,6 +961,7 @@ function ChibiCharacter({
   chatBubble,
   isAttacking,
   isBeingHit,
+  isJumping: isJumpingProp,
   hitEmoji,
 }: {
   player: PlayerData;
@@ -941,6 +974,7 @@ function ChibiCharacter({
   chatBubble?: { content: string; timestamp: number };
   isAttacking?: boolean;
   isBeingHit?: boolean;
+  isJumping?: boolean;
   hitEmoji?: string;
 }) {
   const groupRef = useRef<THREE.Group>(null);
@@ -979,7 +1013,7 @@ function ChibiCharacter({
   const leftLegRef = useRef<THREE.Group>(null);
   const rightLegRef = useRef<THREE.Group>(null);
   const leftArmRef = useRef<THREE.Mesh>(null);
-  const rightArmRef = useRef<THREE.Mesh>(null);
+  const rightArmRef = useRef<THREE.Group>(null);
   const headGroupRef = useRef<THREE.Group>(null);
   const bodyMeshRef = useRef<THREE.Mesh>(null);
   const leftEyeRef = useRef<THREE.Mesh>(null);
@@ -998,11 +1032,27 @@ function ChibiCharacter({
   const attackAnimRef = useRef(0); // 0 = no attack, >0 = attack progress in seconds
   const hitAnimRef = useRef(0); // 0 = no hit, >0 = hit reaction progress
   const hitShakeRef = useRef(0);
+  const [showSword, setShowSword] = useState(false);
+
+  // Jump animation state
+  const jumpVelocityRef = useRef(0);
+  const jumpHeightRef = useRef(0);
+  const isJumpingRef = useRef(false);
+  const jumpCooldownRef = useRef(0);
+
+  // Trigger jump from external prop (for remote players receiving fun:jumped)
+  useEffect(() => {
+    if (isJumpingProp && !isJumpingRef.current) {
+      isJumpingRef.current = true;
+      jumpVelocityRef.current = 3.5;
+    }
+  }, [isJumpingProp]);
 
   // Trigger attack animation when isAttacking changes to true
   useEffect(() => {
     if (isAttacking) {
       attackAnimRef.current = 0.001; // start the animation
+      setShowSword(true);
     }
   }, [isAttacking]);
 
@@ -1020,6 +1070,28 @@ function ChibiCharacter({
     const t = clock.getElapsedTime();
 
     if (player.isAlive) {
+      // ── Jump trigger (Space key — local player only) ──
+      if (isLocalPlayer && keys.current.has(' ') && !isJumpingRef.current && jumpCooldownRef.current <= 0) {
+        keys.current.delete(' '); // consume
+        isJumpingRef.current = true;
+        jumpVelocityRef.current = 3.5; // initial upward velocity
+        jumpCooldownRef.current = 0.5; // cooldown between jumps
+      }
+      if (jumpCooldownRef.current > 0) {
+        jumpCooldownRef.current -= delta;
+      }
+
+      // ── Jump physics ──
+      if (isJumpingRef.current) {
+        jumpVelocityRef.current -= 12.0 * delta; // gravity
+        jumpHeightRef.current += jumpVelocityRef.current * delta;
+        if (jumpHeightRef.current <= 0) {
+          jumpHeightRef.current = 0;
+          jumpVelocityRef.current = 0;
+          isJumpingRef.current = false;
+        }
+      }
+
       // ── Position sync ──
       groupRef.current.position.x = posRef.current.x;
       groupRef.current.position.z = posRef.current.z;
@@ -1030,7 +1102,17 @@ function ChibiCharacter({
       // ── Walking bounce ──
       const walkBounce = isMoving ? Math.abs(Math.sin(t * 10)) * 0.06 : 0;
       const breathe = Math.sin(t * 1.5 + index) * 0.03;
-      groupRef.current.position.y = homePosition[1] + breathe + walkBounce;
+      groupRef.current.position.y = homePosition[1] + breathe + walkBounce + jumpHeightRef.current;
+
+      // ── Jump squash & stretch ──
+      if (isJumpingRef.current || jumpHeightRef.current > 0) {
+        // Stretch when going up, squash when coming down
+        const stretchY = 1.0 + jumpVelocityRef.current * 0.03;
+        const squashXZ = 1.0 / Math.sqrt(Math.max(stretchY, 0.7));
+        groupRef.current.scale.set(squashXZ, Math.max(stretchY, 0.85), squashXZ);
+      } else {
+        groupRef.current.scale.set(1, 1, 1);
+      }
 
       // ── Leg animation (alternating legs) ──
       if (leftLegRef.current && rightLegRef.current) {
@@ -1069,6 +1151,7 @@ function ChibiCharacter({
             attackAnimRef.current = 0;
             rightArmRef.current.rotation.x = 0;
             rightArmRef.current.rotation.z = -0.3;
+            setShowSword(false);
           }
           // Left arm stays still during attack
           leftArmRef.current.rotation.x = 0;
@@ -1233,132 +1316,356 @@ function ChibiCharacter({
       {/* Selection ring */}
       {player.isSelected && (
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
-          <ringGeometry args={[0.5, 0.62, 24]} />
+          <ringGeometry args={[0.5, 0.62, 32]} />
           <meshBasicMaterial color="#FFD700" transparent opacity={0.8} side={THREE.DoubleSide} />
         </mesh>
       )}
 
       {/* Shadow blob */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
-        <circleGeometry args={[0.25, 12]} />
+        <circleGeometry args={[0.25, 20]} />
         <meshBasicMaterial color="#000000" transparent opacity={player.isAlive ? 0.2 : 0.1} />
       </mesh>
 
       {/* Left Leg */}
       <group ref={leftLegRef} position={[-0.08, 0.15, 0]}>
         <mesh castShadow>
-          <capsuleGeometry args={[0.06, 0.15, 3, 6]} />
+          <capsuleGeometry args={[0.06, 0.15, 6, 12]} />
           <meshStandardMaterial
             color={player.isAlive ? bodyColor : deadColor}
-            roughness={0.7}
+            roughness={0.65}
+            metalness={0.02}
             transparent={!player.isAlive}
             opacity={player.isAlive ? 1 : 0.5}
           />
         </mesh>
         {/* Shoe */}
         <mesh position={[0, -0.11, 0.03]}>
-          <sphereGeometry args={[0.065, 6, 6]} />
-          <meshStandardMaterial color={player.isAlive ? '#3A2518' : '#444'} roughness={0.8} />
+          <sphereGeometry args={[0.065, 10, 10]} />
+          <meshStandardMaterial color={player.isAlive ? '#3A2518' : '#444'} roughness={0.75} metalness={0.05} />
+        </mesh>
+        {/* Shoe sole */}
+        <mesh position={[0, -0.155, 0.03]} rotation={[-Math.PI / 2, 0, 0]}>
+          <circleGeometry args={[0.06, 10]} />
+          <meshStandardMaterial color={player.isAlive ? '#1A0A05' : '#333'} roughness={0.9} />
+        </mesh>
+        {/* Sock/cuff detail */}
+        <mesh position={[0, -0.04, 0]}>
+          <torusGeometry args={[0.062, 0.012, 6, 12]} />
+          <meshStandardMaterial
+            color={player.isAlive ? bodyColor : deadColor}
+            roughness={0.6}
+            transparent={!player.isAlive}
+            opacity={player.isAlive ? 1 : 0.5}
+          />
         </mesh>
       </group>
 
       {/* Right Leg */}
       <group ref={rightLegRef} position={[0.08, 0.15, 0]}>
         <mesh castShadow>
-          <capsuleGeometry args={[0.06, 0.15, 3, 6]} />
+          <capsuleGeometry args={[0.06, 0.15, 6, 12]} />
           <meshStandardMaterial
             color={player.isAlive ? bodyColor : deadColor}
-            roughness={0.7}
+            roughness={0.65}
+            metalness={0.02}
             transparent={!player.isAlive}
             opacity={player.isAlive ? 1 : 0.5}
           />
         </mesh>
         {/* Shoe */}
         <mesh position={[0, -0.11, 0.03]}>
-          <sphereGeometry args={[0.065, 6, 6]} />
-          <meshStandardMaterial color={player.isAlive ? '#3A2518' : '#444'} roughness={0.8} />
+          <sphereGeometry args={[0.065, 10, 10]} />
+          <meshStandardMaterial color={player.isAlive ? '#3A2518' : '#444'} roughness={0.75} metalness={0.05} />
+        </mesh>
+        {/* Shoe sole */}
+        <mesh position={[0, -0.155, 0.03]} rotation={[-Math.PI / 2, 0, 0]}>
+          <circleGeometry args={[0.06, 10]} />
+          <meshStandardMaterial color={player.isAlive ? '#1A0A05' : '#333'} roughness={0.9} />
+        </mesh>
+        {/* Sock/cuff detail */}
+        <mesh position={[0, -0.04, 0]}>
+          <torusGeometry args={[0.062, 0.012, 6, 12]} />
+          <meshStandardMaterial
+            color={player.isAlive ? bodyColor : deadColor}
+            roughness={0.6}
+            transparent={!player.isAlive}
+            opacity={player.isAlive ? 1 : 0.5}
+          />
         </mesh>
       </group>
 
       {/* Body */}
       <mesh ref={bodyMeshRef} position={[0, 0.52, 0]} castShadow>
-        <capsuleGeometry args={[0.2, 0.3, 4, 8]} />
+        <capsuleGeometry args={[0.2, 0.3, 8, 16]} />
         <meshStandardMaterial
           color={player.isAlive ? bodyColor : deadColor}
-          roughness={0.6}
+          roughness={0.55}
           metalness={0.05}
           transparent={!player.isAlive}
           opacity={player.isAlive ? 1 : 0.5}
         />
       </mesh>
+      {/* Collar / Neckline */}
+      {player.isAlive && (
+        <mesh position={[0, 0.73, 0]} rotation={[-0.15, 0, 0]}>
+          <torusGeometry args={[0.14, 0.025, 6, 16]} />
+          <meshStandardMaterial
+            color={new THREE.Color(costume.bodyColor).lerp(new THREE.Color('#FFFFFF'), 0.15)}
+            roughness={0.5}
+            metalness={0.02}
+          />
+        </mesh>
+      )}
+      {/* Belt */}
+      {player.isAlive && (
+        <group position={[0, 0.38, 0]}>
+          <mesh>
+            <torusGeometry args={[0.2, 0.018, 6, 16]} />
+            <meshStandardMaterial
+              color={new THREE.Color(costume.bodyColor).lerp(new THREE.Color('#000000'), 0.35)}
+              roughness={0.45}
+              metalness={0.15}
+            />
+          </mesh>
+          {/* Belt buckle */}
+          <mesh position={[0, 0, 0.2]}>
+            <boxGeometry args={[0.04, 0.035, 0.015]} />
+            <meshStandardMaterial color="#DAA520" roughness={0.25} metalness={0.7} />
+          </mesh>
+        </group>
+      )}
+      {/* Body buttons (center front) */}
+      {player.isAlive && (
+        <>
+          <mesh position={[0, 0.58, 0.2]}>
+            <sphereGeometry args={[0.012, 8, 8]} />
+            <meshStandardMaterial
+              color={new THREE.Color(costume.bodyColor).lerp(new THREE.Color('#FFFFFF'), 0.3)}
+              roughness={0.3}
+              metalness={0.1}
+            />
+          </mesh>
+          <mesh position={[0, 0.5, 0.2]}>
+            <sphereGeometry args={[0.012, 8, 8]} />
+            <meshStandardMaterial
+              color={new THREE.Color(costume.bodyColor).lerp(new THREE.Color('#FFFFFF'), 0.3)}
+              roughness={0.3}
+              metalness={0.1}
+            />
+          </mesh>
+        </>
+      )}
 
       {/* Left Arm */}
       <mesh ref={leftArmRef} position={[-0.28, 0.55, 0]} rotation={[0, 0, 0.3]} castShadow>
-        <capsuleGeometry args={[0.055, 0.2, 3, 6]} />
+        <capsuleGeometry args={[0.055, 0.2, 6, 10]} />
         <meshStandardMaterial
           color={player.isAlive ? bodyColor : deadColor}
-          roughness={0.7}
+          roughness={0.65}
+          metalness={0.02}
           transparent={!player.isAlive}
           opacity={player.isAlive ? 1 : 0.5}
         />
       </mesh>
       {/* Left Hand */}
       <mesh position={[-0.34, 0.36, 0]}>
-        <sphereGeometry args={[0.055, 6, 6]} />
+        <sphereGeometry args={[0.055, 10, 10]} />
         <meshStandardMaterial
           color={player.isAlive ? skinColor : deadColor}
-          roughness={0.5}
+          roughness={0.45}
+          metalness={0.02}
           transparent={!player.isAlive}
           opacity={player.isAlive ? 1 : 0.45}
         />
       </mesh>
 
       {/* Right Arm */}
-      <mesh ref={rightArmRef} position={[0.28, 0.55, 0]} rotation={[0, 0, -0.3]} castShadow>
-        <capsuleGeometry args={[0.055, 0.2, 3, 6]} />
-        <meshStandardMaterial
-          color={player.isAlive ? bodyColor : deadColor}
-          roughness={0.7}
-          transparent={!player.isAlive}
-          opacity={player.isAlive ? 1 : 0.5}
-        />
-      </mesh>
-      {/* Right Hand */}
-      <mesh position={[0.34, 0.36, 0]}>
-        <sphereGeometry args={[0.055, 6, 6]} />
-        <meshStandardMaterial
-          color={player.isAlive ? skinColor : deadColor}
-          roughness={0.5}
-          transparent={!player.isAlive}
-          opacity={player.isAlive ? 1 : 0.45}
-        />
-      </mesh>
+      <group ref={rightArmRef} position={[0.28, 0.55, 0]} rotation={[0, 0, -0.3]}>
+        <mesh castShadow>
+          <capsuleGeometry args={[0.055, 0.2, 6, 10]} />
+          <meshStandardMaterial
+            color={player.isAlive ? bodyColor : deadColor}
+            roughness={0.65}
+            metalness={0.02}
+            transparent={!player.isAlive}
+            opacity={player.isAlive ? 1 : 0.5}
+          />
+        </mesh>
+        {/* Right Hand (relative to arm group) */}
+        <mesh position={[0.06, -0.19, 0]}>
+          <sphereGeometry args={[0.055, 10, 10]} />
+          <meshStandardMaterial
+            color={player.isAlive ? skinColor : deadColor}
+            roughness={0.45}
+            metalness={0.02}
+            transparent={!player.isAlive}
+            opacity={player.isAlive ? 1 : 0.45}
+          />
+        </mesh>
+        {/* Sword (appears during attack — child of arm so it follows rotation) */}
+        {showSword && player.isAlive && (
+          <group position={[0.04, -0.28, -0.06]} rotation={[Math.PI / 2, 0, 0]}>
+            {/* Blade — points forward (Z-axis due to rotation) */}
+            <mesh position={[0, -0.18, 0]} castShadow>
+              <boxGeometry args={[0.025, 0.3, 0.015]} />
+              <meshStandardMaterial
+                color="#c0c0c0"
+                metalness={0.9}
+                roughness={0.15}
+                emissive="#ffffff"
+                emissiveIntensity={0.15}
+              />
+            </mesh>
+            {/* Blade tip */}
+            <mesh position={[0, -0.34, 0]} rotation={[0, 0, Math.PI / 4]}>
+              <boxGeometry args={[0.018, 0.025, 0.012]} />
+              <meshStandardMaterial color="#d4d4d4" metalness={0.95} roughness={0.1} />
+            </mesh>
+            {/* Guard */}
+            <mesh position={[0, -0.02, 0]}>
+              <boxGeometry args={[0.07, 0.018, 0.025]} />
+              <meshStandardMaterial color="#b8860b" metalness={0.7} roughness={0.3} />
+            </mesh>
+            {/* Handle */}
+            <mesh position={[0, 0.04, 0]}>
+              <cylinderGeometry args={[0.015, 0.018, 0.08, 6]} />
+              <meshStandardMaterial color="#8b4513" roughness={0.6} />
+            </mesh>
+            {/* Pommel */}
+            <mesh position={[0, 0.085, 0]}>
+              <sphereGeometry args={[0.02, 5, 5]} />
+              <meshStandardMaterial color="#b8860b" metalness={0.7} roughness={0.3} />
+            </mesh>
+          </group>
+        )}
+      </group>
 
       {/* Cape (if role has one) */}
       {player.isAlive && costume.capeColor && <Cape color={costume.capeColor} />}
 
       {/* Head group — for fidget rotation */}
       <group ref={headGroupRef} position={[0, 1.0, 0]}>
+        {/* Head sphere — high poly for smooth look */}
         <mesh castShadow>
-          <sphereGeometry args={[0.28, 14, 14]} />
+          <sphereGeometry args={[0.28, 24, 24]} />
           <meshStandardMaterial
             color={player.isAlive ? skinColor : deadColor}
-            roughness={0.5}
+            roughness={0.4}
+            metalness={0.02}
             transparent={!player.isAlive}
             opacity={player.isAlive ? 1 : 0.5}
           />
         </mesh>
 
+        {/* Hair — stylized volume on top/back of head */}
+        {player.isAlive && (
+          <group>
+            {/* Main hair volume */}
+            <mesh position={[0, 0.12, -0.04]} rotation={[0.15, 0, 0]}>
+              <sphereGeometry args={[0.27, 16, 16, 0, Math.PI * 2, 0, Math.PI * 0.55]} />
+              <meshStandardMaterial
+                color={new THREE.Color(costume.bodyColor).lerp(new THREE.Color('#2A1A0A'), 0.7)}
+                roughness={0.55}
+                metalness={0.08}
+                side={THREE.DoubleSide}
+              />
+            </mesh>
+            {/* Hair fringe / bangs */}
+            <mesh position={[0, 0.1, 0.18]} rotation={[0.6, 0, 0]}>
+              <sphereGeometry args={[0.18, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.35]} />
+              <meshStandardMaterial
+                color={new THREE.Color(costume.bodyColor).lerp(new THREE.Color('#2A1A0A'), 0.7)}
+                roughness={0.55}
+                metalness={0.08}
+                side={THREE.DoubleSide}
+              />
+            </mesh>
+            {/* Side tufts left */}
+            <mesh position={[-0.22, 0.0, 0.05]}>
+              <sphereGeometry args={[0.1, 8, 8]} />
+              <meshStandardMaterial
+                color={new THREE.Color(costume.bodyColor).lerp(new THREE.Color('#2A1A0A'), 0.7)}
+                roughness={0.55}
+                metalness={0.08}
+              />
+            </mesh>
+            {/* Side tufts right */}
+            <mesh position={[0.22, 0.0, 0.05]}>
+              <sphereGeometry args={[0.1, 8, 8]} />
+              <meshStandardMaterial
+                color={new THREE.Color(costume.bodyColor).lerp(new THREE.Color('#2A1A0A'), 0.7)}
+                roughness={0.55}
+                metalness={0.08}
+              />
+            </mesh>
+          </group>
+        )}
+
+        {/* Small cute ears */}
+        {player.isAlive && !isWolf && (
+          <>
+            <mesh position={[-0.27, 0.0, 0]}>
+              <sphereGeometry args={[0.045, 8, 8]} />
+              <meshStandardMaterial color={skinColor} roughness={0.4} metalness={0.02} />
+            </mesh>
+            <mesh position={[-0.27, 0.0, 0.01]}>
+              <sphereGeometry args={[0.025, 6, 6]} />
+              <meshStandardMaterial color="#FFB0A0" roughness={0.6} />
+            </mesh>
+            <mesh position={[0.27, 0.0, 0]}>
+              <sphereGeometry args={[0.045, 8, 8]} />
+              <meshStandardMaterial color={skinColor} roughness={0.4} metalness={0.02} />
+            </mesh>
+            <mesh position={[0.27, 0.0, 0.01]}>
+              <sphereGeometry args={[0.025, 6, 6]} />
+              <meshStandardMaterial color="#FFB0A0" roughness={0.6} />
+            </mesh>
+          </>
+        )}
+
+        {/* Nose — small cute bump */}
+        {player.isAlive && (
+          <mesh position={[0, -0.02, 0.275]}>
+            <sphereGeometry args={[0.025, 8, 8]} />
+            <meshStandardMaterial
+              color={new THREE.Color('#FFD5B8').lerp(new THREE.Color('#FFAA90'), 0.2)}
+              roughness={0.45}
+              metalness={0.02}
+            />
+          </mesh>
+        )}
+
         {/* Cheek blush */}
         {player.isAlive && (
           <>
             <mesh position={[-0.18, -0.05, 0.2]}>
-              <sphereGeometry args={[0.04, 6, 6]} />
-              <meshStandardMaterial color="#FFB0A0" roughness={0.8} transparent opacity={0.5} />
+              <sphereGeometry args={[0.045, 10, 10]} />
+              <meshStandardMaterial color="#FFB0A0" roughness={0.7} transparent opacity={0.4} />
             </mesh>
             <mesh position={[0.18, -0.05, 0.2]}>
-              <sphereGeometry args={[0.04, 6, 6]} />
-              <meshStandardMaterial color="#FFB0A0" roughness={0.8} transparent opacity={0.5} />
+              <sphereGeometry args={[0.045, 10, 10]} />
+              <meshStandardMaterial color="#FFB0A0" roughness={0.7} transparent opacity={0.4} />
+            </mesh>
+          </>
+        )}
+
+        {/* Eyebrows */}
+        {player.isAlive && (
+          <>
+            <mesh position={[-0.09, 0.12, 0.24]} rotation={[0, 0, 0.15]}>
+              <boxGeometry args={[0.06, 0.015, 0.015]} />
+              <meshStandardMaterial
+                color={new THREE.Color(costume.bodyColor).lerp(new THREE.Color('#2A1A0A'), 0.8)}
+                roughness={0.6}
+              />
+            </mesh>
+            <mesh position={[0.09, 0.12, 0.24]} rotation={[0, 0, -0.15]}>
+              <boxGeometry args={[0.06, 0.015, 0.015]} />
+              <meshStandardMaterial
+                color={new THREE.Color(costume.bodyColor).lerp(new THREE.Color('#2A1A0A'), 0.8)}
+                roughness={0.6}
+              />
             </mesh>
           </>
         )}
@@ -1366,43 +1673,79 @@ function ChibiCharacter({
         {/* Eyes */}
         {player.isAlive ? (
           <>
-            {/* Eye whites */}
+            {/* Left eye */}
             <group ref={leftEyeRef}>
+              {/* Eye white */}
               <mesh position={[-0.09, 0.03, 0.22]}>
-                <sphereGeometry args={[0.055, 8, 8]} />
-                <meshBasicMaterial color="#FFFFFF" />
+                <sphereGeometry args={[0.058, 14, 14]} />
+                <meshStandardMaterial color="#FFFFFF" roughness={0.15} metalness={0.02} />
+              </mesh>
+              {/* Iris ring */}
+              <mesh position={[-0.09, 0.035, 0.265]}>
+                <sphereGeometry args={[0.038, 12, 12]} />
+                <meshStandardMaterial
+                  color={new THREE.Color(eyeColor).lerp(new THREE.Color('#FFFFFF'), 0.25)}
+                  roughness={0.2}
+                  metalness={0.05}
+                />
               </mesh>
               {/* Pupil */}
-              <mesh position={[-0.09, 0.04, 0.26]}>
-                <sphereGeometry args={[0.035, 8, 8]} />
-                <meshBasicMaterial color={eyeColor} />
+              <mesh position={[-0.09, 0.04, 0.27]}>
+                <sphereGeometry args={[0.028, 12, 12]} />
+                <meshStandardMaterial color={eyeColor} roughness={0.15} metalness={0.05} />
               </mesh>
-              {/* Shine */}
+              {/* Main shine */}
               <mesh position={[-0.07, 0.06, 0.28]}>
-                <sphereGeometry args={[0.015, 6, 6]} />
+                <sphereGeometry args={[0.016, 8, 8]} />
                 <meshBasicMaterial color="#FFFFFF" />
               </mesh>
+              {/* Secondary smaller shine */}
+              <mesh position={[-0.1, 0.02, 0.278]}>
+                <sphereGeometry args={[0.008, 6, 6]} />
+                <meshBasicMaterial color="#FFFFFF" transparent opacity={0.7} />
+              </mesh>
             </group>
+            {/* Right eye */}
             <group ref={rightEyeRef}>
+              {/* Eye white */}
               <mesh position={[0.09, 0.03, 0.22]}>
-                <sphereGeometry args={[0.055, 8, 8]} />
-                <meshBasicMaterial color="#FFFFFF" />
+                <sphereGeometry args={[0.058, 14, 14]} />
+                <meshStandardMaterial color="#FFFFFF" roughness={0.15} metalness={0.02} />
+              </mesh>
+              {/* Iris ring */}
+              <mesh position={[0.09, 0.035, 0.265]}>
+                <sphereGeometry args={[0.038, 12, 12]} />
+                <meshStandardMaterial
+                  color={new THREE.Color(eyeColor).lerp(new THREE.Color('#FFFFFF'), 0.25)}
+                  roughness={0.2}
+                  metalness={0.05}
+                />
               </mesh>
               {/* Pupil */}
-              <mesh position={[0.09, 0.04, 0.26]}>
-                <sphereGeometry args={[0.035, 8, 8]} />
-                <meshBasicMaterial color={eyeColor} />
+              <mesh position={[0.09, 0.04, 0.27]}>
+                <sphereGeometry args={[0.028, 12, 12]} />
+                <meshStandardMaterial color={eyeColor} roughness={0.15} metalness={0.05} />
               </mesh>
-              {/* Shine */}
+              {/* Main shine */}
               <mesh position={[0.11, 0.06, 0.28]}>
-                <sphereGeometry args={[0.015, 6, 6]} />
+                <sphereGeometry args={[0.016, 8, 8]} />
                 <meshBasicMaterial color="#FFFFFF" />
               </mesh>
+              {/* Secondary smaller shine */}
+              <mesh position={[0.08, 0.02, 0.278]}>
+                <sphereGeometry args={[0.008, 6, 6]} />
+                <meshBasicMaterial color="#FFFFFF" transparent opacity={0.7} />
+              </mesh>
             </group>
-            {/* Mouth - small happy curve */}
+            {/* Mouth - small happy smile */}
             <mesh position={[0, -0.07, 0.26]}>
-              <sphereGeometry args={[0.02, 6, 6]} />
-              <meshBasicMaterial color="#D4856A" />
+              <sphereGeometry args={[0.022, 8, 8]} />
+              <meshStandardMaterial color="#D4856A" roughness={0.4} />
+            </mesh>
+            {/* Upper lip highlight */}
+            <mesh position={[0, -0.058, 0.265]}>
+              <sphereGeometry args={[0.012, 6, 6]} />
+              <meshStandardMaterial color="#E8A090" roughness={0.35} />
             </mesh>
           </>
         ) : (
@@ -1458,6 +1801,7 @@ function ChibiCharacter({
           position={[0, 2.1, 0]}
           center
           distanceFactor={8}
+          zIndexRange={[1, 0]}
           style={{ pointerEvents: 'none', userSelect: 'none' }}
         >
           <div
@@ -1490,6 +1834,7 @@ function ChibiCharacter({
           position={[0, 2.3, 0]}
           center
           distanceFactor={8}
+          zIndexRange={[1, 0]}
           style={{ pointerEvents: 'none', userSelect: 'none' }}
         >
           <div
@@ -1516,6 +1861,7 @@ function ChibiCharacter({
         position={[0, 1.7, 0]}
         center
         distanceFactor={8}
+        zIndexRange={[1, 0]}
         style={{ pointerEvents: 'none', userSelect: 'none' }}
       >
         <div className="flex flex-col items-center gap-0.5">
@@ -1592,10 +1938,17 @@ export function PlayerCircle({
   // Track all player positions via refs for proximity detection
   const playerPositionsRef = useRef<Map<string, THREE.Vector3>>(new Map());
 
-  // Listen for F key to trigger attack
+  // Jump state — track who is jumping
+  const [jumpingId, setJumpingId] = useState<string | null>(null);
+  const jumpCooldownRef = useRef(0);
+
+  // Listen for F key to trigger attack, Space key to jump
   useFrame((_, delta) => {
     if (attackCooldownRef.current > 0) {
       attackCooldownRef.current -= delta;
+    }
+    if (jumpCooldownRef.current > 0) {
+      jumpCooldownRef.current -= delta;
     }
 
     if (keys.current.has('f') && attackCooldownRef.current <= 0 && localUserId) {
@@ -1635,6 +1988,18 @@ export function PlayerCircle({
         }
       }
     }
+
+    // Space key → jump
+    if (keys.current.has(' ') && jumpCooldownRef.current <= 0 && localUserId) {
+      keys.current.delete(' ');
+      jumpCooldownRef.current = 0.6; // cooldown between jumps
+      setJumpingId(localUserId);
+      setTimeout(() => setJumpingId(null), 600);
+
+      // Emit to server so all players see the jump
+      const socket = getSocket();
+      socket.emit('fun:jump');
+    }
   });
 
   // Listen for slap events from server
@@ -1669,6 +2034,21 @@ export function PlayerCircle({
     };
   }, [localUserId]);
 
+  // Listen for jump events from server (other players jumping)
+  useEffect(() => {
+    const socket = getSocket();
+
+    const onJumped = ({ playerId }: { playerId: string }) => {
+      setJumpingId(playerId);
+      setTimeout(() => setJumpingId(null), 600);
+    };
+
+    socket.on('fun:jumped', onJumped);
+    return () => {
+      socket.off('fun:jumped', onJumped);
+    };
+  }, []);
+
   return (
     <group position={[0, 0, 0]}>
       {/* Campfire in center */}
@@ -1693,6 +2073,7 @@ export function PlayerCircle({
             chatBubble={activeBubbles.get(player.id)}
             isAttacking={attackingId === player.id}
             isBeingHit={hitTargetId === player.id}
+            isJumping={jumpingId === player.id}
             hitEmoji={hitEmoji}
             positionsRef={playerPositionsRef}
           />
@@ -1714,6 +2095,7 @@ function ChibiCharacterWithPosTracking(props: {
   chatBubble?: { content: string; timestamp: number };
   isAttacking?: boolean;
   isBeingHit?: boolean;
+  isJumping?: boolean;
   hitEmoji?: string;
   positionsRef: React.RefObject<Map<string, THREE.Vector3>>;
 }) {

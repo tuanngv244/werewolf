@@ -18,6 +18,7 @@ export default function RoomPage() {
   const { currentRoom, setCurrentRoom, leaveRoom } = useRoomStore();
   const [codeCopied, setCodeCopied] = useState(false);
   const [joinError, setJoinError] = useState('');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const hasJoinedRef = useRef(false);
 
   useEffect(() => {
@@ -93,6 +94,25 @@ export default function RoomPage() {
     }
   };
 
+  const handleDeleteRoom = async () => {
+    try {
+      const socket = await waitForConnection();
+      socket.emit('room:delete');
+    } catch {
+      // ignore
+    }
+    leaveRoom();
+    hasJoinedRef.current = false;
+    router.push('/rooms');
+  };
+
+  // Reset hasJoinedRef when unmounting so re-navigating to this room works
+  useEffect(() => {
+    return () => {
+      hasJoinedRef.current = false;
+    };
+  }, []);
+
   const isHost = currentRoom?.hostId === user?.id;
   const canStart = currentRoom && currentRoom.players.length >= 6;
 
@@ -147,7 +167,7 @@ export default function RoomPage() {
           <h2 className="text-lg font-heading font-semibold text-day-text mb-4">
             {t('lobby.players')}
           </h2>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {currentRoom.players.map((player) => (
               <div
                 key={player.id}
@@ -224,20 +244,60 @@ export default function RoomPage() {
         {/* Actions */}
         <div className="flex gap-3">
           {isHost ? (
-            <Button
-              className="flex-1"
-              size="lg"
-              onClick={handleStartGame}
-              disabled={!canStart}
-            >
-              {canStart ? t('lobby.startGame') : t('lobby.needMorePlayers')}
-            </Button>
+            <>
+              <Button
+                className="flex-1"
+                size="lg"
+                onClick={handleStartGame}
+                disabled={!canStart}
+              >
+                {canStart ? t('lobby.startGame') : t('lobby.needMorePlayers')}
+              </Button>
+              <Button
+                size="lg"
+                variant="danger"
+                onClick={() => setShowDeleteConfirm(true)}
+              >
+                🗑️ {t('lobby.deleteRoom')}
+              </Button>
+            </>
           ) : (
             <Button className="flex-1" size="lg" variant="secondary">
               {t('lobby.waitingForHost')}
             </Button>
           )}
         </div>
+
+        {/* Delete Confirmation Modal */}
+        {showDeleteConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+            <Card className="max-w-sm w-full mx-4 text-center">
+              <span className="text-4xl block mb-3">⚠️</span>
+              <h3 className="text-lg font-heading font-semibold text-day-text mb-2">
+                {t('lobby.deleteRoom')}
+              </h3>
+              <p className="text-sm text-day-muted mb-6">
+                {t('lobby.deleteRoomConfirm')}
+              </p>
+              <div className="flex gap-3">
+                <Button
+                  className="flex-1"
+                  variant="secondary"
+                  onClick={() => setShowDeleteConfirm(false)}
+                >
+                  {t('common.cancel')}
+                </Button>
+                <Button
+                  className="flex-1"
+                  variant="danger"
+                  onClick={handleDeleteRoom}
+                >
+                  {t('lobby.deleteRoom')}
+                </Button>
+              </div>
+            </Card>
+          </div>
+        )}
       </div>
     </main>
   );

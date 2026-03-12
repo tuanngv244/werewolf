@@ -16,6 +16,11 @@ export const PHASE_CONFIGS: Record<GamePhase, PhaseConfig> = {
     nameKey: 'game.phase.waiting',
     defaultDuration: 0,
   },
+  [GamePhase.INTRO]: {
+    phase: GamePhase.INTRO,
+    nameKey: 'game.phase.intro',
+    defaultDuration: 15,
+  },
   [GamePhase.STARTING]: {
     phase: GamePhase.STARTING,
     nameKey: 'game.phase.starting',

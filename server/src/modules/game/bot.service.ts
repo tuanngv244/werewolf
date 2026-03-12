@@ -25,8 +25,19 @@ const BOT_NAMES = [
 @Injectable()
 export class BotService {
   private activeGames = new Map<string, NodeJS.Timeout[]>();
+  // Callback to broadcast vote updates — set by the gateway
+  private voteUpdateCallback: ((gameId: string, roomCode: string, votes: Record<string, string>) => void) | null = null;
 
   constructor(private readonly gameService: GameService) {}
+
+  /**
+   * Set the callback for broadcasting vote updates. Called by GameGateway on init.
+   */
+  setVoteUpdateCallback(
+    callback: (gameId: string, roomCode: string, votes: Record<string, string>) => void,
+  ): void {
+    this.voteUpdateCallback = callback;
+  }
 
   /**
    * Generate bot players to fill a room. Returns array of bot RoomPlayer objects.
@@ -96,11 +107,40 @@ export class BotService {
         const aliveOthers = freshGame.players.filter((p) => p.isAlive && p.id !== bot.id);
         if (aliveOthers.length === 0) return;
 
-        const randomTarget = aliveOthers[Math.floor(Math.random() * aliveOthers.length)];
-        const { action } = this.getNightAction(freshBot.role, freshGame, bot.id);
+        // Choose target based on role faction awareness
+        let randomTarget;
+        if (freshBot.role === Role.MEDIUM) {
+          // Medium should target dead players for revive
+          const deadPlayers = freshGame.players.filter((p) => !p.isAlive);
+          if (deadPlayers.length > 0) {
+            randomTarget = deadPlayers[Math.floor(Math.random() * deadPlayers.length)];
+          } else {
+            randomTarget = aliveOthers[Math.floor(Math.random() * aliveOthers.length)];
+          }
+        } else if (freshBot.role === Role.WITCH) {
+          // Witch kill should target non-villagers from witch's perspective (random non-self)
+          // Witch doesn't know who wolves are, so random is fine, but avoid self
+          randomTarget = aliveOthers[Math.floor(Math.random() * aliveOthers.length)];
+        } else if (isWerewolfRole(freshBot.role)) {
+          // Wolves should target non-wolves
+          const nonWolves = aliveOthers.filter((p) => !isWerewolfRole(p.role));
+          randomTarget = nonWolves.length > 0
+            ? nonWolves[Math.floor(Math.random() * nonWolves.length)]
+            : aliveOthers[Math.floor(Math.random() * aliveOthers.length)];
+        } else {
+          randomTarget = aliveOthers[Math.floor(Math.random() * aliveOthers.length)];
+        }
+
+        const { action, secondAction } = this.getNightAction(freshBot.role, freshGame, bot.id);
 
         if (action) {
           await this.gameService.recordNightAction(gameId, bot.id, action, randomTarget.id);
+        }
+        // Some roles need a second action (e.g., Werewolf Seer: seer_check + werewolf_kill)
+        if (secondAction) {
+          // Pick a different target for the second action (wolf kill vs seer check)
+          const secondTarget = aliveOthers[Math.floor(Math.random() * aliveOthers.length)];
+          await this.gameService.recordNightAction(gameId, bot.id, secondAction, secondTarget.id);
         }
       }, delay);
 
@@ -113,7 +153,11 @@ export class BotService {
   /**
    * Determine the night action type for a given role
    */
-  private getNightAction(role: Role, game: GameState, botId: string): { action: string | null } {
+  private getNightAction(role: Role, game: GameState, botId: string): { action: string | null; secondAction?: string | null } {
+    // Werewolf Seer needs both seer_check AND werewolf_kill
+    if (role === Role.WEREWOLF_SEER) {
+      return { action: 'seer_check', secondAction: 'werewolf_kill' };
+    }
     if (isWerewolfRole(role)) {
       return { action: 'werewolf_kill' };
     }
@@ -129,12 +173,19 @@ export class BotService {
       case Role.BODYGUARD:
         return { action: 'protect' };
       case Role.WITCH: {
-        // Randomly choose kill (50% chance if has potion)
         const witch = game.players.find((p) => p.id === botId);
-        if (witch?.witchState?.hasKillPotion) {
+        // Check if there's a werewolf target (someone being attacked)
+        const werewolfTarget = this.gameService.getWerewolfTarget(game);
+        // Prioritize healing if someone is being attacked and we have heal potion
+        if (werewolfTarget && witch?.witchState?.hasHealPotion) {
+          return { action: 'heal' };
+        }
+        // Otherwise try to kill a non-wolf player (50% chance to use kill potion)
+        if (witch?.witchState?.hasKillPotion && Math.random() < 0.5) {
           return { action: 'kill' };
         }
-        return { action: null };
+        // Skip if no potions or randomly decided not to use
+        return { action: 'skip' };
       }
       case Role.BOMBER:
         return { action: 'bomb' };
@@ -142,8 +193,14 @@ export class BotService {
         return { action: 'trap' };
       case Role.AVENGER:
         return { action: 'revenge' };
-      case Role.MEDIUM:
-        return { action: 'revive' };
+      case Role.MEDIUM: {
+        // Only try to revive if there are dead players
+        const deadPlayers = game.players.filter((p) => !p.isAlive);
+        if (deadPlayers.length > 0) {
+          return { action: 'revive' };
+        }
+        return { action: null };
+      }
       case Role.SERIAL_KILLER:
         return { action: 'kill' };
       case Role.ARSONIST:
@@ -250,6 +307,14 @@ export class BotService {
         }
 
         await this.gameService.recordVote(gameId, bot.id, target.id);
+        // Broadcast vote update so human player sees real-time tally
+        if (this.voteUpdateCallback) {
+          const freshVotes = await this.gameService.getVotes(gameId);
+          const currentGame = await this.gameService.getGame(gameId);
+          if (currentGame && freshVotes) {
+            this.voteUpdateCallback(gameId, currentGame.roomCode, freshVotes);
+          }
+        }
       }, delay);
 
       timers.push(timer);

@@ -26,6 +26,7 @@ interface RoomStoreState {
   updateRoomPlayer: (player: RoomPlayer) => void;
   removeRoomPlayer: (playerId: string) => void;
   updateRoomSettings: (settings: Partial<RoomSettings>) => void;
+  removeRoom: (code: string) => void;
   leaveRoom: () => void;
 }
 
@@ -72,6 +73,11 @@ export const useRoomStore = create<RoomStoreState>()((set) => ({
         },
       };
     }),
+
+  removeRoom: (code) =>
+    set((state) => ({
+      rooms: state.rooms.filter((r) => r.code !== code),
+    })),
 
   leaveRoom: () => set({ currentRoom: null, isInRoom: false }),
 }));

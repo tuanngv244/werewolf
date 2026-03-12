@@ -24,6 +24,11 @@ interface VoteState {
 
 interface SeerResultData {
   targetId: string;
+  alignment: string; // 'good' | 'evil' | 'unknown'
+}
+
+interface WerewolfSeerResultData {
+  targetId: string;
   role: Role;
 }
 
@@ -67,7 +72,10 @@ interface GameState {
   // Seer results
   seerResult: SeerResultData | null;
   auraSeerResult: AuraSeerResultData | null;
-  werewolfSeerResult: SeerResultData | null;
+  werewolfSeerResult: WerewolfSeerResultData | null;
+
+  // Witch target (who was attacked by werewolves)
+  witchAttackedTarget: string | null;
 
   // Werewolf team info
   werewolfTeam: WolfPlayer[];
@@ -80,6 +88,12 @@ interface GameState {
 
   // Death log
   deathLog: DeathLogEntry[];
+
+  // Intro overlay — tracked client-side since server INTRO phase may elapse before client navigates
+  shouldShowIntro: boolean;
+
+  // Room code for post-game navigation
+  lastRoomCode: string | null;
 
   // Actions
   setGame: (
@@ -99,10 +113,12 @@ interface GameState {
   setWinners: (team: Team, playerIds: string[]) => void;
   setSeerResult: (result: SeerResultData) => void;
   setAuraSeerResult: (result: AuraSeerResultData) => void;
-  setWerewolfSeerResult: (result: SeerResultData) => void;
+  setWerewolfSeerResult: (result: WerewolfSeerResultData) => void;
+  setWitchAttackedTarget: (targetId: string | null) => void;
   setWerewolfTeam: (wolves: WolfPlayer[]) => void;
   setIsAlive: (alive: boolean) => void;
   addDeathLogEntry: (entry: DeathLogEntry) => void;
+  setShouldShowIntro: (show: boolean) => void;
   resetGame: () => void;
 }
 
@@ -124,10 +140,13 @@ const initialState = {
   seerResult: null,
   auraSeerResult: null,
   werewolfSeerResult: null,
+  witchAttackedTarget: null,
   werewolfTeam: [],
   headhunterTarget: null,
   roleList: [],
   deathLog: [],
+  shouldShowIntro: false,
+  lastRoomCode: null,
 };
 
 export const useGameStore = create<GameState>()((set) => ({
@@ -141,7 +160,9 @@ export const useGameStore = create<GameState>()((set) => ({
       seen.add(p.id);
       return true;
     });
+    // Reset all game state when starting a new game (prevents stale state on replay)
     set({
+      ...initialState,
       gameId,
       players: uniquePlayers,
       timers,
@@ -149,6 +170,7 @@ export const useGameStore = create<GameState>()((set) => ({
       phaseEndAt: phaseEndAt || null,
       round: 0,
       roleList: roleList || [],
+      shouldShowIntro: true,
     });
   },
 
@@ -163,6 +185,7 @@ export const useGameStore = create<GameState>()((set) => ({
       seerResult: phase === GamePhase.NIGHT ? null : state.seerResult,
       auraSeerResult: phase === GamePhase.NIGHT ? null : state.auraSeerResult,
       werewolfSeerResult: phase === GamePhase.NIGHT ? null : state.werewolfSeerResult,
+      witchAttackedTarget: phase === GamePhase.NIGHT ? null : state.witchAttackedTarget,
     })),
 
   setMyRole: (role, team, headhunterTarget) =>
@@ -187,12 +210,16 @@ export const useGameStore = create<GameState>()((set) => ({
 
   setWerewolfSeerResult: (werewolfSeerResult) => set({ werewolfSeerResult }),
 
+  setWitchAttackedTarget: (witchAttackedTarget) => set({ witchAttackedTarget }),
+
   setWerewolfTeam: (werewolfTeam) => set({ werewolfTeam }),
 
   setIsAlive: (isAlive) => set({ isAlive }),
 
   addDeathLogEntry: (entry) =>
     set((state) => ({ deathLog: [...state.deathLog, entry] })),
+
+  setShouldShowIntro: (shouldShowIntro) => set({ shouldShowIntro }),
 
   resetGame: () => set(initialState),
 }));
