@@ -1,24 +1,45 @@
 # Werewolf Game — Session Handoff
 
-> Last updated: 2026-03-11
+> Last updated: 2026-03-12
 
 ---
 
 ## Current Session
 
-**Status:** PRODUCTION DEPLOYMENT BUG FIXES — COMPLETE
-**Date:** 2026-03-11
-**Summary:** Fixed 4 critical bugs preventing the server from running in production Docker deployment at http://159.223.65.161.
+**Status:** IMPROVE_TASKS IMPLEMENTATION — COMPLETE
+**Date:** 2026-03-12
+**Summary:** Implemented all 7 improvement tasks (4 bug fixes + 3 features) from IMPROVE_TASKS.md.
 
 ---
 
 ## Active Tasks
 
-*No active tasks. All 4 bug fixes complete.*
+*No active tasks. All 7 improvements complete.*
 
 ---
 
 ## Completed (Recent)
+
+### IMPROVE_TASKS Implementation (2026-03-12)
+- **Stage:** DONE
+- **Tasks Completed:**
+  1. **#1 Chat deduplication** — Added `message.id` dedup check in `chat-store.ts` `addMessage()` to prevent double messages.
+  2. **#3 Seer result display fix** — Changed `setPhase()` in `game-store.ts` to only clear seer/aura/werewolf seer results when entering NIGHT phase (not on every phase transition). Results now persist through DAWN and DAY.
+  3. **#2 Remove saved player notifications** — Server now sends `saved: []` in `game:dawn_result` broadcast (keeping saved info server-side only). Removed saved player display from client DawnPanel.
+  4. **#4 Witch role improvements** — Added Skip button (3-column layout: Heal/Kill/Skip). Skip emits `skip` action that server ignores (no-op = save potions). Heal mode doesn't require target (saves wolf victim automatically). Kill mode excludes self.
+  5. **#6 Dead player spectator chat** — Server: WEREWOLF channel messages now also sent to dead players. Client: dead players see DAY+WEREWOLF+DEAD channel tabs but can only send in DEAD. Observe-only placeholder shown.
+  6. **#5 Role list in top bar** — Server: `roleList` included in `game:started` event (both normal and demo). Client: stored in `game-store`, rendered as compact emoji row with tooltips below top bar. Refactored `roleIcons` to module-level `ROLE_ICONS` constant.
+  7. **#7 Death event log** — Added `deathLog: DeathLogEntry[]` to `game-store` with `addDeathLogEntry()` action. Deaths tracked from `dawn_result`, `vote_result`, and `gunner_shot` socket events in `useSocket`. Collapsible floating panel at bottom-right with death cause icons and round numbers.
+- **i18n keys added (both en.json + vi.json):**
+  - `game.skip`, `game.observeOnly`, `game.deathLog`, `game.deathNight`, `game.deathVoted`, `game.deathGunner`
+- **Files Modified:**
+  - `client/src/stores/chat-store.ts` — Dedup in addMessage
+  - `client/src/stores/game-store.ts` — setPhase fix, roleList, deathLog, DeathLogEntry export
+  - `client/src/hooks/useSocket.ts` — Pass roleList, track deaths in deathLog
+  - `client/src/app/[locale]/(game)/game/page.tsx` — DawnPanel (remove saved), Witch skip, dead chat channels, role list bar, death log component, ROLE_ICONS refactor
+  - `client/src/messages/en.json` — New i18n keys
+  - `client/src/messages/vi.json` — New i18n keys
+  - `server/src/modules/game/game.gateway.ts` — Remove saved from dawn broadcast, WEREWOLF chat to dead players, roleList in game:started
 
 ### Production Deployment Bug Fixes (2026-03-11)
 - **Stage:** DONE

@@ -143,6 +143,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
       })),
       timers: game.timers,
       phaseEndAt: game.phaseEndAt,
+      roleList: room.settings.roles,
     });
 
     // Send role assignment to the real player
@@ -280,6 +281,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
       })),
       timers: game.timers,
       phaseEndAt: game.phaseEndAt,
+      roleList: room.settings.roles,
     });
 
     // Send individual role assignments
@@ -408,7 +410,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     );
 
     if (data.channel === 'WEREWOLF') {
-      // Only send to werewolf players in this room
+      // Only send to werewolf players in this room + dead players (spectators)
       const game = await this.gameService.getGameByRoom(roomCode);
       if (!game) return;
 
@@ -418,10 +420,14 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
       // Verify sender is a wolf
       if (!wolfIds.has(client.user.id)) return;
 
+      const deadIds = new Set(
+        game.players.filter((p) => !p.isAlive).map((p) => p.id),
+      );
+
       const sockets = await this.server.in(`room:${roomCode}`).fetchSockets();
       for (const s of sockets) {
         const authSocket = s as unknown as AuthenticatedSocket;
-        if (authSocket.user && wolfIds.has(authSocket.user.id)) {
+        if (authSocket.user && (wolfIds.has(authSocket.user.id) || deadIds.has(authSocket.user.id))) {
           s.emit('chat:message', message);
         }
       }
@@ -444,11 +450,11 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
         }
       }
     } else {
-      // DAY channel — only alive players can send
+      // DAY channel — only alive players can send, but all players can receive
       const game = await this.gameService.getGameByRoom(roomCode);
       if (game) {
         const sender = game.players.find((p) => p.id === client.user.id);
-        if (sender && !sender.isAlive) return; // Dead players cannot chat in DAY channel
+        if (sender && !sender.isAlive) return; // Dead players cannot send in DAY channel
       }
       this.server.to(`room:${roomCode}`).emit('chat:message', message);
     }
@@ -599,7 +605,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
         case 'dawn_result':
           this.server.to(`room:${game.roomCode}`).emit('game:dawn_result', {
             killed: event.killed,
-            saved: event.saved,
+            saved: [],
             messages: event.messages,
           });
           break;

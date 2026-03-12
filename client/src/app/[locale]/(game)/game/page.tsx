@@ -2,6 +2,7 @@
 
 import { useTranslations } from 'next-intl';
 import { useGameStore } from '@/stores/game-store';
+import type { DeathLogEntry } from '@/stores/game-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { useChatStore } from '@/stores/chat-store';
 import { useCountdown } from '@/hooks/useCountdown';
@@ -165,7 +166,9 @@ const ChatPanel = React.memo(function ChatPanel({ isNight }: { isNight: boolean 
   const availableChannels = useMemo(() => {
     const channels: { key: string; label: string }[] = [];
     if (!isAlive) {
-      // Dead players can ONLY use ghost chat
+      // Dead players can see ALL channels as spectators but can only send in DEAD
+      channels.push({ key: 'DAY', label: '💬' });
+      channels.push({ key: 'WEREWOLF', label: '🐺' });
       channels.push({ key: 'DEAD', label: '👻' });
     } else {
       if (
@@ -262,7 +265,11 @@ const ChatPanel = React.memo(function ChatPanel({ isNight }: { isNight: boolean 
           onChange={(e) => canSendMessage && setInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleSend()}
           placeholder={
-            !isAlive && activeChannel !== 'DEAD' ? t('game.deadCantChat') : t('chat.placeholder')
+            !isAlive && activeChannel !== 'DEAD'
+              ? `👁 ${t('game.observeOnly')}`
+              : !canSendMessage
+                ? t('game.deadCantChat')
+                : t('chat.placeholder')
           }
           disabled={!canSendMessage}
         />
@@ -274,6 +281,60 @@ const ChatPanel = React.memo(function ChatPanel({ isNight }: { isNight: boolean 
     </GlassCard>
   );
 });
+
+// ─── Role Icons Map (shared by NightActionPanel + Role List) ─────────────
+const ROLE_ICONS: Record<string, string> = {
+  [Role.WEREWOLF]: '🐺',
+  [Role.ALPHA_WEREWOLF]: '🐺',
+  [Role.WEREWOLF_SHAMAN]: '🐺',
+  [Role.WEREWOLF_SEER]: '🐺',
+  [Role.SEER]: '🔮',
+  [Role.AURA_SEER]: '✨',
+  [Role.DOCTOR]: '💊',
+  [Role.WITCH]: '🧙',
+  [Role.BOMBER]: '💣',
+  [Role.BEAST_HUNTER]: '🪤',
+  [Role.AVENGER]: '⚔️',
+  [Role.MEDIUM]: '👻',
+  [Role.VILLAGER]: '🏘️',
+  [Role.GUNNER]: '🔫',
+  [Role.CURSED]: '🌑',
+  [Role.HEADHUNTER]: '🎯',
+  [Role.FOOL]: '🃏',
+  [Role.BODYGUARD]: '🛡️',
+  [Role.PRIEST]: '✝️',
+  [Role.ELDER]: '👴',
+  [Role.BAKER]: '🍞',
+  [Role.DRUNK]: '🍺',
+  [Role.MAYOR]: '🎩',
+  [Role.PACIFIST]: '☮️',
+  [Role.SLEEPWALKER]: '😴',
+  [Role.HERMIT]: '🏔️',
+  [Role.APPRENTICE_SEER]: '🌟',
+  [Role.NIGHTMARE_WOLF]: '🐺',
+  [Role.SHADOW_WOLF]: '🐺',
+  [Role.BLOOD_MOON_WOLF]: '🐺',
+  [Role.HOWLER_WOLF]: '🐺',
+  [Role.LONE_WOLF]: '🐺',
+  [Role.VENOM_WOLF]: '🐺',
+  [Role.SERIAL_KILLER]: '🔪',
+  [Role.CUPID]: '💘',
+  [Role.ARSONIST]: '🔥',
+  [Role.SURVIVOR]: '🦺',
+  [Role.AMNESIAC]: '❓',
+  [Role.DOPPELGANGER]: '🪞',
+  [Role.JESTER]: '🤡',
+  [Role.VIGILANTE]: '🎯',
+  [Role.SPY]: '🕵️',
+  [Role.JAILER]: '🔒',
+  [Role.GRAVE_ROBBER]: '⚰️',
+  [Role.INFECTOR_WOLF]: '🐺',
+  [Role.STALKER_WOLF]: '🐺',
+  [Role.CURSED_WOLF]: '🐺',
+  [Role.PIRATE]: '🏴‍☠️',
+  [Role.PLAGUE_DOCTOR]: '🩺',
+  [Role.CORRUPTOR]: '👿',
+};
 
 // ─── Night Action Panel ─────────────────────────────
 function NightActionPanel({
@@ -353,59 +414,6 @@ function NightActionPanel({
     );
   }
 
-  const roleIcons: Record<string, string> = {
-    [Role.WEREWOLF]: '🐺',
-    [Role.ALPHA_WEREWOLF]: '🐺',
-    [Role.WEREWOLF_SHAMAN]: '🐺',
-    [Role.WEREWOLF_SEER]: '🐺',
-    [Role.SEER]: '🔮',
-    [Role.AURA_SEER]: '✨',
-    [Role.DOCTOR]: '💊',
-    [Role.WITCH]: '🧙',
-    [Role.BOMBER]: '💣',
-    [Role.BEAST_HUNTER]: '🪤',
-    [Role.AVENGER]: '⚔️',
-    [Role.MEDIUM]: '👻',
-    [Role.VILLAGER]: '🏘️',
-    [Role.GUNNER]: '🔫',
-    [Role.CURSED]: '🌑',
-    [Role.HEADHUNTER]: '🎯',
-    [Role.FOOL]: '🃏',
-    [Role.BODYGUARD]: '🛡️',
-    [Role.PRIEST]: '✝️',
-    [Role.ELDER]: '👴',
-    [Role.BAKER]: '🍞',
-    [Role.DRUNK]: '🍺',
-    [Role.MAYOR]: '🎩',
-    [Role.PACIFIST]: '☮️',
-    [Role.SLEEPWALKER]: '😴',
-    [Role.HERMIT]: '🏔️',
-    [Role.APPRENTICE_SEER]: '🌟',
-    [Role.NIGHTMARE_WOLF]: '🐺',
-    [Role.SHADOW_WOLF]: '🐺',
-    [Role.BLOOD_MOON_WOLF]: '🐺',
-    [Role.HOWLER_WOLF]: '🐺',
-    [Role.LONE_WOLF]: '🐺',
-    [Role.VENOM_WOLF]: '🐺',
-    [Role.SERIAL_KILLER]: '🔪',
-    [Role.CUPID]: '💘',
-    [Role.ARSONIST]: '🔥',
-    [Role.SURVIVOR]: '🦺',
-    [Role.AMNESIAC]: '❓',
-    [Role.DOPPELGANGER]: '🪞',
-    [Role.JESTER]: '🤡',
-    [Role.VIGILANTE]: '🎯',
-    [Role.SPY]: '🕵️',
-    [Role.JAILER]: '🔒',
-    [Role.GRAVE_ROBBER]: '⚰️',
-    [Role.INFECTOR_WOLF]: '🐺',
-    [Role.STALKER_WOLF]: '🐺',
-    [Role.CURSED_WOLF]: '🐺',
-    [Role.PIRATE]: '🏴‍☠️',
-    [Role.PLAGUE_DOCTOR]: '🩺',
-    [Role.CORRUPTOR]: '👿',
-  };
-
   const hasNightAction = [
     Role.WEREWOLF,
     Role.ALPHA_WEREWOLF,
@@ -478,7 +486,7 @@ function NightActionPanel({
   if (!hasNightAction) {
     return (
       <GlassCard isNight className="text-center py-6">
-        <span className="text-4xl block mb-3">{roleIcons[myRole] || '🌙'}</span>
+        <span className="text-4xl block mb-3">{ROLE_ICONS[myRole] || '🌙'}</span>
         <p className="text-night-text font-heading font-semibold">
           {t(`roles.${roleToCamel(myRole)}`)}
         </p>
@@ -499,8 +507,8 @@ function NightActionPanel({
           </div>
         </div>
 
-        {/* Heal / Kill mode buttons */}
-        <div className="grid grid-cols-2 gap-2 mb-3">
+        {/* Heal / Kill / Skip mode buttons */}
+        <div className="grid grid-cols-3 gap-2 mb-3">
           <button
             onClick={() => {
               setWitchAction('heal');
@@ -541,6 +549,20 @@ function NightActionPanel({
               {t('game.witchKill')}
             </span>
           </button>
+          <button
+            onClick={() => {
+              if (!gameId) return;
+              emit('game:night_action', { gameId, action: 'skip' });
+              useGameStore.getState().setNightAction(null);
+              if (useUiStore.getState().isSoundEnabled) playSound('actionConfirm');
+            }}
+            className="flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all bg-night-bg/40 border-night-border/30 hover:bg-night-bg/60 hover:border-night-accent/50"
+          >
+            <span className="text-2xl">⏭️</span>
+            <span className="text-xs font-semibold text-night-muted">
+              {t('game.skip')}
+            </span>
+          </button>
         </div>
 
         {/* Show player list for Kill mode */}
@@ -566,19 +588,21 @@ function NightActionPanel({
           </div>
         )}
 
-        <div className="mt-3">
-          <Button
-            className="w-full"
-            onClick={handleConfirmAction}
-            disabled={!witchAction || (witchAction === 'kill' && !selectedTarget)}
-          >
-            {witchAction === 'heal'
-              ? `💚 ${t('game.witchHeal')}`
-              : witchAction === 'kill'
-                ? `☠️ ${t('game.witchKill')}`
-                : t('common.confirm')}
-          </Button>
-        </div>
+        {witchAction && witchAction !== 'skip' && (
+          <div className="mt-3">
+            <Button
+              className="w-full"
+              onClick={handleConfirmAction}
+              disabled={witchAction === 'kill' && !selectedTarget}
+            >
+              {witchAction === 'heal'
+                ? `💚 ${t('game.witchHeal')}`
+                : witchAction === 'kill'
+                  ? `☠️ ${t('game.witchKill')}`
+                  : t('common.confirm')}
+            </Button>
+          </div>
+        )}
       </GlassCard>
     );
   }
@@ -586,7 +610,7 @@ function NightActionPanel({
   return (
     <GlassCard isNight>
       <div className="flex items-center gap-3 mb-3">
-        <span className="text-3xl">{roleIcons[myRole] || '🌙'}</span>
+        <span className="text-3xl">{ROLE_ICONS[myRole] || '🌙'}</span>
         <div>
           <h3 className="font-heading font-semibold text-night-text">
             {t(`roles.${roleToCamel(myRole)}`)}
@@ -757,21 +781,6 @@ function DawnPanel() {
           <p className="text-day-muted text-sm">{t('game.noDeath')}</p>
         </div>
       )}
-      {nightResult && nightResult.saved.length > 0 && (
-        <div className="mt-3 space-y-2">
-          {nightResult.saved.map((playerId) => {
-            const player = players.find((p) => p.id === playerId);
-            return (
-              <div key={playerId} className="flex items-center gap-3 p-2 bg-success/15 rounded-xl">
-                <span className="text-lg">💚</span>
-                <p className="text-xs text-success font-semibold">
-                  {t('game.wasSaved', { player: player?.username || 'Unknown' })}
-                </p>
-              </div>
-            );
-          })}
-        </div>
-      )}
     </GlassCard>
   );
 }
@@ -820,6 +829,63 @@ function GunnerPanel({ isNight }: { isNight: boolean }) {
   );
 }
 
+// ─── Death Log Panel ─────────────────────────────
+function DeathLog({ isNight }: { isNight: boolean }) {
+  const t = useTranslations();
+  const deathLog = useGameStore((s) => s.deathLog);
+  const [isCollapsed, setIsCollapsed] = useState(true);
+
+  if (deathLog.length === 0) return null;
+
+  const causeLabels: Record<string, string> = {
+    night: t('game.deathNight'),
+    voted: t('game.deathVoted'),
+    gunner: t('game.deathGunner'),
+  };
+
+  const causeIcons: Record<string, string> = {
+    night: '🐺',
+    voted: '🗳️',
+    gunner: '🔫',
+  };
+
+  return (
+    <div className="pointer-events-auto">
+      <button
+        onClick={() => setIsCollapsed(!isCollapsed)}
+        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-t-xl text-xs font-semibold transition-all backdrop-blur-xl border border-b-0 ${
+          isNight
+            ? 'bg-night-card/70 border-night-border/50 text-night-text'
+            : 'bg-white/70 border-day-border/50 text-day-text'
+        }`}
+      >
+        <span>💀</span>
+        <span>{t('game.deathLog')}</span>
+        <Badge variant="danger">{deathLog.length}</Badge>
+        <span className="text-[10px]">{isCollapsed ? '▲' : '▼'}</span>
+      </button>
+      {!isCollapsed && (
+        <GlassCard isNight={isNight} className="!rounded-tl-none !py-2 max-h-40 overflow-y-auto">
+          <div className="space-y-1.5">
+            {deathLog.map((entry, i) => (
+              <div key={`${entry.playerId}-${i}`} className="flex items-center gap-2 text-xs">
+                <span>{causeIcons[entry.cause] || '💀'}</span>
+                <span className="font-semibold text-danger">{entry.playerName}</span>
+                <span className={isNight ? 'text-night-muted' : 'text-day-muted'}>
+                  {causeLabels[entry.cause] || entry.cause}
+                </span>
+                <span className={`ml-auto text-[10px] ${isNight ? 'text-night-muted' : 'text-day-muted'}`}>
+                  R{entry.round}
+                </span>
+              </div>
+            ))}
+          </div>
+        </GlassCard>
+      )}
+    </div>
+  );
+}
+
 // ─── 3D Scene Wrapper ─────────────────────────────
 function Game3DScene({
   isNight,
@@ -854,6 +920,7 @@ export default function GamePage() {
   const t = useTranslations();
   const router = useRouter();
   const { phase, myRole, myTeam, phaseEndAt, winners, round, gameId, players } = useGameStore();
+  const roleList = useGameStore((s) => s.roleList);
   const isAlive = useGameStore((s) => s.isAlive);
   const { emit } = useSocket();
 
@@ -1050,8 +1117,28 @@ export default function GamePage() {
           </div>
         )}
 
+        {/* Role list */}
+        {roleList.length > 0 && (
+          <div className="pointer-events-auto flex justify-center mt-1">
+            <GlassCard isNight={isNight} className="!py-1.5 !px-3">
+              <div className="flex gap-1 items-center flex-wrap justify-center">
+                {roleList.map((role, i) => (
+                  <span key={`${role}-${i}`} className="text-sm" title={t(`roles.${roleToCamel(role)}`)}>
+                    {ROLE_ICONS[role] || '❓'}
+                  </span>
+                ))}
+              </div>
+            </GlassCard>
+          </div>
+        )}
+
         {/* Spacer */}
         <div className="flex-1" />
+
+        {/* Death Log (bottom-right, above action panels) */}
+        <div className="flex justify-end px-3 mb-1">
+          <DeathLog isNight={isNight} />
+        </div>
 
         {/* Bottom: Action Panel + Chat (side by side on desktop) */}
         <div className="pointer-events-auto p-3">

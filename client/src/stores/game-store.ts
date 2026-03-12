@@ -37,6 +37,14 @@ interface WolfPlayer {
   role: Role;
 }
 
+export interface DeathLogEntry {
+  playerId: string;
+  playerName: string;
+  cause: string;
+  round: number;
+  phase: string;
+}
+
 interface GameState {
   gameId: string | null;
   phase: GamePhase | null;
@@ -66,6 +74,12 @@ interface GameState {
   // Headhunter target
   headhunterTarget: string | null;
 
+  // Role list for the game
+  roleList: Role[];
+
+  // Death log
+  deathLog: DeathLogEntry[];
+
   // Actions
   setGame: (
     gameId: string,
@@ -73,6 +87,7 @@ interface GameState {
     timers: GameTimers,
     phase?: GamePhase | null,
     phaseEndAt?: number | null,
+    roleList?: Role[],
   ) => void;
   setPhase: (phase: GamePhase, endAt: number, round?: number) => void;
   setMyRole: (role: Role, team: Team, headhunterTarget?: string) => void;
@@ -86,6 +101,7 @@ interface GameState {
   setWerewolfSeerResult: (result: SeerResultData) => void;
   setWerewolfTeam: (wolves: WolfPlayer[]) => void;
   setIsAlive: (alive: boolean) => void;
+  addDeathLogEntry: (entry: DeathLogEntry) => void;
   resetGame: () => void;
 }
 
@@ -109,12 +125,14 @@ const initialState = {
   werewolfSeerResult: null,
   werewolfTeam: [],
   headhunterTarget: null,
+  roleList: [],
+  deathLog: [],
 };
 
 export const useGameStore = create<GameState>()((set) => ({
   ...initialState,
 
-  setGame: (gameId, players, timers, phase, phaseEndAt) => {
+  setGame: (gameId, players, timers, phase, phaseEndAt, roleList) => {
     // Deduplicate players by ID to prevent React key warnings
     const seen = new Set<string>();
     const uniquePlayers = players.filter((p) => {
@@ -129,6 +147,7 @@ export const useGameStore = create<GameState>()((set) => ({
       phase: phase || null,
       phaseEndAt: phaseEndAt || null,
       round: 0,
+      roleList: roleList || [],
     });
   },
 
@@ -137,11 +156,12 @@ export const useGameStore = create<GameState>()((set) => ({
       phase,
       phaseEndAt: endAt,
       round: round ?? state.round,
-      nightActionDone: false,
-      nightActionTarget: null,
-      seerResult: null,
-      auraSeerResult: null,
-      werewolfSeerResult: null,
+      nightActionDone: phase === GamePhase.NIGHT ? false : state.nightActionDone,
+      nightActionTarget: phase === GamePhase.NIGHT ? null : state.nightActionTarget,
+      // Only clear seer results when entering a new NIGHT phase, not on DAWN/DAY transitions
+      seerResult: phase === GamePhase.NIGHT ? null : state.seerResult,
+      auraSeerResult: phase === GamePhase.NIGHT ? null : state.auraSeerResult,
+      werewolfSeerResult: phase === GamePhase.NIGHT ? null : state.werewolfSeerResult,
     })),
 
   setMyRole: (role, team, headhunterTarget) =>
@@ -169,6 +189,9 @@ export const useGameStore = create<GameState>()((set) => ({
   setWerewolfTeam: (werewolfTeam) => set({ werewolfTeam }),
 
   setIsAlive: (isAlive) => set({ isAlive }),
+
+  addDeathLogEntry: (entry) =>
+    set((state) => ({ deathLog: [...state.deathLog, entry] })),
 
   resetGame: () => set(initialState),
 }));

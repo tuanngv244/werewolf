@@ -134,7 +134,13 @@
     "witchHeal": "Heal Potion",
     "witchKill": "Kill Potion",
     "witchHealDesc": "Use your heal potion to save the werewolves' target tonight. One-time use.",
-    "deadCantChat": "Dead players can only use ghost chat 👻"
+    "deadCantChat": "Dead players can only use ghost chat 👻",
+    "skip": "Skip",
+    "observeOnly": "You can observe",
+    "deathLog": "Death Log",
+    "deathNight": "Killed at night",
+    "deathVoted": "Voted out",
+    "deathGunner": "Shot by Gunner"
   },
   "voice": {
     "muteSound": "Mute sound",

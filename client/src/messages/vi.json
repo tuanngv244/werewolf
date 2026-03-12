@@ -134,7 +134,13 @@
     "witchHeal": "Bình Cứu",
     "witchKill": "Bình Độc",
     "witchHealDesc": "Dùng bình cứu để cứu nạn nhân của sói đêm nay. Chỉ dùng được một lần.",
-    "deadCantChat": "Người chết chỉ có thể chat với hồn ma 👻"
+    "deadCantChat": "Người chết chỉ có thể chat với hồn ma 👻",
+    "skip": "Bỏ qua",
+    "observeOnly": "Bạn có thể quan sát",
+    "deathLog": "Nhật Ký Tử Vong",
+    "deathNight": "Bị giết ban đêm",
+    "deathVoted": "Bị treo cổ",
+    "deathGunner": "Bị Xạ Thủ bắn"
   },
   "voice": {
     "muteSound": "Tắt âm thanh",

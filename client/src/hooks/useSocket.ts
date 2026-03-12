@@ -33,6 +33,8 @@ export function useSocket() {
   const setWerewolfTeam = useGameStore((s) => s.setWerewolfTeam);
   const setIsAlive = useGameStore((s) => s.setIsAlive);
 
+  const addDeathLogEntry = useGameStore((s) => s.addDeathLogEntry);
+
   const addMessage = useChatStore((s) => s.addMessage);
   const setActiveChannel = useChatStore((s) => s.setActiveChannel);
 
@@ -54,8 +56,8 @@ export function useSocket() {
       });
 
       // Game events
-      socket.on('game:started', ({ gameId, players, timers, phase, phaseEndAt }) => {
-        setGame(gameId, players, timers, phase, phaseEndAt);
+      socket.on('game:started', ({ gameId, players, timers, phase, phaseEndAt, roleList }) => {
+        setGame(gameId, players, timers, phase, phaseEndAt, roleList);
       });
 
       socket.on('game:role_assigned', ({ role, team, headhunterTarget }) => {
@@ -68,10 +70,20 @@ export function useSocket() {
 
       socket.on('game:dawn_result', (result) => {
         setNightResult(result);
-        // Mark ALL killed players as dead in the store
+        // Mark ALL killed players as dead in the store + log deaths
         if (result.killed && Array.isArray(result.killed)) {
+          const currentPlayers = useGameStore.getState().players;
+          const currentRound = useGameStore.getState().round;
           for (const killedId of result.killed) {
             updatePlayer(killedId, { isAlive: false });
+            const player = currentPlayers.find((p) => p.id === killedId);
+            addDeathLogEntry({
+              playerId: killedId,
+              playerName: player?.username || 'Unknown',
+              cause: 'night',
+              round: currentRound,
+              phase: 'DAWN',
+            });
           }
         }
         // Check if local player was killed in dawn results
@@ -88,9 +100,19 @@ export function useSocket() {
 
       socket.on('game:vote_result', (result) => {
         setVoteState({ votes: {}, result });
-        // Mark eliminated player as dead
+        // Mark eliminated player as dead + log death
         if (result.eliminatedId) {
           updatePlayer(result.eliminatedId, { isAlive: false });
+          const currentPlayers = useGameStore.getState().players;
+          const currentRound = useGameStore.getState().round;
+          const player = currentPlayers.find((p) => p.id === result.eliminatedId);
+          addDeathLogEntry({
+            playerId: result.eliminatedId,
+            playerName: player?.username || 'Unknown',
+            cause: 'voted',
+            round: currentRound,
+            phase: 'VOTE',
+          });
           const userId = useAuthStore.getState().user?.id;
           if (userId && result.eliminatedId === userId) {
             setIsAlive(false);
@@ -132,6 +154,16 @@ export function useSocket() {
 
       socket.on('game:gunner_shot', ({ targetId }) => {
         updatePlayer(targetId, { isAlive: false });
+        const currentPlayers = useGameStore.getState().players;
+        const currentRound = useGameStore.getState().round;
+        const player = currentPlayers.find((p) => p.id === targetId);
+        addDeathLogEntry({
+          playerId: targetId,
+          playerName: player?.username || 'Unknown',
+          cause: 'gunner',
+          round: currentRound,
+          phase: 'DAY',
+        });
         const userId = useAuthStore.getState().user?.id;
         if (userId && targetId === userId) {
           setIsAlive(false);
@@ -205,6 +237,7 @@ export function useSocket() {
     setWerewolfSeerResult,
     setWerewolfTeam,
     setIsAlive,
+    addDeathLogEntry,
     addMessage,
     setActiveChannel,
   ]);
