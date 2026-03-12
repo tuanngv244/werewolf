@@ -5,6 +5,10 @@
   "description": "Real-time multiplayer Werewolf (Ma Soi) game with 3D characters",
   "scripts": {
     "dev": "concurrently \"pnpm --filter client dev\" \"pnpm --filter server dev\"",
+    "devLocal": "concurrently -n infra,client,server -c blue,green,yellow \"pnpm devLocal:infra\" \"pnpm --filter client devLocal\" \"pnpm devLocal:server\"",
+    "devLocal:server": "wait-on tcp:5432 tcp:6379 && pnpm --filter server dev",
+    "devLocal:infra": "docker compose -f docker-compose.dev.yml up",
+    "devLocal:infra:stop": "docker compose -f docker-compose.dev.yml down",
     "build": "pnpm --filter shared build && pnpm --filter client build && pnpm --filter server build",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
@@ -12,7 +16,8 @@
   },
   "devDependencies": {
     "concurrently": "^9.1.2",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "wait-on": "^9.0.4"
   },
   "engines": {
     "node": ">=20.0.0",

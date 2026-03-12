@@ -52,6 +52,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     try {
       const token = client.handshake?.auth?.token;
       if (!token) {
+        console.warn('Socket connection rejected: no auth token');
         client.disconnect();
         return;
       }
@@ -63,7 +64,8 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
       if (roomCode) {
         client.join(`room:${roomCode}`);
       }
-    } catch {
+    } catch (error) {
+      console.warn('Socket connection rejected: JWT verification failed', error?.message || error);
       client.disconnect();
     }
   }
@@ -101,70 +103,77 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() data: { playerCount?: number },
   ) {
-    const playerCount = Math.min(Math.max(data?.playerCount || 8, 6), 16);
-    const roles = DEFAULT_ROLES[playerCount as keyof typeof DEFAULT_ROLES] || DEFAULT_ROLES[8];
+    try {
+      const playerCount = Math.min(Math.max(data?.playerCount || 8, 6), 16);
+      const roles = DEFAULT_ROLES[playerCount as keyof typeof DEFAULT_ROLES] || DEFAULT_ROLES[8];
 
-    // Create room with the host
-    const room = await this.roomsService.createRoom(client.user, {
-      maxPlayers: playerCount,
-      isPrivate: true,
-      roles: roles as any,
-    });
-
-    // Use faster timers for demo mode
-    room.settings.timers = { night: 15, day: 30, vote: 15, lastWords: 8 };
-
-    // Add bot players to fill the room
-    const botsNeeded = playerCount - 1; // -1 for the host
-    const bots = this.botService.generateBotPlayers(botsNeeded);
-    for (const bot of bots) {
-      room.players.push(bot);
-    }
-
-    await this.roomsService.updateRoom(room.code, room);
-    await this.roomsService.setPlayerRoom(client.user.id, room.code);
-    client.join(`room:${room.code}`);
-
-    // Auto-start the game immediately
-    room.status = RoomStatus.IN_GAME;
-    await this.roomsService.updateRoom(room.code, room);
-
-    const game = await this.gameService.createGame(room);
-
-    // Send game started
-    client.emit('game:started', {
-      gameId: game.id,
-      phase: game.phase,
-      players: game.players.map((p) => ({
-        id: p.id,
-        username: p.username,
-        isAlive: true,
-        isConnected: true,
-      })),
-      timers: game.timers,
-      phaseEndAt: game.phaseEndAt,
-      roleList: room.settings.roles,
-    });
-
-    // Send role assignment to the real player
-    const player = game.players.find((p) => p.id === client.user.id);
-    if (player) {
-      client.emit('game:role_assigned', {
-        role: player.role,
-        team: player.team,
-        ...(player.headhunterState ? { headhunterTarget: player.headhunterState.targetId } : {}),
+      // Create room with the host
+      const room = await this.roomsService.createRoom(client.user, {
+        maxPlayers: playerCount,
+        isPrivate: true,
+        roles: roles as any,
       });
 
-      if (isWerewolfRole(player.role)) {
-        const wolfIds = game.players
-          .filter((p) => isWerewolfRole(p.role))
-          .map((p) => ({ id: p.id, username: p.username, role: p.role }));
-        client.emit('game:werewolf_team', { wolves: wolfIds });
-      }
-    }
+      // Use faster timers for demo mode
+      room.settings.timers = { night: 15, day: 30, vote: 15, lastWords: 8 };
 
-    // Start phase timer — bots will auto-act via BotService
-    this.startPhaseTimer(game.id, game.phaseEndAt);
+      // Add bot players to fill the room
+      const botsNeeded = playerCount - 1; // -1 for the host
+      const bots = this.botService.generateBotPlayers(botsNeeded);
+      for (const bot of bots) {
+        room.players.push(bot);
+      }
+
+      await this.roomsService.updateRoom(room.code, room);
+      await this.roomsService.setPlayerRoom(client.user.id, room.code);
+      client.join(`room:${room.code}`);
+
+      // Auto-start the game immediately
+      room.status = RoomStatus.IN_GAME;
+      await this.roomsService.updateRoom(room.code, room);
+
+      const game = await this.gameService.createGame(room);
+
+      // Send game started
+      client.emit('game:started', {
+        gameId: game.id,
+        phase: game.phase,
+        players: game.players.map((p) => ({
+          id: p.id,
+          username: p.username,
+          isAlive: true,
+          isConnected: true,
+        })),
+        timers: game.timers,
+        phaseEndAt: game.phaseEndAt,
+        roleList: room.settings.roles,
+      });
+
+      // Send role assignment to the real player
+      const player = game.players.find((p) => p.id === client.user.id);
+      if (player) {
+        client.emit('game:role_assigned', {
+          role: player.role,
+          team: player.team,
+          ...(player.headhunterState ? { headhunterTarget: player.headhunterState.targetId } : {}),
+        });
+
+        if (isWerewolfRole(player.role)) {
+          const wolfIds = game.players
+            .filter((p) => isWerewolfRole(p.role))
+            .map((p) => ({ id: p.id, username: p.username, role: p.role }));
+          client.emit('game:werewolf_team', { wolves: wolfIds });
+        }
+      }
+
+      // Start phase timer — bots will auto-act via BotService
+      this.startPhaseTimer(game.id, game.phaseEndAt);
+    } catch (error) {
+      console.error('Failed to create demo room:', error);
+      client.emit('room:error', {
+        message: 'Failed to create demo room. Please ensure the server is fully started and try again.',
+      });
+    }
   }
 
   @SubscribeMessage('room:join')

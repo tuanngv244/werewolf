@@ -21,7 +21,7 @@ import { GameRecord } from './database/entities/game-record.entity';
     }),
     JwtModule.register({
       global: true,
-      secret: process.env.JWT_SECRET || 'dev-secret-change-me',
+      secret: process.env.JWT_SECRET || 'dev-secret-change-me-in-production',
       signOptions: { expiresIn: '24h' },
     }),
     RedisModule,
