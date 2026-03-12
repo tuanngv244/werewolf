@@ -1,0 +1,20 @@
+{
+  "name": "Werewolf Game | Ma Soi",
+  "short_name": "Werewolf",
+  "description": "A real-time multiplayer social deduction game with cute 3D characters",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "theme_color": "#4A1D96",
+  "background_color": "#0f0a1e",
+  "display": "standalone"
+}
