@@ -588,7 +588,7 @@ function NightActionPanel({
           </div>
         )}
 
-        {witchAction && witchAction !== 'skip' && (
+        {witchAction && (
           <div className="mt-3">
             <Button
               className="w-full"

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import type { GamePhase, Role, Team, GameTimers } from '@shared/types/game.types';
+import { GamePhase } from '@shared/types/game.types';
+import type { Role, Team, GameTimers } from '@shared/types/game.types';
 
 interface GamePlayer {
   id: string;
