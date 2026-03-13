@@ -37,6 +37,7 @@ export function useSocket() {
   const setWerewolfTeam = useGameStore((s) => s.setWerewolfTeam);
   const setIsAlive = useGameStore((s) => s.setIsAlive);
   const setWitchAttackedTarget = useGameStore((s) => s.setWitchAttackedTarget);
+  const setWitchPotionState = useGameStore((s) => s.setWitchPotionState);
 
   const addDeathLogEntry = useGameStore((s) => s.addDeathLogEntry);
 
@@ -178,8 +179,12 @@ export function useSocket() {
         setActiveChannel('WEREWOLF');
       }
     };
-    const handleWitchTarget = ({ targetId }: any) => {
+    const handleWitchTarget = ({ targetId, hasHealPotion, hasKillPotion }: any) => {
       setWitchAttackedTarget(targetId);
+      // Update potion availability if server sent it
+      if (hasHealPotion !== undefined && hasKillPotion !== undefined) {
+        setWitchPotionState(hasHealPotion, hasKillPotion);
+      }
     };
     const handleGunnerShot = ({ targetId }: any) => {
       updatePlayer(targetId, { isAlive: false });
@@ -298,6 +303,7 @@ export function useSocket() {
     setWerewolfTeam,
     setIsAlive,
     setWitchAttackedTarget,
+    setWitchPotionState,
     addDeathLogEntry,
     addMessage,
     setActiveChannel,

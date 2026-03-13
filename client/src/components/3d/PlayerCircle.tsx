@@ -2,7 +2,7 @@
 
 import { useRef, useMemo, useEffect, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { Html, Float } from '@react-three/drei';
+import { Html, useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { Role } from '@shared/types/game.types';
 import { useAuthStore } from '@/stores/auth-store';
@@ -18,802 +18,231 @@ interface PlayerData {
   isSelected?: boolean;
 }
 
-// ─── Role Visual Config ───────────────────────────────
+// ─── Model paths ─────────────────────────────
+const MODEL_PATHS = [
+  '/models/b_model.glb',
+  '/models/g_model.glb',
+  '/models/m_model.glb',
+  '/models/s_model.glb',
+  '/models/w_model.glb',
+];
+
+// Preload all models so they're cached
+MODEL_PATHS.forEach((path) => useGLTF.preload(path));
+
+// ─── Deterministic model assignment per player ───────────────
+// Uses a simple hash of the player ID to pick a model consistently
+function getModelIndex(playerId: string): number {
+  let hash = 0;
+  for (let i = 0; i < playerId.length; i++) {
+    hash = (hash * 31 + playerId.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash) % MODEL_PATHS.length;
+}
+
+// ─── Role Visual Config (kept for emoji, glow, etc.) ───────────────
 interface RoleCostume {
-  bodyColor: string;
-  hatColor?: string;
-  hatType?:
-    | 'pointy'
-    | 'tophat'
-    | 'hood'
-    | 'crown'
-    | 'jester'
-    | 'helmet'
-    | 'bandana'
-    | 'goggles'
-    | 'none';
-  accessoryColor?: string;
-  capeColor?: string;
-  eyeColor?: string;
-  glowColor?: string;
   emoji: string;
+  glowColor?: string;
 }
 
 const ROLE_COSTUMES: Record<string, RoleCostume> = {
   // ── Village Team — Active ──
-  villager: { bodyColor: '#8B7355', hatType: 'none', emoji: '🏘️', eyeColor: '#2C1810' },
-  doctor: {
-    bodyColor: '#FFFFFF',
-    hatType: 'tophat',
-    hatColor: '#FFFFFF',
-    accessoryColor: '#E74C3C',
-    emoji: '💊',
-    glowColor: '#3498DB',
-    eyeColor: '#2C5F8A',
-  },
-  gunner: {
-    bodyColor: '#8B6914',
-    hatType: 'bandana',
-    hatColor: '#B8860B',
-    accessoryColor: '#DAA520',
-    emoji: '🔫',
-    eyeColor: '#4A3728',
-  },
-  seer: {
-    bodyColor: '#7B3FA0',
-    hatType: 'pointy',
-    hatColor: '#9B59B6',
-    accessoryColor: '#D8B4FE',
-    emoji: '🔮',
-    glowColor: '#9B59B6',
-    eyeColor: '#6B21A8',
-  },
-  aura_seer: {
-    bodyColor: '#E6E6FA',
-    hatType: 'hood',
-    hatColor: '#F0E6FF',
-    accessoryColor: '#C4B5FD',
-    emoji: '✨',
-    glowColor: '#E6E6FA',
-    eyeColor: '#7C3AED',
-  },
-  medium: {
-    bodyColor: '#4A6670',
-    hatType: 'hood',
-    hatColor: '#5A7A8A',
-    accessoryColor: '#7FDBFF',
-    emoji: '👻',
-    glowColor: '#7FDBFF',
-    eyeColor: '#0EA5E9',
-  },
-  witch: {
-    bodyColor: '#4A1A6B',
-    hatType: 'pointy',
-    hatColor: '#6C3483',
-    accessoryColor: '#27AE60',
-    emoji: '🧙',
-    glowColor: '#6C3483',
-    eyeColor: '#A855F7',
-  },
-  avenger: {
-    bodyColor: '#7A1A1A',
-    hatType: 'hood',
-    hatColor: '#8B2020',
-    capeColor: '#C0392B',
-    emoji: '⚔️',
-    glowColor: '#DC2626',
-    eyeColor: '#DC2626',
-  },
-  beast_hunter: {
-    bodyColor: '#5C4A1E',
-    hatType: 'helmet',
-    hatColor: '#6B5A2E',
-    accessoryColor: '#8B6914',
-    emoji: '🪤',
-    eyeColor: '#78350F',
-  },
-  cursed: { bodyColor: '#4A5568', hatType: 'none', emoji: '🌑', eyeColor: '#374151' },
-  bodyguard: {
-    bodyColor: '#2C3E8C',
-    hatType: 'helmet',
-    hatColor: '#1E3A7A',
-    accessoryColor: '#C0C0C0',
-    emoji: '🛡️',
-    glowColor: '#3B82F6',
-    eyeColor: '#1E40AF',
-  },
-  priest: {
-    bodyColor: '#F5F5DC',
-    hatType: 'hood',
-    hatColor: '#F0EAD6',
-    accessoryColor: '#FFD700',
-    emoji: '✝️',
-    glowColor: '#FBBF24',
-    eyeColor: '#92400E',
-  },
-
+  villager: { emoji: '🏘️' },
+  doctor: { emoji: '💊', glowColor: '#3498DB' },
+  gunner: { emoji: '🔫' },
+  seer: { emoji: '🔮', glowColor: '#9B59B6' },
+  aura_seer: { emoji: '✨', glowColor: '#E6E6FA' },
+  medium: { emoji: '👻', glowColor: '#7FDBFF' },
+  witch: { emoji: '🧙', glowColor: '#6C3483' },
+  avenger: { emoji: '⚔️', glowColor: '#DC2626' },
+  beast_hunter: { emoji: '🪤' },
+  cursed: { emoji: '🌑' },
+  bodyguard: { emoji: '🛡️', glowColor: '#3B82F6' },
+  priest: { emoji: '✝️', glowColor: '#FBBF24' },
   // ── Village Team — Passive ──
-  elder: {
-    bodyColor: '#8B7D6B',
-    hatType: 'none',
-    accessoryColor: '#C0C0C0',
-    emoji: '👴',
-    eyeColor: '#5C4B3A',
-  },
-  baker: {
-    bodyColor: '#DEB887',
-    hatType: 'tophat',
-    hatColor: '#F5DEB3',
-    accessoryColor: '#D2691E',
-    emoji: '🍞',
-    eyeColor: '#8B4513',
-  },
-  drunk: {
-    bodyColor: '#6B4423',
-    hatType: 'none',
-    accessoryColor: '#8B0000',
-    emoji: '🍺',
-    eyeColor: '#4A2810',
-  },
-  mayor: {
-    bodyColor: '#2F4F4F',
-    hatType: 'tophat',
-    hatColor: '#1C1C1C',
-    accessoryColor: '#FFD700',
-    emoji: '🎩',
-    glowColor: '#D4AF37',
-    eyeColor: '#1F2937',
-  },
-  pacifist: {
-    bodyColor: '#E8F5E9',
-    hatType: 'none',
-    accessoryColor: '#4CAF50',
-    emoji: '☮️',
-    glowColor: '#66BB6A',
-    eyeColor: '#2E7D32',
-  },
-  sleepwalker: {
-    bodyColor: '#B0C4DE',
-    hatType: 'none',
-    accessoryColor: '#778899',
-    emoji: '😴',
-    eyeColor: '#4682B4',
-  },
-  hermit: {
-    bodyColor: '#556B2F',
-    hatType: 'hood',
-    hatColor: '#6B8E23',
-    accessoryColor: '#8FBC8F',
-    emoji: '🏔️',
-    eyeColor: '#3B5323',
-  },
-  apprentice_seer: {
-    bodyColor: '#9370DB',
-    hatType: 'pointy',
-    hatColor: '#BA55D3',
-    accessoryColor: '#E6E6FA',
-    emoji: '🌟',
-    glowColor: '#C084FC',
-    eyeColor: '#7B2FBE',
-  },
-
+  elder: { emoji: '👴' },
+  baker: { emoji: '🍞' },
+  drunk: { emoji: '🍺' },
+  mayor: { emoji: '🎩', glowColor: '#D4AF37' },
+  pacifist: { emoji: '☮️', glowColor: '#66BB6A' },
+  sleepwalker: { emoji: '😴' },
+  hermit: { emoji: '🏔️' },
+  apprentice_seer: { emoji: '🌟', glowColor: '#C084FC' },
   // ── Werewolf Team ──
-  werewolf: {
-    bodyColor: '#5A2020',
-    hatType: 'none',
-    accessoryColor: '#8B0000',
-    emoji: '🐺',
-    glowColor: '#8B0000',
-    eyeColor: '#FFA500',
-  },
-  alpha_werewolf: {
-    bodyColor: '#3D0A0A',
-    hatType: 'crown',
-    hatColor: '#8B0000',
-    accessoryColor: '#4A0000',
-    emoji: '🐺',
-    glowColor: '#B91C1C',
-    eyeColor: '#FF4500',
-  },
-  werewolf_shaman: {
-    bodyColor: '#4A1A4A',
-    hatType: 'hood',
-    hatColor: '#5A2A5A',
-    accessoryColor: '#800080',
-    emoji: '🐺',
-    glowColor: '#9333EA',
-    eyeColor: '#D946EF',
-  },
-  werewolf_seer: {
-    bodyColor: '#1A1A4A',
-    hatType: 'hood',
-    hatColor: '#2A2A6A',
-    accessoryColor: '#191970',
-    emoji: '🐺',
-    glowColor: '#3B82F6',
-    eyeColor: '#60A5FA',
-  },
-  nightmare_wolf: {
-    bodyColor: '#1A0A2E',
-    hatType: 'hood',
-    hatColor: '#2D1B4E',
-    accessoryColor: '#4B0082',
-    emoji: '🐺',
-    glowColor: '#7C3AED',
-    eyeColor: '#A78BFA',
-  },
-  shadow_wolf: {
-    bodyColor: '#1A1A1A',
-    hatType: 'hood',
-    hatColor: '#2A2A2A',
-    accessoryColor: '#333333',
-    emoji: '🐺',
-    glowColor: '#4B5563',
-    eyeColor: '#9CA3AF',
-  },
-  blood_moon_wolf: {
-    bodyColor: '#4A0000',
-    hatType: 'none',
-    accessoryColor: '#8B0000',
-    emoji: '🐺',
-    glowColor: '#DC2626',
-    eyeColor: '#EF4444',
-  },
-  howler_wolf: {
-    bodyColor: '#4A3728',
-    hatType: 'none',
-    accessoryColor: '#8B6914',
-    emoji: '🐺',
-    glowColor: '#D97706',
-    eyeColor: '#F59E0B',
-  },
-  lone_wolf: {
-    bodyColor: '#3D2B1F',
-    hatType: 'bandana',
-    hatColor: '#5C4033',
-    accessoryColor: '#6B4423',
-    emoji: '🐺',
-    glowColor: '#92400E',
-    eyeColor: '#B45309',
-  },
-  venom_wolf: {
-    bodyColor: '#1B4D3E',
-    hatType: 'none',
-    accessoryColor: '#228B22',
-    emoji: '🐺',
-    glowColor: '#16A34A',
-    eyeColor: '#22C55E',
-  },
-
+  werewolf: { emoji: '🐺', glowColor: '#8B0000' },
+  alpha_werewolf: { emoji: '🐺', glowColor: '#B91C1C' },
+  werewolf_shaman: { emoji: '🐺', glowColor: '#9333EA' },
+  werewolf_seer: { emoji: '🐺', glowColor: '#3B82F6' },
+  nightmare_wolf: { emoji: '🐺', glowColor: '#7C3AED' },
+  shadow_wolf: { emoji: '🐺', glowColor: '#4B5563' },
+  blood_moon_wolf: { emoji: '🐺', glowColor: '#DC2626' },
+  howler_wolf: { emoji: '🐺', glowColor: '#D97706' },
+  lone_wolf: { emoji: '🐺', glowColor: '#92400E' },
+  venom_wolf: { emoji: '🐺', glowColor: '#16A34A' },
   // ── Solo Team ──
-  headhunter: {
-    bodyColor: '#2C3E50',
-    hatType: 'hood',
-    hatColor: '#34495E',
-    accessoryColor: '#E74C3C',
-    emoji: '🎯',
-    glowColor: '#EF4444',
-    eyeColor: '#94A3B8',
-  },
-  fool: {
-    bodyColor: '#FF6B6B',
-    hatType: 'jester',
-    hatColor: '#FFD93D',
-    accessoryColor: '#FF6B6B',
-    emoji: '🃏',
-    glowColor: '#FBBF24',
-    eyeColor: '#F59E0B',
-  },
-  bomber: {
-    bodyColor: '#CC5500',
-    hatType: 'goggles',
-    hatColor: '#FF8C00',
-    accessoryColor: '#FFD700',
-    emoji: '💣',
-    glowColor: '#F97316',
-    eyeColor: '#EA580C',
-  },
-  serial_killer: {
-    bodyColor: '#1C1C1C',
-    hatType: 'hood',
-    hatColor: '#2D2D2D',
-    accessoryColor: '#B22222',
-    emoji: '🔪',
-    glowColor: '#991B1B',
-    eyeColor: '#EF4444',
-  },
-  cupid: {
-    bodyColor: '#FFB6C1',
-    hatType: 'none',
-    accessoryColor: '#FF69B4',
-    emoji: '💘',
-    glowColor: '#EC4899',
-    eyeColor: '#DB2777',
-  },
-  arsonist: {
-    bodyColor: '#8B2500',
-    hatType: 'bandana',
-    hatColor: '#CD3700',
-    accessoryColor: '#FF4500',
-    emoji: '🔥',
-    glowColor: '#EF4444',
-    eyeColor: '#F97316',
-  },
-  survivor: {
-    bodyColor: '#696969',
-    hatType: 'helmet',
-    hatColor: '#808080',
-    accessoryColor: '#A9A9A9',
-    emoji: '🦺',
-    eyeColor: '#6B7280',
-  },
-  amnesiac: {
-    bodyColor: '#B8B8D1',
-    hatType: 'none',
-    accessoryColor: '#9898B8',
-    emoji: '❓',
-    glowColor: '#A78BFA',
-    eyeColor: '#8B8BB8',
-  },
-  doppelganger: {
-    bodyColor: '#4A4A6A',
-    hatType: 'hood',
-    hatColor: '#5A5A7A',
-    accessoryColor: '#6A6A8A',
-    emoji: '🪞',
-    glowColor: '#818CF8',
-    eyeColor: '#6366F1',
-  },
-  jester: {
-    bodyColor: '#FF4500',
-    hatType: 'jester',
-    hatColor: '#FF6347',
-    accessoryColor: '#FFD700',
-    emoji: '🤡',
-    glowColor: '#FB923C',
-    eyeColor: '#EA580C',
-  },
+  headhunter: { emoji: '🎯', glowColor: '#EF4444' },
+  fool: { emoji: '🃏', glowColor: '#FBBF24' },
+  bomber: { emoji: '💣', glowColor: '#F97316' },
+  serial_killer: { emoji: '🔪', glowColor: '#991B1B' },
+  cupid: { emoji: '💘', glowColor: '#EC4899' },
+  arsonist: { emoji: '🔥', glowColor: '#EF4444' },
+  survivor: { emoji: '🦺' },
+  amnesiac: { emoji: '❓', glowColor: '#A78BFA' },
+  doppelganger: { emoji: '🪞', glowColor: '#818CF8' },
+  jester: { emoji: '🤡', glowColor: '#FB923C' },
 };
 
-const DEFAULT_COSTUME: RoleCostume = {
-  bodyColor: '#6B8CFF',
-  hatType: 'none',
-  emoji: '❓',
-  eyeColor: '#2C1810',
-};
+const DEFAULT_COSTUME: RoleCostume = { emoji: '❓' };
 
 function getCostume(role?: Role | string): RoleCostume {
   if (!role) return DEFAULT_COSTUME;
   return ROLE_COSTUMES[role] || DEFAULT_COSTUME;
 }
 
-// ─── Hat Components ──────────────────────────────
-function PointyHat({ color }: { color: string }) {
-  return (
-    <group position={[0, 1.35, 0]}>
-      {/* Hat brim */}
-      <mesh position={[0, -0.05, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[0.22, 0.38, 20]} />
-        <meshStandardMaterial color={color} roughness={0.65} side={THREE.DoubleSide} />
-      </mesh>
-      {/* Hat cone */}
-      <mesh position={[0, 0.2, 0]}>
-        <coneGeometry args={[0.22, 0.55, 16]} />
-        <meshStandardMaterial color={color} roughness={0.55} metalness={0.02} />
-      </mesh>
-      {/* Hat tip star */}
-      <mesh position={[0, 0.5, 0]}>
-        <sphereGeometry args={[0.03, 10, 10]} />
-        <meshStandardMaterial color="#FFD700" roughness={0.2} metalness={0.5} emissive="#FFD700" emissiveIntensity={0.3} />
-      </mesh>
-    </group>
-  );
-}
+// ─── Ground & Collision Raycasting Utility ─────────────────────────────
+// Shared raycaster instances (reused to avoid GC pressure)
+const _groundRaycaster = new THREE.Raycaster();
+const _collisionRaycaster = new THREE.Raycaster();
+const _rayOrigin = new THREE.Vector3();
+const _rayDir = new THREE.Vector3(0, -1, 0);
+const _collisionDir = new THREE.Vector3();
+const _faceNormal = new THREE.Vector3();
 
-function TopHat({ color }: { color: string }) {
-  return (
-    <group position={[0, 1.35, 0]}>
-      <mesh position={[0, -0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[0.18, 0.35, 20]} />
-        <meshStandardMaterial
-          color={color}
-          roughness={0.35}
-          metalness={0.1}
-          side={THREE.DoubleSide}
-        />
-      </mesh>
-      <mesh position={[0, 0.15, 0]}>
-        <cylinderGeometry args={[0.18, 0.18, 0.3, 16]} />
-        <meshStandardMaterial color={color} roughness={0.35} metalness={0.1} />
-      </mesh>
-      {/* Hat band */}
-      <mesh position={[0, 0.02, 0]}>
-        <cylinderGeometry args={[0.185, 0.185, 0.03, 16]} />
-        <meshStandardMaterial color="#333333" roughness={0.4} metalness={0.15} />
-      </mesh>
-      {/* Red cross band */}
-      <mesh position={[0, 0.06, 0.19]}>
-        <boxGeometry args={[0.08, 0.08, 0.01]} />
-        <meshBasicMaterial color="#E74C3C" />
-      </mesh>
-    </group>
-  );
-}
+/**
+ * Cast a ray downward from (x, highY, z) to find the walkable ground surface Y.
+ *
+ * Strategy: The raycaster returns hits sorted top-to-bottom (nearest first from Y=highY).
+ * The map model has multiple stacked terrain layers (grass top, dirt paths, underside).
+ * We want the TOPMOST walkable surface that is NOT a rooftop/canopy.
+ *
+ * - If referenceY is given, skip surfaces more than maxAboveRef above it (those are rooftops).
+ * - Among remaining, pick the HIGHEST (first/topmost) walkable surface = actual ground top.
+ * - If no referenceY, pick the first walkable surface (topmost).
+ */
+function getGroundY(
+  mapScene: THREE.Object3D | null,
+  x: number,
+  z: number,
+  fallbackY: number,
+  highY = 30,
+  referenceY?: number,
+): number {
+  if (!mapScene) return fallbackY;
 
-function Hood({ color }: { color: string }) {
-  return (
-    <group position={[0, 1.25, -0.05]}>
-      <mesh>
-        <sphereGeometry args={[0.34, 16, 16, 0, Math.PI * 2, 0, Math.PI * 0.65]} />
-        <meshStandardMaterial color={color} roughness={0.65} side={THREE.DoubleSide} />
-      </mesh>
-    </group>
-  );
-}
+  _rayOrigin.set(x, highY, z);
+  _groundRaycaster.set(_rayOrigin, _rayDir);
+  _groundRaycaster.far = highY + 20;
 
-function Crown({ color }: { color: string }) {
-  return (
-    <group position={[0, 1.38, 0]}>
-      <mesh>
-        <cylinderGeometry args={[0.25, 0.28, 0.12, 12]} />
-        <meshStandardMaterial color={color} roughness={0.25} metalness={0.6} />
-      </mesh>
-      {/* Crown points */}
-      {[0, 1, 2, 3, 4, 5].map((i) => {
-        const a = (i / 6) * Math.PI * 2;
-        return (
-          <mesh key={i} position={[Math.cos(a) * 0.22, 0.1, Math.sin(a) * 0.22]}>
-            <coneGeometry args={[0.04, 0.12, 6]} />
-            <meshStandardMaterial color="#FFD700" roughness={0.2} metalness={0.7} />
-          </mesh>
-        );
-      })}
-      {/* Gems on crown */}
-      {[0, 2, 4].map((i) => {
-        const a = (i / 6) * Math.PI * 2;
-        return (
-          <mesh key={`gem-${i}`} position={[Math.cos(a) * 0.26, 0.04, Math.sin(a) * 0.26]}>
-            <sphereGeometry args={[0.02, 8, 8]} />
-            <meshStandardMaterial color="#E74C3C" roughness={0.1} metalness={0.3} emissive="#E74C3C" emissiveIntensity={0.2} />
-          </mesh>
-        );
-      })}
-    </group>
-  );
-}
+  const intersects = _groundRaycaster.intersectObject(mapScene, true);
+  if (intersects.length === 0) return fallbackY;
 
-function JesterHat({ color, color2 }: { color: string; color2: string }) {
-  return (
-    <group position={[0, 1.35, 0]}>
-      {/* Left droop */}
-      <mesh position={[-0.2, 0.15, 0]} rotation={[0, 0, 0.5]}>
-        <coneGeometry args={[0.12, 0.35, 6]} />
-        <meshStandardMaterial color={color} roughness={0.6} />
-      </mesh>
-      <mesh position={[-0.3, 0.28, 0]}>
-        <sphereGeometry args={[0.05, 6, 6]} />
-        <meshBasicMaterial color="#FFD700" />
-      </mesh>
-      {/* Right droop */}
-      <mesh position={[0.2, 0.15, 0]} rotation={[0, 0, -0.5]}>
-        <coneGeometry args={[0.12, 0.35, 6]} />
-        <meshStandardMaterial color={color2} roughness={0.6} />
-      </mesh>
-      <mesh position={[0.3, 0.28, 0]}>
-        <sphereGeometry args={[0.05, 6, 6]} />
-        <meshBasicMaterial color="#FFD700" />
-      </mesh>
-      {/* Center droop */}
-      <mesh position={[0, 0.22, 0.05]}>
-        <coneGeometry args={[0.1, 0.3, 6]} />
-        <meshStandardMaterial color={color} roughness={0.6} />
-      </mesh>
-      <mesh position={[0, 0.35, 0.08]}>
-        <sphereGeometry args={[0.05, 6, 6]} />
-        <meshBasicMaterial color="#FFD700" />
-      </mesh>
-    </group>
-  );
-}
+  // How far above the reference a surface can be before we consider it a rooftop
+  const maxAboveRef = 3.0;
 
-function Helmet({ color }: { color: string }) {
-  return (
-    <group position={[0, 1.3, 0]}>
-      <mesh>
-        <sphereGeometry args={[0.33, 10, 10, 0, Math.PI * 2, 0, Math.PI * 0.55]} />
-        <meshStandardMaterial color={color} roughness={0.4} metalness={0.4} />
-      </mesh>
-      {/* Visor */}
-      <mesh position={[0, -0.05, 0.25]} rotation={[0.3, 0, 0]}>
-        <boxGeometry args={[0.28, 0.06, 0.08]} />
-        <meshStandardMaterial color="#3A3A3A" roughness={0.3} metalness={0.5} />
-      </mesh>
-    </group>
-  );
-}
+  // Intersects are sorted by distance from ray origin (Y=highY), so first hit = highest Y surface.
+  // Walk through top-to-bottom and return the FIRST walkable surface that isn't a rooftop.
+  for (const hit of intersects) {
+    // Check if this face is upward-facing (walkable)
+    let isWalkable = true;
+    if (hit.face) {
+      _faceNormal.copy(hit.face.normal);
+      if (hit.object.matrixWorld) {
+        _faceNormal.transformDirection(hit.object.matrixWorld);
+      }
+      isWalkable = _faceNormal.y > 0.3;
+    }
 
-function Bandana({ color }: { color: string }) {
-  return (
-    <group position={[0, 1.2, 0]}>
-      {/* Headband */}
-      <mesh rotation={[0.15, 0, 0]}>
-        <torusGeometry args={[0.28, 0.04, 6, 12]} />
-        <meshStandardMaterial color={color} roughness={0.7} />
-      </mesh>
-      {/* Knot tails at back */}
-      <mesh position={[0.08, 0, -0.25]} rotation={[0.5, 0.3, 0]}>
-        <boxGeometry args={[0.06, 0.18, 0.02]} />
-        <meshStandardMaterial color={color} roughness={0.8} />
-      </mesh>
-      <mesh position={[-0.06, -0.05, -0.25]} rotation={[0.7, -0.2, 0]}>
-        <boxGeometry args={[0.06, 0.15, 0.02]} />
-        <meshStandardMaterial color={color} roughness={0.8} />
-      </mesh>
-    </group>
-  );
-}
+    if (!isWalkable) continue;
 
-function Goggles({ color }: { color: string }) {
-  return (
-    <group position={[0, 1.35, 0]}>
-      {/* Strap */}
-      <mesh rotation={[0.1, 0, 0]}>
-        <torusGeometry args={[0.3, 0.02, 6, 16]} />
-        <meshStandardMaterial color="#555" roughness={0.5} />
-      </mesh>
-      {/* Left lens */}
-      <mesh position={[-0.12, -0.08, 0.26]}>
-        <cylinderGeometry args={[0.07, 0.07, 0.04, 8]} />
-        <meshStandardMaterial color={color} roughness={0.2} metalness={0.6} />
-      </mesh>
-      <mesh position={[-0.12, -0.08, 0.28]}>
-        <circleGeometry args={[0.06, 8]} />
-        <meshBasicMaterial color="#88DDFF" transparent opacity={0.6} />
-      </mesh>
-      {/* Right lens */}
-      <mesh position={[0.12, -0.08, 0.26]}>
-        <cylinderGeometry args={[0.07, 0.07, 0.04, 8]} />
-        <meshStandardMaterial color={color} roughness={0.2} metalness={0.6} />
-      </mesh>
-      <mesh position={[0.12, -0.08, 0.28]}>
-        <circleGeometry args={[0.06, 8]} />
-        <meshBasicMaterial color="#88DDFF" transparent opacity={0.6} />
-      </mesh>
-    </group>
-  );
-}
+    // If we have a reference Y, skip surfaces that are way above it (rooftops/canopies)
+    if (referenceY !== undefined && hit.point.y > referenceY + maxAboveRef) {
+      continue;
+    }
 
-function RoleHat({ type, color, color2 }: { type: string; color: string; color2?: string }) {
-  switch (type) {
-    case 'pointy':
-      return <PointyHat color={color} />;
-    case 'tophat':
-      return <TopHat color={color} />;
-    case 'hood':
-      return <Hood color={color} />;
-    case 'crown':
-      return <Crown color={color} />;
-    case 'jester':
-      return <JesterHat color={color} color2={color2 || '#6B6BFF'} />;
-    case 'helmet':
-      return <Helmet color={color} />;
-    case 'bandana':
-      return <Bandana color={color} />;
-    case 'goggles':
-      return <Goggles color={color} />;
-    default:
-      return null;
+    // This is the topmost valid walkable ground surface
+    return hit.point.y;
   }
+
+  // No valid walkable surface found — use fallback
+  return fallbackY;
 }
 
-// ─── Werewolf Ears ───────────────────────────────
-function WolfEars({ color }: { color: string }) {
-  return (
-    <>
-      {/* Left ear */}
-      <group position={[-0.2, 1.38, 0]} rotation={[0, 0, -0.3]}>
-        <mesh>
-          <coneGeometry args={[0.08, 0.2, 8]} />
-          <meshStandardMaterial color={color} roughness={0.6} />
-        </mesh>
-        <mesh position={[0, -0.02, 0.01]} scale={0.65}>
-          <coneGeometry args={[0.06, 0.14, 8]} />
-          <meshStandardMaterial color="#FFB0B0" roughness={0.5} />
-        </mesh>
-      </group>
-      {/* Right ear */}
-      <group position={[0.2, 1.38, 0]} rotation={[0, 0, 0.3]}>
-        <mesh>
-          <coneGeometry args={[0.08, 0.2, 8]} />
-          <meshStandardMaterial color={color} roughness={0.6} />
-        </mesh>
-        <mesh position={[0, -0.02, 0.01]} scale={0.65}>
-          <coneGeometry args={[0.06, 0.14, 8]} />
-          <meshStandardMaterial color="#FFB0B0" roughness={0.5} />
-        </mesh>
-      </group>
-    </>
-  );
-}
+// Small Y offset to prevent character feet from clipping into the ground mesh
+const GROUND_Y_OFFSET = 0.02;
 
-// ─── Cape ────────────────────────────────────────
-function Cape({ color }: { color: string }) {
-  return (
-    <group position={[0, 0.65, -0.22]} rotation={[0.15, 0, 0]}>
-      {/* Main cape body */}
-      <mesh>
-        <boxGeometry args={[0.4, 0.55, 0.04]} />
-        <meshStandardMaterial color={color} roughness={0.65} side={THREE.DoubleSide} />
-      </mesh>
-      {/* Cape collar/shoulder piece */}
-      <mesh position={[0, 0.28, 0.02]}>
-        <boxGeometry args={[0.44, 0.06, 0.05]} />
-        <meshStandardMaterial
-          color={new THREE.Color(color).lerp(new THREE.Color('#FFFFFF'), 0.15)}
-          roughness={0.5}
-          metalness={0.05}
-        />
-      </mesh>
-      {/* Cape bottom rounded edge */}
-      <mesh position={[0, -0.29, 0]} rotation={[Math.PI / 2, 0, 0]}>
-        <cylinderGeometry args={[0.02, 0.02, 0.4, 8]} />
-        <meshStandardMaterial color={color} roughness={0.65} />
-      </mesh>
-    </group>
-  );
-}
+// Model facing offset: Adjust if the GLB model's front doesn't align with Three.js -Z convention.
+// Set to 0 if model faces -Z (Blender default), or Math.PI if model faces +Z.
+const MODEL_FACING_OFFSET = 0;
 
-// ─── Role-specific Accessory ────────────────────────
-function RoleAccessory({ role, color }: { role: string; color: string }) {
-  switch (role) {
-    case 'doctor':
-      return (
-        <group position={[0, 0.82, 0.18]}>
-          <mesh>
-            <torusGeometry args={[0.08, 0.015, 6, 8, Math.PI]} />
-            <meshStandardMaterial color="#888" roughness={0.3} metalness={0.7} />
-          </mesh>
-        </group>
-      );
-    case 'gunner':
-      return (
-        <group position={[0, 0.45, 0]}>
-          <mesh rotation={[0, 0, 0.3]}>
-            <torusGeometry args={[0.26, 0.025, 6, 12]} />
-            <meshStandardMaterial color={color} roughness={0.4} metalness={0.5} />
-          </mesh>
-          {[0, 1, 2, 3, 4, 5].map((i) => {
-            const a = (i / 6) * Math.PI * 2;
-            return (
-              <mesh
-                key={i}
-                position={[Math.cos(a) * 0.26, Math.sin(a) * 0.26, 0]}
-                rotation={[0, 0, a]}
-              >
-                <cylinderGeometry args={[0.015, 0.015, 0.05, 4]} />
-                <meshStandardMaterial color="#DAA520" roughness={0.3} metalness={0.7} />
-              </mesh>
-            );
-          })}
-        </group>
-      );
-    case 'seer':
-      return (
-        <group position={[0.35, 0.7, 0.1]}>
-          <Float speed={3} floatIntensity={0.1}>
-            <mesh>
-              <sphereGeometry args={[0.08, 10, 10]} />
-              <meshStandardMaterial
-                color="#D8B4FE"
-                roughness={0.1}
-                metalness={0.3}
-                transparent
-                opacity={0.8}
-              />
-            </mesh>
-            <pointLight color="#9B59B6" intensity={0.5} distance={1} />
-          </Float>
-        </group>
-      );
-    case 'witch':
-      return (
-        <>
-          <group position={[0.3, 0.8, 0.1]}>
-            <Float speed={2} floatIntensity={0.08}>
-              <mesh>
-                <cylinderGeometry args={[0.025, 0.04, 0.1, 6]} />
-                <meshStandardMaterial color="#27AE60" roughness={0.2} transparent opacity={0.8} />
-              </mesh>
-            </Float>
-          </group>
-          <group position={[-0.3, 0.75, 0.1]}>
-            <Float speed={2.5} floatIntensity={0.08}>
-              <mesh>
-                <cylinderGeometry args={[0.025, 0.04, 0.1, 6]} />
-                <meshStandardMaterial color="#E74C3C" roughness={0.2} transparent opacity={0.8} />
-              </mesh>
-            </Float>
-          </group>
-        </>
-      );
-    case 'bomber':
-      return (
-        <group position={[0.28, 0.4, 0.1]} rotation={[0, 0, 0.3]}>
-          <mesh>
-            <cylinderGeometry args={[0.03, 0.03, 0.15, 6]} />
-            <meshStandardMaterial color="#CC3333" roughness={0.7} />
-          </mesh>
-          <mesh position={[0, 0.09, 0]}>
-            <cylinderGeometry args={[0.008, 0.008, 0.06, 4]} />
-            <meshStandardMaterial color="#333" roughness={0.9} />
-          </mesh>
-          <mesh position={[0, 0.12, 0]}>
-            <sphereGeometry args={[0.02, 6, 6]} />
-            <meshBasicMaterial color="#FFAA00" />
-          </mesh>
-          <pointLight position={[0, 0.12, 0]} color="#FF6600" intensity={0.3} distance={0.5} />
-        </group>
-      );
-    case 'medium':
-      return (
-        <group position={[0.32, 0.6, 0.1]}>
-          <Float speed={1.5} floatIntensity={0.06}>
-            <mesh>
-              <boxGeometry args={[0.06, 0.1, 0.06]} />
-              <meshStandardMaterial color="#5A7A8A" roughness={0.4} metalness={0.3} />
-            </mesh>
-            <mesh position={[0, 0, 0]}>
-              <boxGeometry args={[0.04, 0.06, 0.04]} />
-              <meshBasicMaterial color="#7FDBFF" transparent opacity={0.6} />
-            </mesh>
-            <pointLight color="#7FDBFF" intensity={0.4} distance={0.8} />
-          </Float>
-        </group>
-      );
-    case 'headhunter':
-      return (
-        <group position={[0.15, 1.12, 0.27]}>
-          <mesh rotation={[0, 0, 0]}>
-            <torusGeometry args={[0.06, 0.008, 6, 12]} />
-            <meshStandardMaterial color="#E74C3C" roughness={0.3} metalness={0.5} />
-          </mesh>
-        </group>
-      );
-    case 'beast_hunter':
-      return (
-        <group position={[0.32, 0.35, 0.1]} rotation={[0, 0, 0.2]}>
-          <mesh>
-            <torusGeometry args={[0.06, 0.015, 6, 8]} />
-            <meshStandardMaterial color="#666" roughness={0.3} metalness={0.7} />
-          </mesh>
-          {[0, 1, 2, 3].map((i) => {
-            const a = (i / 4) * Math.PI * 2;
-            return (
-              <mesh key={i} position={[Math.cos(a) * 0.06, Math.sin(a) * 0.06, 0]}>
-                <coneGeometry args={[0.01, 0.04, 3]} />
-                <meshStandardMaterial color="#999" roughness={0.3} metalness={0.6} />
-              </mesh>
-            );
-          })}
-        </group>
-      );
-    default:
-      return null;
+/**
+ * Check if moving from (fromX, fromZ) to (toX, toZ) at height Y is blocked by a WALL object.
+ * Casts a horizontal ray in the movement direction well above the ground surface
+ * to avoid hitting the terrain mesh itself (which has multiple overlapping layers).
+ * Only detects actual vertical obstacles like walls, fences, buildings.
+ */
+function canMoveTo(
+  mapScene: THREE.Object3D | null,
+  fromX: number,
+  fromZ: number,
+  toX: number,
+  toZ: number,
+  currentY: number,
+  characterHeight = 1.2,
+): boolean {
+  if (!mapScene) return true;
+
+  const dx = toX - fromX;
+  const dz = toZ - fromZ;
+  const dist = Math.sqrt(dx * dx + dz * dz);
+  if (dist < 0.001) return true;
+
+  _collisionDir.set(dx / dist, 0, dz / dist);
+
+  // Cast ray at character mid-body height (well above ground mesh layers)
+  _rayOrigin.set(fromX, currentY + characterHeight, fromZ);
+  _collisionRaycaster.set(_rayOrigin, _collisionDir);
+  _collisionRaycaster.far = dist + 0.15;
+
+  const intersects = _collisionRaycaster.intersectObject(mapScene, true);
+
+  // Filter out hits on mostly-horizontal surfaces (terrain/ground mesh layers)
+  // Only count hits on near-vertical surfaces (walls, fences, buildings)
+  for (const hit of intersects) {
+    if (hit.face) {
+      _faceNormal.copy(hit.face.normal);
+      if (hit.object.matrixWorld) {
+        _faceNormal.transformDirection(hit.object.matrixWorld);
+      }
+      // A vertical wall has a face normal that is mostly horizontal (normal.y ≈ 0)
+      // Terrain/ground has normal.y close to 1. Only block on wall-like surfaces.
+      if (Math.abs(_faceNormal.y) < 0.5) {
+        return false; // Hit a wall-like obstacle
+      }
+    }
   }
+
+  return true; // Only ground/terrain hits, no walls blocking
 }
 
-// ─── Keyboard Input Hook ─────────────────────────
+// ─── Emoji List for Picker ─────────────────────────
+const EMOJI_LIST = ['😀', '😂', '😍', '😎', '🤔', '😱', '🤣', '😡', '👍', '👏', '🔥', '💀', '🐺', '😈', '🙏', '❤️'];
+
+// ─── Keyboard Input Hook (with Tab + Enter for emoji picker) ─────────────────────────
 function useKeyboard() {
   const keys = useRef<Set<string>>(new Set());
+  const justPressed = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     const onDown = (e: KeyboardEvent) => {
-      // Capture arrow keys + F for attack, avoid interfering with chat input
-      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'f', 'F', ' '].includes(e.key)) {
-        // Don't capture if user is typing in an input/textarea
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'w', 'W', 'a', 'A', 's', 'S', 'd', 'D', 'f', 'F', ' ', 'Tab', 'Enter', 'y', 'Y'].includes(e.key)) {
         const tag = (e.target as HTMLElement)?.tagName;
         if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-        keys.current.add(e.key.toLowerCase());
+        const key = e.key.toLowerCase();
+        if (!keys.current.has(key)) {
+          justPressed.current.add(key);
+        }
+        keys.current.add(key);
         e.preventDefault();
       }
     };
@@ -822,7 +251,10 @@ function useKeyboard() {
     };
     window.addEventListener('keydown', onDown);
     window.addEventListener('keyup', onUp);
-    const onBlur = () => keys.current.clear();
+    const onBlur = () => {
+      keys.current.clear();
+      justPressed.current.clear();
+    };
     window.addEventListener('blur', onBlur);
     return () => {
       window.removeEventListener('keydown', onDown);
@@ -831,18 +263,27 @@ function useKeyboard() {
     };
   }, []);
 
-  return keys;
+  return { keys, justPressed };
 }
 
 // ─── Wandering Logic (for NPC/bots) ──────────────────────────────
-function useWander(homePos: [number, number, number], isAlive: boolean, seed: number) {
+function useWander(
+  homePos: [number, number, number],
+  isAlive: boolean,
+  seed: number,
+  mapScene: THREE.Object3D | null,
+) {
   const posRef = useRef(new THREE.Vector3(homePos[0], homePos[1], homePos[2]));
   const targetRef = useRef(new THREE.Vector3(homePos[0], homePos[1], homePos[2]));
-  const timerRef = useRef(seed * 10); // stagger start
+  const timerRef = useRef(seed * 10);
   const speedRef = useRef(0.3 + Math.random() * 0.3);
   const rotRef = useRef(0);
   const isMovingRef = useRef(false);
-  const wanderRadius = 1.2;
+  const walkPhaseRef = useRef(seed * 5); // Walk animation phase
+  const wanderRadius = 2.0;
+
+  // Set initial ground Y
+  const initialGroundSet = useRef(false);
 
   useFrame((_, delta) => {
     if (!isAlive) {
@@ -850,21 +291,23 @@ function useWander(homePos: [number, number, number], isAlive: boolean, seed: nu
       return;
     }
 
+    // Set initial Y from homePosition (already computed correctly from campfire ground level)
+    if (!initialGroundSet.current) {
+      posRef.current.y = homePos[1];
+      initialGroundSet.current = true;
+    }
+
     timerRef.current -= delta;
 
-    // Pick a new random target near home
     if (timerRef.current <= 0) {
       timerRef.current = 2 + Math.random() * 4;
       const angle = Math.random() * Math.PI * 2;
       const dist = Math.random() * wanderRadius;
-      targetRef.current.set(
-        homePos[0] + Math.cos(angle) * dist,
-        homePos[1],
-        homePos[2] + Math.sin(angle) * dist,
-      );
+      const newX = homePos[0] + Math.cos(angle) * dist;
+      const newZ = homePos[2] + Math.sin(angle) * dist;
+      targetRef.current.set(newX, homePos[1], newZ);
     }
 
-    // Move towards target
     const current = posRef.current;
     const target = targetRef.current;
     const dx = target.x - current.x;
@@ -873,12 +316,41 @@ function useWander(homePos: [number, number, number], isAlive: boolean, seed: nu
 
     if (dist > 0.05) {
       isMovingRef.current = true;
+      walkPhaseRef.current += delta * 8;
       const step = Math.min(delta * speedRef.current, dist);
-      current.x += (dx / dist) * step;
-      current.z += (dz / dist) * step;
+      const newX = current.x + (dx / dist) * step;
+      const newZ = current.z + (dz / dist) * step;
 
-      // Rotate to face movement direction
-      const targetRot = Math.atan2(dx, dz);
+      // Check horizontal collision before moving
+      const pathClear = canMoveTo(mapScene, current.x, current.z, newX, newZ, current.y);
+
+      if (pathClear) {
+        // Raycast to find ground at the new position, using current Y as reference
+        if (mapScene) {
+          const groundY = getGroundY(mapScene, newX, newZ, current.y, 30, current.y);
+          // Allow moderate slopes (max 2.0 per step), block extreme cliffs
+          const yDiff = Math.abs(groundY - current.y);
+          if (yDiff < 2.0) {
+            current.y = groundY + GROUND_Y_OFFSET;
+            current.x = newX;
+            current.z = newZ;
+          } else {
+            // Blocked by steep terrain — pick a new target
+            timerRef.current = 0;
+            isMovingRef.current = false;
+          }
+        } else {
+          current.x = newX;
+          current.z = newZ;
+        }
+      } else {
+        // Blocked by collision — pick a new target
+        timerRef.current = 0;
+        isMovingRef.current = false;
+      }
+
+      // Face in the direction of movement (Three.js: rotation.y=0 faces -Z)
+      const targetRot = Math.atan2(-dx, -dz);
       let rotDiff = targetRot - rotRef.current;
       while (rotDiff > Math.PI) rotDiff -= Math.PI * 2;
       while (rotDiff < -Math.PI) rotDiff += Math.PI * 2;
@@ -888,7 +360,7 @@ function useWander(homePos: [number, number, number], isAlive: boolean, seed: nu
     }
   });
 
-  return { posRef, rotRef, isMovingRef };
+  return { posRef, rotRef, isMovingRef, walkPhaseRef };
 }
 
 // ─── Player-controlled Movement ──────────────────────────────
@@ -896,12 +368,17 @@ function usePlayerControl(
   homePos: [number, number, number],
   isAlive: boolean,
   keys: React.RefObject<Set<string>>,
+  mapScene: THREE.Object3D | null,
 ) {
   const posRef = useRef(new THREE.Vector3(homePos[0], homePos[1], homePos[2]));
   const rotRef = useRef(0);
   const isMovingRef = useRef(false);
-  const speed = 2.0;
-  const maxRadius = 5; // max distance from home
+  const walkPhaseRef = useRef(0); // Walk animation phase
+  const speed = 2.5;
+  const maxRadius = 12; // Allow free roaming across the map
+
+  // Set initial ground Y
+  const initialGroundSet = useRef(false);
 
   useFrame((_, delta) => {
     if (!isAlive || !keys.current) {
@@ -909,48 +386,202 @@ function usePlayerControl(
       return;
     }
 
+    // Set initial Y from homePosition (already computed correctly from campfire ground level)
+    if (!initialGroundSet.current) {
+      posRef.current.y = homePos[1];
+      initialGroundSet.current = true;
+    }
+
     let moveX = 0;
     let moveZ = 0;
 
-    if (keys.current.has('arrowup')) moveZ -= 1;
-    if (keys.current.has('arrowdown')) moveZ += 1;
-    if (keys.current.has('arrowleft')) moveX -= 1;
-    if (keys.current.has('arrowright')) moveX += 1;
+    // Support both Arrow keys and WASD
+    if (keys.current.has('arrowup') || keys.current.has('w')) moveZ -= 1;
+    if (keys.current.has('arrowdown') || keys.current.has('s')) moveZ += 1;
+    if (keys.current.has('arrowleft') || keys.current.has('a')) moveX -= 1;
+    if (keys.current.has('arrowright') || keys.current.has('d')) moveX += 1;
 
     const isMoving = moveX !== 0 || moveZ !== 0;
     isMovingRef.current = isMoving;
 
     if (isMoving) {
-      // Normalize diagonal movement
+      walkPhaseRef.current += delta * 10;
       const len = Math.sqrt(moveX * moveX + moveZ * moveZ);
       moveX /= len;
       moveZ /= len;
 
       const newX = posRef.current.x + moveX * speed * delta;
       const newZ = posRef.current.z + moveZ * speed * delta;
-
-      // Boundary check — stay within maxRadius of home
       const distFromHome = Math.sqrt((newX - homePos[0]) ** 2 + (newZ - homePos[2]) ** 2);
 
       if (distFromHome < maxRadius) {
-        posRef.current.x = newX;
-        posRef.current.z = newZ;
+        // Check horizontal collision before moving
+        const pathClear = canMoveTo(mapScene, posRef.current.x, posRef.current.z, newX, newZ, posRef.current.y);
+
+        if (pathClear) {
+          // Raycast to find ground at the new position
+          if (mapScene) {
+            const groundY = getGroundY(mapScene, newX, newZ, posRef.current.y, 30, posRef.current.y);
+            // Allow moderate slopes (max 2.0 per step), block extreme cliffs
+            const yDiff = Math.abs(groundY - posRef.current.y);
+            if (yDiff < 2.0) {
+              posRef.current.x = newX;
+              posRef.current.z = newZ;
+              posRef.current.y = groundY + GROUND_Y_OFFSET;
+            }
+            // If too steep, don't move (acts as collision with steep terrain)
+          } else {
+            posRef.current.x = newX;
+            posRef.current.z = newZ;
+          }
+        }
+        // If collision detected, don't move (blocked by object)
       }
 
-      // Face movement direction
-      const targetRot = Math.atan2(moveX, moveZ);
+      // Face in the direction of movement
+      // Three.js: rotation.y=0 faces -Z. atan2(-moveX, -moveZ) aligns model front with movement.
+      const targetRot = Math.atan2(-moveX, -moveZ);
       let rotDiff = targetRot - rotRef.current;
       while (rotDiff > Math.PI) rotDiff -= Math.PI * 2;
       while (rotDiff < -Math.PI) rotDiff += Math.PI * 2;
-      rotRef.current += rotDiff * delta * 8; // faster rotation for player
+      rotRef.current += rotDiff * delta * 8;
     }
   });
 
-  return { posRef, rotRef, isMovingRef };
+  return { posRef, rotRef, isMovingRef, walkPhaseRef };
 }
 
-// ─── Single Chibi Character ─────────────────────────
-function ChibiCharacter({
+// ─── Emoji Picker Component (circular layout) ─────────────────────────
+function EmojiPicker({
+  selectedIndex,
+  isVisible,
+}: {
+  selectedIndex: number;
+  isVisible: boolean;
+}) {
+  if (!isVisible) return null;
+
+  const count = EMOJI_LIST.length;
+  const circleRadius = 72; // px radius of the emoji circle
+
+  return (
+    <Html
+      position={[0, 2.0, 0]}
+      center
+      distanceFactor={8}
+      zIndexRange={[10, 0]}
+      style={{ pointerEvents: 'none', userSelect: 'none' }}
+    >
+      <div
+        style={{
+          position: 'relative',
+          width: circleRadius * 2 + 40,
+          height: circleRadius * 2 + 40,
+        }}
+      >
+        {/* Circular background */}
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            borderRadius: '50%',
+            background: 'rgba(0,0,0,0.75)',
+            border: '2px solid rgba(255,255,255,0.15)',
+            backdropFilter: 'blur(8px)',
+          }}
+        />
+        {/* Emojis positioned in a circle */}
+        {EMOJI_LIST.map((emoji, i) => {
+          const angle = (i / count) * Math.PI * 2 - Math.PI / 2; // Start from top
+          const x = Math.cos(angle) * circleRadius + circleRadius + 20;
+          const y = Math.sin(angle) * circleRadius + circleRadius + 20;
+          const isSelected = i === selectedIndex;
+
+          return (
+            <div
+              key={i}
+              style={{
+                position: 'absolute',
+                left: x,
+                top: y,
+                transform: `translate(-50%, -50%) scale(${isSelected ? 1.5 : 1})`,
+                width: 28,
+                height: 28,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: '50%',
+                background: isSelected ? 'rgba(255,200,0,0.5)' : 'transparent',
+                border: isSelected ? '2px solid #FFD700' : '2px solid transparent',
+                filter: isSelected ? 'drop-shadow(0 0 6px #FFD700)' : 'none',
+                transition: 'transform 0.15s, background 0.15s',
+                fontSize: isSelected ? 18 : 14,
+                lineHeight: 1,
+                zIndex: isSelected ? 2 : 1,
+              }}
+            >
+              {emoji}
+            </div>
+          );
+        })}
+        {/* Center hint text */}
+        <div
+          style={{
+            position: 'absolute',
+            left: '50%',
+            top: '50%',
+            transform: 'translate(-50%, -50%)',
+            textAlign: 'center',
+            color: 'rgba(255,255,255,0.5)',
+            fontSize: 10,
+            lineHeight: 1.3,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <div style={{ fontSize: 20, marginBottom: 2 }}>{EMOJI_LIST[selectedIndex]}</div>
+          <div>Tab ↻</div>
+          <div>Enter ✓</div>
+        </div>
+      </div>
+    </Html>
+  );
+}
+
+// ─── Floating Emoji Display (shows above character head for 3s) ─────────
+function FloatingEmoji({ emoji, timestamp }: { emoji: string; timestamp: number }) {
+  const elapsed = (Date.now() - timestamp) / 1000;
+  if (elapsed > 3) return null;
+
+  // Fade out in the last 0.5s
+  const opacity = elapsed > 2.5 ? 1 - (elapsed - 2.5) / 0.5 : 1;
+  // Gentle float up
+  const yOffset = elapsed * 3;
+
+  return (
+    <Html
+      position={[0, 1.7, 0]}
+      center
+      distanceFactor={8}
+      zIndexRange={[5, 0]}
+      style={{ pointerEvents: 'none', userSelect: 'none' }}
+    >
+      <div
+        className="text-3xl drop-shadow-lg"
+        style={{
+          opacity,
+          transform: `translateY(${-yOffset}px) scale(${1 + elapsed * 0.08})`,
+          transition: 'none',
+          textShadow: '0 2px 8px rgba(0,0,0,0.3)',
+        }}
+      >
+        {emoji}
+      </div>
+    </Html>
+  );
+}
+
+// ─── GLB Character Component ─────────────────────────
+function GLBCharacter({
   player,
   homePosition,
   onClick,
@@ -959,10 +590,13 @@ function ChibiCharacter({
   isLocalPlayer,
   keys,
   chatBubble,
-  isAttacking,
   isBeingHit,
   isJumping: isJumpingProp,
   hitEmoji,
+  emojiPickerOpen,
+  emojiSelectedIndex,
+  floatingEmoji,
+  mapScene,
 }: {
   player: PlayerData;
   homePosition: [number, number, number];
@@ -972,67 +606,72 @@ function ChibiCharacter({
   isLocalPlayer: boolean;
   keys: React.RefObject<Set<string>>;
   chatBubble?: { content: string; timestamp: number };
-  isAttacking?: boolean;
   isBeingHit?: boolean;
   isJumping?: boolean;
   hitEmoji?: string;
+  emojiPickerOpen?: boolean;
+  emojiSelectedIndex?: number;
+  floatingEmoji?: { emoji: string; timestamp: number };
+  mapScene?: THREE.Object3D | null;
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const costume = useMemo(() => getCostume(player.role), [player.role]);
-  const bodyColor = useMemo(() => new THREE.Color(costume.bodyColor), [costume.bodyColor]);
-  const deadColor = useMemo(() => new THREE.Color('#888888'), []); // grey for dead players
-  const skinColor = useMemo(() => new THREE.Color('#FFD5B8'), []);
-  const eyeColor = useMemo(
-    () => new THREE.Color(costume.eyeColor || '#2C1810'),
-    [costume.eyeColor],
-  );
-  const isWolf =
-    player.role &&
-    [
-      'werewolf',
-      'alpha_werewolf',
-      'werewolf_shaman',
-      'werewolf_seer',
-      'nightmare_wolf',
-      'shadow_wolf',
-      'blood_moon_wolf',
-      'howler_wolf',
-      'lone_wolf',
-      'venom_wolf',
-    ].includes(player.role);
+
+  // Deterministic model selection per player ID
+  const modelPath = useMemo(() => MODEL_PATHS[getModelIndex(player.id)], [player.id]);
+  const { scene } = useGLTF(modelPath);
+
+  // Clone the scene so each instance is independent
+  const clonedScene = useMemo(() => {
+    const clone = scene.clone(true);
+    // Traverse and clone materials so each instance can be tinted independently
+    clone.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        const mesh = child as THREE.Mesh;
+        if (mesh.material) {
+          mesh.material = (mesh.material as THREE.Material).clone();
+        }
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+      }
+    });
+    return clone;
+  }, [scene]);
+
+  // Apply dead state (grayscale + transparent)
+  useEffect(() => {
+    clonedScene.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        const mesh = child as THREE.Mesh;
+        const mat = mesh.material as THREE.MeshStandardMaterial;
+        if (mat && mat.isMeshStandardMaterial) {
+          if (!player.isAlive) {
+            mat.color.set('#888888');
+            mat.transparent = true;
+            mat.opacity = 0.5;
+            mat.emissive.set('#000000');
+            mat.emissiveIntensity = 0;
+          } else {
+            mat.transparent = false;
+            mat.opacity = 1.0;
+          }
+        }
+      }
+    });
+  }, [clonedScene, player.isAlive]);
 
   // Movement — local player uses keyboard, bots/others use AI wander
-  const wanderState = useWander(homePosition, !isLocalPlayer && player.isAlive, index);
-  const playerState = usePlayerControl(homePosition, isLocalPlayer && player.isAlive, keys);
+  const wanderState = useWander(homePosition, !isLocalPlayer && player.isAlive, index, mapScene ?? null);
+  const playerState = usePlayerControl(homePosition, isLocalPlayer && player.isAlive, keys, mapScene ?? null);
 
   const posRef = isLocalPlayer ? playerState.posRef : wanderState.posRef;
   const rotRef = isLocalPlayer ? playerState.rotRef : wanderState.rotRef;
   const isMovingRef = isLocalPlayer ? playerState.isMovingRef : wanderState.isMovingRef;
+  const walkPhaseRef = isLocalPlayer ? playerState.walkPhaseRef : wanderState.walkPhaseRef;
 
-  // Animation refs
-  const leftLegRef = useRef<THREE.Group>(null);
-  const rightLegRef = useRef<THREE.Group>(null);
-  const leftArmRef = useRef<THREE.Mesh>(null);
-  const rightArmRef = useRef<THREE.Group>(null);
-  const headGroupRef = useRef<THREE.Group>(null);
-  const bodyMeshRef = useRef<THREE.Mesh>(null);
-  const leftEyeRef = useRef<THREE.Mesh>(null);
-  const rightEyeRef = useRef<THREE.Mesh>(null);
-
-  // Animation state
-  const blinkTimerRef = useRef(3 + Math.random() * 5);
-  const isBlinkingRef = useRef(false);
-  const blinkDurationRef = useRef(0);
-  const idleFidgetTimerRef = useRef(5 + Math.random() * 8);
-  const fidgetTypeRef = useRef(0); // 0 = none, 1 = look left, 2 = look right, 3 = bounce
-  const fidgetProgressRef = useRef(0);
-  const prevVelRef = useRef({ x: 0, z: 0 });
-
-  // Attack/hit animation state
-  const attackAnimRef = useRef(0); // 0 = no attack, >0 = attack progress in seconds
-  const hitAnimRef = useRef(0); // 0 = no hit, >0 = hit reaction progress
+  // Hit animation state
+  const hitAnimRef = useRef(0);
   const hitShakeRef = useRef(0);
-  const [showSword, setShowSword] = useState(false);
 
   // Jump animation state
   const jumpVelocityRef = useRef(0);
@@ -1040,7 +679,7 @@ function ChibiCharacter({
   const isJumpingRef = useRef(false);
   const jumpCooldownRef = useRef(0);
 
-  // Trigger jump from external prop (for remote players receiving fun:jumped)
+  // Trigger jump from external prop
   useEffect(() => {
     if (isJumpingProp && !isJumpingRef.current) {
       isJumpingRef.current = true;
@@ -1048,23 +687,15 @@ function ChibiCharacter({
     }
   }, [isJumpingProp]);
 
-  // Trigger attack animation when isAttacking changes to true
-  useEffect(() => {
-    if (isAttacking) {
-      attackAnimRef.current = 0.001; // start the animation
-      setShowSword(true);
-    }
-  }, [isAttacking]);
-
-  // Trigger hit animation when isBeingHit changes to true
+  // Trigger hit animation
   useEffect(() => {
     if (isBeingHit) {
-      hitAnimRef.current = 0.001; // start hit reaction
+      hitAnimRef.current = 0.001;
       hitShakeRef.current = 1.0;
     }
   }, [isBeingHit]);
 
-  // Position + full animation loop
+  // Main animation loop
   useFrame(({ clock }, delta) => {
     if (!groupRef.current) return;
     const t = clock.getElapsedTime();
@@ -1072,10 +703,10 @@ function ChibiCharacter({
     if (player.isAlive) {
       // ── Jump trigger (Space key — local player only) ──
       if (isLocalPlayer && keys.current.has(' ') && !isJumpingRef.current && jumpCooldownRef.current <= 0) {
-        keys.current.delete(' '); // consume
+        keys.current.delete(' ');
         isJumpingRef.current = true;
-        jumpVelocityRef.current = 3.5; // initial upward velocity
-        jumpCooldownRef.current = 0.5; // cooldown between jumps
+        jumpVelocityRef.current = 3.5;
+        jumpCooldownRef.current = 0.5;
       }
       if (jumpCooldownRef.current > 0) {
         jumpCooldownRef.current -= delta;
@@ -1083,7 +714,7 @@ function ChibiCharacter({
 
       // ── Jump physics ──
       if (isJumpingRef.current) {
-        jumpVelocityRef.current -= 12.0 * delta; // gravity
+        jumpVelocityRef.current -= 12.0 * delta;
         jumpHeightRef.current += jumpVelocityRef.current * delta;
         if (jumpHeightRef.current <= 0) {
           jumpHeightRef.current = 0;
@@ -1095,75 +726,53 @@ function ChibiCharacter({
       // ── Position sync ──
       groupRef.current.position.x = posRef.current.x;
       groupRef.current.position.z = posRef.current.z;
-      groupRef.current.rotation.y = rotRef.current;
+      // Apply model facing offset so the model's visual front faces the movement direction
+      groupRef.current.rotation.y = rotRef.current + MODEL_FACING_OFFSET;
 
       const isMoving = isMovingRef.current;
+      const walkPhase = walkPhaseRef.current;
 
-      // ── Walking bounce ──
-      const walkBounce = isMoving ? Math.abs(Math.sin(t * 10)) * 0.06 : 0;
-      const breathe = Math.sin(t * 1.5 + index) * 0.03;
-      groupRef.current.position.y = homePosition[1] + breathe + walkBounce + jumpHeightRef.current;
+      // ── Walking animation — realistic body mechanics ──
+      if (isMoving && !isJumpingRef.current) {
+        // Walk bounce: asymmetric double-bump (each foot contact)
+        const stepCycle = Math.sin(walkPhase * 2); // Full step cycle
+        const walkBounce = Math.abs(stepCycle) * 0.04 + Math.abs(Math.sin(walkPhase * 4)) * 0.02;
 
-      // ── Jump squash & stretch ──
-      if (isJumpingRef.current || jumpHeightRef.current > 0) {
-        // Stretch when going up, squash when coming down
+        // Slight side-to-side sway (weight transfer between feet)
+        const sway = Math.sin(walkPhase) * 0.03;
+
+        // Forward lean while walking
+        clonedScene.rotation.x = 0.06;
+        // Body sway (lean into the stride)
+        clonedScene.rotation.z = sway;
+        // Subtle body twist (counter-rotation to arm swing)
+        clonedScene.rotation.y = Math.sin(walkPhase) * 0.02;
+
+        const breathe = Math.sin(t * 2.0 + index) * 0.01;
+        groupRef.current.position.y = posRef.current.y + walkBounce + breathe + jumpHeightRef.current;
+        groupRef.current.scale.set(1, 1, 1);
+      } else if (isJumpingRef.current || jumpHeightRef.current > 0) {
+        // ── Jump squash & stretch ──
         const stretchY = 1.0 + jumpVelocityRef.current * 0.03;
         const squashXZ = 1.0 / Math.sqrt(Math.max(stretchY, 0.7));
         groupRef.current.scale.set(squashXZ, Math.max(stretchY, 0.85), squashXZ);
+        clonedScene.rotation.x = jumpVelocityRef.current > 0 ? -0.1 : 0.15; // Lean back on ascent, forward on descent
+        clonedScene.rotation.z *= 0.9;
+        clonedScene.rotation.y *= 0.9;
+
+        const breathe = Math.sin(t * 1.5 + index) * 0.03;
+        groupRef.current.position.y = posRef.current.y + breathe + jumpHeightRef.current;
       } else {
+        // ── Idle animation — subtle breathing and micro-movements ──
+        const breathe = Math.sin(t * 1.5 + index) * 0.03;
+        const idleSway = Math.sin(t * 0.5 + index * 2.3) * 0.005;
+        groupRef.current.position.y = posRef.current.y + breathe + jumpHeightRef.current;
         groupRef.current.scale.set(1, 1, 1);
-      }
 
-      // ── Leg animation (alternating legs) ──
-      if (leftLegRef.current && rightLegRef.current) {
-        if (isMoving) {
-          const legSwing = Math.sin(t * 10) * 0.4;
-          leftLegRef.current.rotation.x = legSwing;
-          rightLegRef.current.rotation.x = -legSwing;
-        } else {
-          leftLegRef.current.rotation.x *= 0.85;
-          rightLegRef.current.rotation.x *= 0.85;
-        }
-      }
-
-      // ── Arm swing ──
-      if (leftArmRef.current && rightArmRef.current) {
-        // Attack animation — right arm punch forward
-        if (attackAnimRef.current > 0) {
-          attackAnimRef.current += delta;
-          const p = attackAnimRef.current;
-          if (p < 0.15) {
-            // Wind up — pull arm back
-            rightArmRef.current.rotation.x = -(p / 0.15) * 1.5;
-            rightArmRef.current.rotation.z = -(0.3 + (p / 0.15) * 0.3);
-          } else if (p < 0.25) {
-            // Punch forward!
-            const t2 = (p - 0.15) / 0.1;
-            rightArmRef.current.rotation.x = -1.5 + t2 * 3.0;
-            rightArmRef.current.rotation.z = -0.6 + t2 * 0.6;
-          } else if (p < 0.45) {
-            // Hold + return
-            const t2 = (p - 0.25) / 0.2;
-            rightArmRef.current.rotation.x = 1.5 * (1 - t2);
-            rightArmRef.current.rotation.z = -0.3 * (1 - t2) - 0.3;
-          } else {
-            // Done
-            attackAnimRef.current = 0;
-            rightArmRef.current.rotation.x = 0;
-            rightArmRef.current.rotation.z = -0.3;
-            setShowSword(false);
-          }
-          // Left arm stays still during attack
-          leftArmRef.current.rotation.x = 0;
-        } else if (isMoving) {
-          const armSwing = Math.sin(t * 10) * 0.35;
-          leftArmRef.current.rotation.x = -armSwing;
-          rightArmRef.current.rotation.x = armSwing;
-        } else {
-          // Idle arm sway
-          leftArmRef.current.rotation.x = Math.sin(t * 0.8 + 1) * 0.05;
-          rightArmRef.current.rotation.x = Math.sin(t * 0.8 + 2) * 0.05;
-        }
+        // Slowly return lean to neutral
+        clonedScene.rotation.x *= 0.92;
+        clonedScene.rotation.z = clonedScene.rotation.z * 0.92 + idleSway;
+        clonedScene.rotation.y *= 0.92;
       }
 
       // ── Hit reaction — shake body ──
@@ -1172,10 +781,6 @@ function ChibiCharacter({
         if (hitShakeRef.current < 0) hitShakeRef.current = 0;
         const shake = Math.sin(t * 40) * hitShakeRef.current * 0.15;
         groupRef.current.position.x = posRef.current.x + shake;
-        // Tilt head back from impact
-        if (headGroupRef.current) {
-          headGroupRef.current.rotation.x = -hitShakeRef.current * 0.3;
-        }
       }
 
       // ── Hit animation progress ──
@@ -1183,107 +788,6 @@ function ChibiCharacter({
         hitAnimRef.current += delta;
         if (hitAnimRef.current > 1.0) {
           hitAnimRef.current = 0;
-        }
-      }
-
-      // ── Body tilt when turning ──
-      if (bodyMeshRef.current) {
-        // Calculate velocity delta for lean
-        const vx = posRef.current.x - (prevVelRef.current.x || posRef.current.x);
-        const vz = posRef.current.z - (prevVelRef.current.z || posRef.current.z);
-        prevVelRef.current = { x: posRef.current.x, z: posRef.current.z };
-
-        // Lean into movement direction
-        const targetLeanZ = isMoving ? -vx * 3 : 0;
-        const targetLeanX = isMoving ? vz * 3 : 0;
-        bodyMeshRef.current.rotation.z +=
-          (THREE.MathUtils.clamp(targetLeanZ, -0.15, 0.15) - bodyMeshRef.current.rotation.z) * 0.1;
-        bodyMeshRef.current.rotation.x +=
-          (THREE.MathUtils.clamp(targetLeanX, -0.1, 0.1) - bodyMeshRef.current.rotation.x) * 0.1;
-      }
-
-      // ── Head bobbing while walking ──
-      if (headGroupRef.current) {
-        if (isMoving) {
-          headGroupRef.current.position.y = 1.0 + Math.sin(t * 10 + Math.PI / 4) * 0.02;
-        } else {
-          headGroupRef.current.position.y += (1.0 - headGroupRef.current.position.y) * 0.1;
-        }
-
-        // ── Idle fidget — head look around ──
-        if (!isMoving) {
-          idleFidgetTimerRef.current -= delta;
-          if (idleFidgetTimerRef.current <= 0 && fidgetTypeRef.current === 0) {
-            fidgetTypeRef.current = Math.floor(Math.random() * 3) + 1; // 1-3
-            fidgetProgressRef.current = 0;
-            idleFidgetTimerRef.current = 5 + Math.random() * 8;
-          }
-
-          if (fidgetTypeRef.current > 0) {
-            fidgetProgressRef.current += delta;
-            const p = fidgetProgressRef.current;
-
-            if (fidgetTypeRef.current === 1 || fidgetTypeRef.current === 2) {
-              // Look left or right
-              const dir = fidgetTypeRef.current === 1 ? 1 : -1;
-              if (p < 0.3) {
-                headGroupRef.current.rotation.y = dir * (p / 0.3) * 0.4;
-              } else if (p < 1.0) {
-                headGroupRef.current.rotation.y = dir * 0.4;
-              } else if (p < 1.3) {
-                headGroupRef.current.rotation.y = dir * 0.4 * (1 - (p - 1.0) / 0.3);
-              } else {
-                headGroupRef.current.rotation.y = 0;
-                fidgetTypeRef.current = 0;
-              }
-            } else if (fidgetTypeRef.current === 3) {
-              // Little bounce/nod
-              if (p < 0.15) {
-                headGroupRef.current.rotation.x = -(p / 0.15) * 0.15;
-              } else if (p < 0.3) {
-                headGroupRef.current.rotation.x = -0.15 * (1 - (p - 0.15) / 0.15);
-              } else if (p < 0.45) {
-                headGroupRef.current.rotation.x = (-(p - 0.3) / 0.15) * 0.1;
-              } else if (p < 0.6) {
-                headGroupRef.current.rotation.x = -0.1 * (1 - (p - 0.45) / 0.15);
-              } else {
-                headGroupRef.current.rotation.x = 0;
-                fidgetTypeRef.current = 0;
-              }
-            }
-          } else {
-            headGroupRef.current.rotation.y *= 0.95;
-            headGroupRef.current.rotation.x *= 0.95;
-          }
-        } else {
-          // Reset head rotation when moving
-          headGroupRef.current.rotation.y *= 0.9;
-          headGroupRef.current.rotation.x *= 0.9;
-          fidgetTypeRef.current = 0;
-        }
-      }
-
-      // ── Eye blink ──
-      if (leftEyeRef.current && rightEyeRef.current) {
-        blinkTimerRef.current -= delta;
-        if (blinkTimerRef.current <= 0 && !isBlinkingRef.current) {
-          isBlinkingRef.current = true;
-          blinkDurationRef.current = 0;
-          blinkTimerRef.current = 2 + Math.random() * 5;
-        }
-
-        if (isBlinkingRef.current) {
-          blinkDurationRef.current += delta;
-          const blinkT = blinkDurationRef.current;
-          const blinkScale =
-            blinkT < 0.06 ? 1 - blinkT / 0.06 : blinkT < 0.12 ? (blinkT - 0.06) / 0.06 : 1;
-          leftEyeRef.current.scale.y = Math.max(0.05, blinkScale);
-          rightEyeRef.current.scale.y = Math.max(0.05, blinkScale);
-          if (blinkT >= 0.12) {
-            isBlinkingRef.current = false;
-            leftEyeRef.current.scale.y = 1;
-            rightEyeRef.current.scale.y = 1;
-          }
         }
       }
     } else {
@@ -1296,6 +800,9 @@ function ChibiCharacter({
     ? Math.max(0, 1 - (Date.now() - chatBubble.timestamp) / 4000)
     : 0;
 
+  // Model scale — reduce to make characters feel like they live inside the map
+  const modelScale = 0.55;
+
   return (
     <group
       ref={groupRef}
@@ -1306,13 +813,6 @@ function ChibiCharacter({
       }}
       scale={player.isAlive ? 1 : 0.7}
     >
-      {/* Dead ghost overlay — reduce opacity of the entire character */}
-      {!player.isAlive && (
-        <mesh position={[0, 0.7, 0]}>
-          <sphereGeometry args={[0.01, 2, 2]} />
-          <meshBasicMaterial transparent opacity={0} />
-        </mesh>
-      )}
       {/* Selection ring */}
       {player.isSelected && (
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
@@ -1323,482 +823,34 @@ function ChibiCharacter({
 
       {/* Shadow blob */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
-        <circleGeometry args={[0.25, 20]} />
-        <meshBasicMaterial color="#000000" transparent opacity={player.isAlive ? 0.2 : 0.1} />
+        <circleGeometry args={[0.3, 20]} />
+        <meshBasicMaterial color="#000000" transparent opacity={player.isAlive ? 0.25 : 0.1} />
       </mesh>
 
-      {/* Left Leg */}
-      <group ref={leftLegRef} position={[-0.08, 0.15, 0]}>
-        <mesh castShadow>
-          <capsuleGeometry args={[0.06, 0.15, 6, 12]} />
-          <meshStandardMaterial
-            color={player.isAlive ? bodyColor : deadColor}
-            roughness={0.65}
-            metalness={0.02}
-            transparent={!player.isAlive}
-            opacity={player.isAlive ? 1 : 0.5}
-          />
-        </mesh>
-        {/* Shoe */}
-        <mesh position={[0, -0.11, 0.03]}>
-          <sphereGeometry args={[0.065, 10, 10]} />
-          <meshStandardMaterial color={player.isAlive ? '#3A2518' : '#444'} roughness={0.75} metalness={0.05} />
-        </mesh>
-        {/* Shoe sole */}
-        <mesh position={[0, -0.155, 0.03]} rotation={[-Math.PI / 2, 0, 0]}>
-          <circleGeometry args={[0.06, 10]} />
-          <meshStandardMaterial color={player.isAlive ? '#1A0A05' : '#333'} roughness={0.9} />
-        </mesh>
-        {/* Sock/cuff detail */}
-        <mesh position={[0, -0.04, 0]}>
-          <torusGeometry args={[0.062, 0.012, 6, 12]} />
-          <meshStandardMaterial
-            color={player.isAlive ? bodyColor : deadColor}
-            roughness={0.6}
-            transparent={!player.isAlive}
-            opacity={player.isAlive ? 1 : 0.5}
-          />
-        </mesh>
-      </group>
+      {/* GLB Model */}
+      <primitive
+        object={clonedScene}
+        scale={modelScale}
+        position={[0, 0, 0]}
+      />
 
-      {/* Right Leg */}
-      <group ref={rightLegRef} position={[0.08, 0.15, 0]}>
-        <mesh castShadow>
-          <capsuleGeometry args={[0.06, 0.15, 6, 12]} />
-          <meshStandardMaterial
-            color={player.isAlive ? bodyColor : deadColor}
-            roughness={0.65}
-            metalness={0.02}
-            transparent={!player.isAlive}
-            opacity={player.isAlive ? 1 : 0.5}
-          />
-        </mesh>
-        {/* Shoe */}
-        <mesh position={[0, -0.11, 0.03]}>
-          <sphereGeometry args={[0.065, 10, 10]} />
-          <meshStandardMaterial color={player.isAlive ? '#3A2518' : '#444'} roughness={0.75} metalness={0.05} />
-        </mesh>
-        {/* Shoe sole */}
-        <mesh position={[0, -0.155, 0.03]} rotation={[-Math.PI / 2, 0, 0]}>
-          <circleGeometry args={[0.06, 10]} />
-          <meshStandardMaterial color={player.isAlive ? '#1A0A05' : '#333'} roughness={0.9} />
-        </mesh>
-        {/* Sock/cuff detail */}
-        <mesh position={[0, -0.04, 0]}>
-          <torusGeometry args={[0.062, 0.012, 6, 12]} />
-          <meshStandardMaterial
-            color={player.isAlive ? bodyColor : deadColor}
-            roughness={0.6}
-            transparent={!player.isAlive}
-            opacity={player.isAlive ? 1 : 0.5}
-          />
-        </mesh>
-      </group>
-
-      {/* Body */}
-      <mesh ref={bodyMeshRef} position={[0, 0.52, 0]} castShadow>
-        <capsuleGeometry args={[0.2, 0.3, 8, 16]} />
-        <meshStandardMaterial
-          color={player.isAlive ? bodyColor : deadColor}
-          roughness={0.55}
-          metalness={0.05}
-          transparent={!player.isAlive}
-          opacity={player.isAlive ? 1 : 0.5}
+      {/* Emoji Picker (only for local player) */}
+      {isLocalPlayer && (
+        <EmojiPicker
+          selectedIndex={emojiSelectedIndex ?? 0}
+          isVisible={!!emojiPickerOpen}
         />
-      </mesh>
-      {/* Collar / Neckline */}
-      {player.isAlive && (
-        <mesh position={[0, 0.73, 0]} rotation={[-0.15, 0, 0]}>
-          <torusGeometry args={[0.14, 0.025, 6, 16]} />
-          <meshStandardMaterial
-            color={new THREE.Color(costume.bodyColor).lerp(new THREE.Color('#FFFFFF'), 0.15)}
-            roughness={0.5}
-            metalness={0.02}
-          />
-        </mesh>
-      )}
-      {/* Belt */}
-      {player.isAlive && (
-        <group position={[0, 0.38, 0]}>
-          <mesh>
-            <torusGeometry args={[0.2, 0.018, 6, 16]} />
-            <meshStandardMaterial
-              color={new THREE.Color(costume.bodyColor).lerp(new THREE.Color('#000000'), 0.35)}
-              roughness={0.45}
-              metalness={0.15}
-            />
-          </mesh>
-          {/* Belt buckle */}
-          <mesh position={[0, 0, 0.2]}>
-            <boxGeometry args={[0.04, 0.035, 0.015]} />
-            <meshStandardMaterial color="#DAA520" roughness={0.25} metalness={0.7} />
-          </mesh>
-        </group>
-      )}
-      {/* Body buttons (center front) */}
-      {player.isAlive && (
-        <>
-          <mesh position={[0, 0.58, 0.2]}>
-            <sphereGeometry args={[0.012, 8, 8]} />
-            <meshStandardMaterial
-              color={new THREE.Color(costume.bodyColor).lerp(new THREE.Color('#FFFFFF'), 0.3)}
-              roughness={0.3}
-              metalness={0.1}
-            />
-          </mesh>
-          <mesh position={[0, 0.5, 0.2]}>
-            <sphereGeometry args={[0.012, 8, 8]} />
-            <meshStandardMaterial
-              color={new THREE.Color(costume.bodyColor).lerp(new THREE.Color('#FFFFFF'), 0.3)}
-              roughness={0.3}
-              metalness={0.1}
-            />
-          </mesh>
-        </>
       )}
 
-      {/* Left Arm */}
-      <mesh ref={leftArmRef} position={[-0.28, 0.55, 0]} rotation={[0, 0, 0.3]} castShadow>
-        <capsuleGeometry args={[0.055, 0.2, 6, 10]} />
-        <meshStandardMaterial
-          color={player.isAlive ? bodyColor : deadColor}
-          roughness={0.65}
-          metalness={0.02}
-          transparent={!player.isAlive}
-          opacity={player.isAlive ? 1 : 0.5}
-        />
-      </mesh>
-      {/* Left Hand */}
-      <mesh position={[-0.34, 0.36, 0]}>
-        <sphereGeometry args={[0.055, 10, 10]} />
-        <meshStandardMaterial
-          color={player.isAlive ? skinColor : deadColor}
-          roughness={0.45}
-          metalness={0.02}
-          transparent={!player.isAlive}
-          opacity={player.isAlive ? 1 : 0.45}
-        />
-      </mesh>
-
-      {/* Right Arm */}
-      <group ref={rightArmRef} position={[0.28, 0.55, 0]} rotation={[0, 0, -0.3]}>
-        <mesh castShadow>
-          <capsuleGeometry args={[0.055, 0.2, 6, 10]} />
-          <meshStandardMaterial
-            color={player.isAlive ? bodyColor : deadColor}
-            roughness={0.65}
-            metalness={0.02}
-            transparent={!player.isAlive}
-            opacity={player.isAlive ? 1 : 0.5}
-          />
-        </mesh>
-        {/* Right Hand (relative to arm group) */}
-        <mesh position={[0.06, -0.19, 0]}>
-          <sphereGeometry args={[0.055, 10, 10]} />
-          <meshStandardMaterial
-            color={player.isAlive ? skinColor : deadColor}
-            roughness={0.45}
-            metalness={0.02}
-            transparent={!player.isAlive}
-            opacity={player.isAlive ? 1 : 0.45}
-          />
-        </mesh>
-        {/* Sword (appears during attack — child of arm so it follows rotation) */}
-        {showSword && player.isAlive && (
-          <group position={[0.04, -0.28, -0.06]} rotation={[Math.PI / 2, 0, 0]}>
-            {/* Blade — points forward (Z-axis due to rotation) */}
-            <mesh position={[0, -0.18, 0]} castShadow>
-              <boxGeometry args={[0.025, 0.3, 0.015]} />
-              <meshStandardMaterial
-                color="#c0c0c0"
-                metalness={0.9}
-                roughness={0.15}
-                emissive="#ffffff"
-                emissiveIntensity={0.15}
-              />
-            </mesh>
-            {/* Blade tip */}
-            <mesh position={[0, -0.34, 0]} rotation={[0, 0, Math.PI / 4]}>
-              <boxGeometry args={[0.018, 0.025, 0.012]} />
-              <meshStandardMaterial color="#d4d4d4" metalness={0.95} roughness={0.1} />
-            </mesh>
-            {/* Guard */}
-            <mesh position={[0, -0.02, 0]}>
-              <boxGeometry args={[0.07, 0.018, 0.025]} />
-              <meshStandardMaterial color="#b8860b" metalness={0.7} roughness={0.3} />
-            </mesh>
-            {/* Handle */}
-            <mesh position={[0, 0.04, 0]}>
-              <cylinderGeometry args={[0.015, 0.018, 0.08, 6]} />
-              <meshStandardMaterial color="#8b4513" roughness={0.6} />
-            </mesh>
-            {/* Pommel */}
-            <mesh position={[0, 0.085, 0]}>
-              <sphereGeometry args={[0.02, 5, 5]} />
-              <meshStandardMaterial color="#b8860b" metalness={0.7} roughness={0.3} />
-            </mesh>
-          </group>
-        )}
-      </group>
-
-      {/* Cape (if role has one) */}
-      {player.isAlive && costume.capeColor && <Cape color={costume.capeColor} />}
-
-      {/* Head group — for fidget rotation */}
-      <group ref={headGroupRef} position={[0, 1.0, 0]}>
-        {/* Head sphere — high poly for smooth look */}
-        <mesh castShadow>
-          <sphereGeometry args={[0.28, 24, 24]} />
-          <meshStandardMaterial
-            color={player.isAlive ? skinColor : deadColor}
-            roughness={0.4}
-            metalness={0.02}
-            transparent={!player.isAlive}
-            opacity={player.isAlive ? 1 : 0.5}
-          />
-        </mesh>
-
-        {/* Hair — stylized volume on top/back of head */}
-        {player.isAlive && (
-          <group>
-            {/* Main hair volume */}
-            <mesh position={[0, 0.12, -0.04]} rotation={[0.15, 0, 0]}>
-              <sphereGeometry args={[0.27, 16, 16, 0, Math.PI * 2, 0, Math.PI * 0.55]} />
-              <meshStandardMaterial
-                color={new THREE.Color(costume.bodyColor).lerp(new THREE.Color('#2A1A0A'), 0.7)}
-                roughness={0.55}
-                metalness={0.08}
-                side={THREE.DoubleSide}
-              />
-            </mesh>
-            {/* Hair fringe / bangs */}
-            <mesh position={[0, 0.1, 0.18]} rotation={[0.6, 0, 0]}>
-              <sphereGeometry args={[0.18, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.35]} />
-              <meshStandardMaterial
-                color={new THREE.Color(costume.bodyColor).lerp(new THREE.Color('#2A1A0A'), 0.7)}
-                roughness={0.55}
-                metalness={0.08}
-                side={THREE.DoubleSide}
-              />
-            </mesh>
-            {/* Side tufts left */}
-            <mesh position={[-0.22, 0.0, 0.05]}>
-              <sphereGeometry args={[0.1, 8, 8]} />
-              <meshStandardMaterial
-                color={new THREE.Color(costume.bodyColor).lerp(new THREE.Color('#2A1A0A'), 0.7)}
-                roughness={0.55}
-                metalness={0.08}
-              />
-            </mesh>
-            {/* Side tufts right */}
-            <mesh position={[0.22, 0.0, 0.05]}>
-              <sphereGeometry args={[0.1, 8, 8]} />
-              <meshStandardMaterial
-                color={new THREE.Color(costume.bodyColor).lerp(new THREE.Color('#2A1A0A'), 0.7)}
-                roughness={0.55}
-                metalness={0.08}
-              />
-            </mesh>
-          </group>
-        )}
-
-        {/* Small cute ears */}
-        {player.isAlive && !isWolf && (
-          <>
-            <mesh position={[-0.27, 0.0, 0]}>
-              <sphereGeometry args={[0.045, 8, 8]} />
-              <meshStandardMaterial color={skinColor} roughness={0.4} metalness={0.02} />
-            </mesh>
-            <mesh position={[-0.27, 0.0, 0.01]}>
-              <sphereGeometry args={[0.025, 6, 6]} />
-              <meshStandardMaterial color="#FFB0A0" roughness={0.6} />
-            </mesh>
-            <mesh position={[0.27, 0.0, 0]}>
-              <sphereGeometry args={[0.045, 8, 8]} />
-              <meshStandardMaterial color={skinColor} roughness={0.4} metalness={0.02} />
-            </mesh>
-            <mesh position={[0.27, 0.0, 0.01]}>
-              <sphereGeometry args={[0.025, 6, 6]} />
-              <meshStandardMaterial color="#FFB0A0" roughness={0.6} />
-            </mesh>
-          </>
-        )}
-
-        {/* Nose — small cute bump */}
-        {player.isAlive && (
-          <mesh position={[0, -0.02, 0.275]}>
-            <sphereGeometry args={[0.025, 8, 8]} />
-            <meshStandardMaterial
-              color={new THREE.Color('#FFD5B8').lerp(new THREE.Color('#FFAA90'), 0.2)}
-              roughness={0.45}
-              metalness={0.02}
-            />
-          </mesh>
-        )}
-
-        {/* Cheek blush */}
-        {player.isAlive && (
-          <>
-            <mesh position={[-0.18, -0.05, 0.2]}>
-              <sphereGeometry args={[0.045, 10, 10]} />
-              <meshStandardMaterial color="#FFB0A0" roughness={0.7} transparent opacity={0.4} />
-            </mesh>
-            <mesh position={[0.18, -0.05, 0.2]}>
-              <sphereGeometry args={[0.045, 10, 10]} />
-              <meshStandardMaterial color="#FFB0A0" roughness={0.7} transparent opacity={0.4} />
-            </mesh>
-          </>
-        )}
-
-        {/* Eyebrows */}
-        {player.isAlive && (
-          <>
-            <mesh position={[-0.09, 0.12, 0.24]} rotation={[0, 0, 0.15]}>
-              <boxGeometry args={[0.06, 0.015, 0.015]} />
-              <meshStandardMaterial
-                color={new THREE.Color(costume.bodyColor).lerp(new THREE.Color('#2A1A0A'), 0.8)}
-                roughness={0.6}
-              />
-            </mesh>
-            <mesh position={[0.09, 0.12, 0.24]} rotation={[0, 0, -0.15]}>
-              <boxGeometry args={[0.06, 0.015, 0.015]} />
-              <meshStandardMaterial
-                color={new THREE.Color(costume.bodyColor).lerp(new THREE.Color('#2A1A0A'), 0.8)}
-                roughness={0.6}
-              />
-            </mesh>
-          </>
-        )}
-
-        {/* Eyes */}
-        {player.isAlive ? (
-          <>
-            {/* Left eye */}
-            <group ref={leftEyeRef}>
-              {/* Eye white */}
-              <mesh position={[-0.09, 0.03, 0.22]}>
-                <sphereGeometry args={[0.058, 14, 14]} />
-                <meshStandardMaterial color="#FFFFFF" roughness={0.15} metalness={0.02} />
-              </mesh>
-              {/* Iris ring */}
-              <mesh position={[-0.09, 0.035, 0.265]}>
-                <sphereGeometry args={[0.038, 12, 12]} />
-                <meshStandardMaterial
-                  color={new THREE.Color(eyeColor).lerp(new THREE.Color('#FFFFFF'), 0.25)}
-                  roughness={0.2}
-                  metalness={0.05}
-                />
-              </mesh>
-              {/* Pupil */}
-              <mesh position={[-0.09, 0.04, 0.27]}>
-                <sphereGeometry args={[0.028, 12, 12]} />
-                <meshStandardMaterial color={eyeColor} roughness={0.15} metalness={0.05} />
-              </mesh>
-              {/* Main shine */}
-              <mesh position={[-0.07, 0.06, 0.28]}>
-                <sphereGeometry args={[0.016, 8, 8]} />
-                <meshBasicMaterial color="#FFFFFF" />
-              </mesh>
-              {/* Secondary smaller shine */}
-              <mesh position={[-0.1, 0.02, 0.278]}>
-                <sphereGeometry args={[0.008, 6, 6]} />
-                <meshBasicMaterial color="#FFFFFF" transparent opacity={0.7} />
-              </mesh>
-            </group>
-            {/* Right eye */}
-            <group ref={rightEyeRef}>
-              {/* Eye white */}
-              <mesh position={[0.09, 0.03, 0.22]}>
-                <sphereGeometry args={[0.058, 14, 14]} />
-                <meshStandardMaterial color="#FFFFFF" roughness={0.15} metalness={0.02} />
-              </mesh>
-              {/* Iris ring */}
-              <mesh position={[0.09, 0.035, 0.265]}>
-                <sphereGeometry args={[0.038, 12, 12]} />
-                <meshStandardMaterial
-                  color={new THREE.Color(eyeColor).lerp(new THREE.Color('#FFFFFF'), 0.25)}
-                  roughness={0.2}
-                  metalness={0.05}
-                />
-              </mesh>
-              {/* Pupil */}
-              <mesh position={[0.09, 0.04, 0.27]}>
-                <sphereGeometry args={[0.028, 12, 12]} />
-                <meshStandardMaterial color={eyeColor} roughness={0.15} metalness={0.05} />
-              </mesh>
-              {/* Main shine */}
-              <mesh position={[0.11, 0.06, 0.28]}>
-                <sphereGeometry args={[0.016, 8, 8]} />
-                <meshBasicMaterial color="#FFFFFF" />
-              </mesh>
-              {/* Secondary smaller shine */}
-              <mesh position={[0.08, 0.02, 0.278]}>
-                <sphereGeometry args={[0.008, 6, 6]} />
-                <meshBasicMaterial color="#FFFFFF" transparent opacity={0.7} />
-              </mesh>
-            </group>
-            {/* Mouth - small happy smile */}
-            <mesh position={[0, -0.07, 0.26]}>
-              <sphereGeometry args={[0.022, 8, 8]} />
-              <meshStandardMaterial color="#D4856A" roughness={0.4} />
-            </mesh>
-            {/* Upper lip highlight */}
-            <mesh position={[0, -0.058, 0.265]}>
-              <sphereGeometry args={[0.012, 6, 6]} />
-              <meshStandardMaterial color="#E8A090" roughness={0.35} />
-            </mesh>
-          </>
-        ) : (
-          <>
-            {/* Dead X eyes */}
-            <mesh position={[-0.09, 0.04, 0.26]} rotation={[0, 0, Math.PI / 4]}>
-              <boxGeometry args={[0.06, 0.015, 0.01]} />
-              <meshBasicMaterial color="#444" />
-            </mesh>
-            <mesh position={[-0.09, 0.04, 0.26]} rotation={[0, 0, -Math.PI / 4]}>
-              <boxGeometry args={[0.06, 0.015, 0.01]} />
-              <meshBasicMaterial color="#444" />
-            </mesh>
-            <mesh position={[0.09, 0.04, 0.26]} rotation={[0, 0, Math.PI / 4]}>
-              <boxGeometry args={[0.06, 0.015, 0.01]} />
-              <meshBasicMaterial color="#444" />
-            </mesh>
-            <mesh position={[0.09, 0.04, 0.26]} rotation={[0, 0, -Math.PI / 4]}>
-              <boxGeometry args={[0.06, 0.015, 0.01]} />
-              <meshBasicMaterial color="#444" />
-            </mesh>
-            {/* Dead mouth */}
-            <mesh position={[0, -0.08, 0.26]}>
-              <boxGeometry args={[0.06, 0.012, 0.01]} />
-              <meshBasicMaterial color="#555" />
-            </mesh>
-          </>
-        )}
-
-        {/* Wolf ears (werewolf team only) */}
-        {player.isAlive && isWolf && <WolfEars color={costume.bodyColor} />}
-
-        {/* Hat / Headwear — positions are relative to head group now at [0,0,0] */}
-        {player.isAlive && costume.hatType && costume.hatType !== 'none' && (
-          <group position={[0, -1.0, 0]}>
-            <RoleHat
-              type={costume.hatType}
-              color={costume.hatColor || costume.bodyColor}
-              color2={costume.accessoryColor}
-            />
-          </group>
-        )}
-      </group>
-
-      {/* Role-specific accessories */}
-      {player.isAlive && player.role && (
-        <RoleAccessory role={player.role} color={costume.accessoryColor || '#888'} />
+      {/* Floating Emoji (above character head) */}
+      {floatingEmoji && (
+        <FloatingEmoji emoji={floatingEmoji.emoji} timestamp={floatingEmoji.timestamp} />
       )}
 
       {/* Chat bubble */}
       {chatBubble && bubbleOpacity > 0 && (
         <Html
-          position={[0, 2.1, 0]}
+          position={[0, 1.5, 0]}
           center
           distanceFactor={8}
           zIndexRange={[1, 0]}
@@ -1815,7 +867,6 @@ function ChibiCharacter({
             }}
           >
             {chatBubble.content}
-            {/* Tail */}
             <div
               className="absolute left-1/2 -translate-x-1/2 -bottom-1.5 w-0 h-0"
               style={{
@@ -1828,10 +879,10 @@ function ChibiCharacter({
         </Html>
       )}
 
-      {/* Hit reaction emoji — 💥 SLAP! floating above head */}
+      {/* Hit reaction emoji */}
       {hitAnimRef.current > 0 && (
         <Html
-          position={[0, 2.3, 0]}
+          position={[0, 1.7, 0]}
           center
           distanceFactor={8}
           zIndexRange={[1, 0]}
@@ -1858,7 +909,7 @@ function ChibiCharacter({
 
       {/* Name tag + role emoji */}
       <Html
-        position={[0, 1.7, 0]}
+        position={[0, 1.3, 0]}
         center
         distanceFactor={8}
         zIndexRange={[1, 0]}
@@ -1907,14 +958,22 @@ export function PlayerCircle({
   onSelect,
   isNight,
   chatBubbles,
+  firePosition,
+  mapScene,
+  onLocalPlayerPosition,
+  onCameraToggle,
 }: {
   players: PlayerData[];
   selectedId?: string | null;
   onSelect?: (playerId: string) => void;
   isNight: boolean;
   chatBubbles?: Map<string, { content: string; timestamp: number }>;
+  firePosition?: [number, number, number];
+  mapScene?: THREE.Object3D | null;
+  onLocalPlayerPosition?: (pos: THREE.Vector3, rot: number) => void;
+  onCameraToggle?: () => void;
 }) {
-  // Deduplicate players by ID to prevent duplicate key warnings
+  // Deduplicate players by ID
   const uniquePlayers = useMemo(() => {
     const seen = new Set<string>();
     return players.filter((p) => {
@@ -1924,105 +983,160 @@ export function PlayerCircle({
     });
   }, [players]);
 
-  const radius = Math.max(3, uniquePlayers.length * 0.4);
-  const keys = useKeyboard();
+  const radius = Math.max(2.5, uniquePlayers.length * 0.35);
+  const { keys, justPressed } = useKeyboard();
   const localUserId = useAuthStore((s) => s.user?.id);
   const emptyBubbles = useMemo(() => new Map<string, { content: string; timestamp: number }>(), []);
   const activeBubbles = chatBubbles || emptyBubbles;
 
-  // Attack state — track who is attacking and who is being hit
-  const [attackingId, setAttackingId] = useState<string | null>(null);
+  // Fire/campfire center position (detected from map model, or fallback)
+  // Fallback Y=0.5 is a reasonable default above the map surface
+  const fireCenterX = firePosition ? firePosition[0] : 0;
+  const fireCenterY = firePosition ? firePosition[1] : 0.5;
+  const fireCenterZ = firePosition ? firePosition[2] : 0;
+
+  // Attack state (kept for slap hit detection without shuriken)
   const [hitTargetId, setHitTargetId] = useState<string | null>(null);
   const [hitEmoji, setHitEmoji] = useState('💥');
-  const attackCooldownRef = useRef(0);
-  // Track all player positions via refs for proximity detection
   const playerPositionsRef = useRef<Map<string, THREE.Vector3>>(new Map());
 
-  // Jump state — track who is jumping
+  // Emoji picker state
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
+  const [emojiSelectedIndex, setEmojiSelectedIndex] = useState(0);
+
+  // Floating emojis per player: { playerId -> { emoji, timestamp } }
+  const [floatingEmojis, setFloatingEmojis] = useState<Map<string, { emoji: string; timestamp: number }>>(new Map());
+
+  // Jump state
   const [jumpingId, setJumpingId] = useState<string | null>(null);
   const jumpCooldownRef = useRef(0);
 
-  // Listen for F key to trigger attack, Space key to jump
+  // Track local player's facing direction
+  const playerFacingRef = useRef(new THREE.Vector3(0, 0, -1));
+
+  // Emoji picker logic + jump in useFrame
   useFrame((_, delta) => {
-    if (attackCooldownRef.current > 0) {
-      attackCooldownRef.current -= delta;
-    }
     if (jumpCooldownRef.current > 0) {
       jumpCooldownRef.current -= delta;
     }
 
-    if (keys.current.has('f') && attackCooldownRef.current <= 0 && localUserId) {
-      keys.current.delete('f'); // consume the keypress
-      attackCooldownRef.current = 0.8; // cooldown between attacks
+    // ── Y key → toggle camera mode ──
+    if (justPressed.current.has('y') && localUserId) {
+      justPressed.current.delete('y');
+      onCameraToggle?.();
+    }
 
-      // Find the nearest other player within attack range
-      const myPos = playerPositionsRef.current.get(localUserId);
-      if (!myPos) return;
-
-      let nearestId: string | null = null;
-      let nearestDist = 2.0; // attack range
-
-      for (const p of uniquePlayers) {
-        if (p.id === localUserId || !p.isAlive) continue;
-        const otherPos = playerPositionsRef.current.get(p.id);
-        if (!otherPos) continue;
-        const dist = myPos.distanceTo(otherPos);
-        if (dist < nearestDist) {
-          nearestDist = dist;
-          nearestId = p.id;
-        }
-      }
-
-      if (nearestId) {
-        // Trigger attack animation locally
-        setAttackingId(localUserId);
-        setTimeout(() => setAttackingId(null), 500);
-
-        // Emit to server so all players see it
-        const socket = getSocket();
-        socket.emit('fun:slap', { targetId: nearestId });
-
-        // Play slap sound locally
-        if (useUiStore.getState().isSoundEnabled) {
-          playSound('slap');
-        }
+    // ── F key → toggle emoji picker ──
+    if (justPressed.current.has('f') && localUserId) {
+      justPressed.current.delete('f');
+      if (!emojiPickerOpen) {
+        // Open picker
+        setEmojiPickerOpen(true);
+        setEmojiSelectedIndex(0);
+      } else {
+        // Close picker without selecting
+        setEmojiPickerOpen(false);
       }
     }
 
-    // Space key → jump
+    // ── Tab key → cycle emoji selection ──
+    if (justPressed.current.has('tab') && emojiPickerOpen) {
+      justPressed.current.delete('tab');
+      setEmojiSelectedIndex((prev) => (prev + 1) % EMOJI_LIST.length);
+    }
+
+    // ── Enter key → confirm emoji selection ──
+    if (justPressed.current.has('enter') && emojiPickerOpen && localUserId) {
+      justPressed.current.delete('enter');
+      const selectedEmoji = EMOJI_LIST[emojiSelectedIndex];
+      setEmojiPickerOpen(false);
+
+      // Show floating emoji above local player's head
+      setFloatingEmojis((prev) => {
+        const next = new Map(prev);
+        next.set(localUserId, { emoji: selectedEmoji, timestamp: Date.now() });
+        return next;
+      });
+
+      // Clear after 3 seconds
+      setTimeout(() => {
+        setFloatingEmojis((prev) => {
+          const next = new Map(prev);
+          if (next.get(localUserId)?.emoji === selectedEmoji) {
+            next.delete(localUserId);
+          }
+          return next;
+        });
+      }, 3100);
+
+      // Broadcast emoji to other players via socket
+      const socket = getSocket();
+      socket.emit('fun:emoji', { emoji: selectedEmoji });
+
+      if (useUiStore.getState().isSoundEnabled) {
+        playSound('slap');
+      }
+    }
+
+    // ── Space key → jump ──
     if (keys.current.has(' ') && jumpCooldownRef.current <= 0 && localUserId) {
       keys.current.delete(' ');
-      jumpCooldownRef.current = 0.6; // cooldown between jumps
+      jumpCooldownRef.current = 0.6;
       setJumpingId(localUserId);
       setTimeout(() => setJumpingId(null), 600);
 
-      // Emit to server so all players see the jump
       const socket = getSocket();
       socket.emit('fun:jump');
     }
+
+    // Clear justPressed at end of frame
+    justPressed.current.clear();
   });
+
+  // Listen for emoji events from server (from other players)
+  useEffect(() => {
+    const socket = getSocket();
+
+    const onEmoji = ({ playerId, emoji }: { playerId: string; emoji: string }) => {
+      if (playerId === localUserId) return; // Already handled locally
+      setFloatingEmojis((prev) => {
+        const next = new Map(prev);
+        next.set(playerId, { emoji, timestamp: Date.now() });
+        return next;
+      });
+      // Clear after 3 seconds
+      setTimeout(() => {
+        setFloatingEmojis((prev) => {
+          const next = new Map(prev);
+          if (next.get(playerId)?.emoji === emoji) {
+            next.delete(playerId);
+          }
+          return next;
+        });
+      }, 3100);
+    };
+
+    socket.on('fun:emoji', onEmoji);
+    return () => {
+      socket.off('fun:emoji', onEmoji);
+    };
+  }, [localUserId]);
 
   // Listen for slap events from server
   useEffect(() => {
     const socket = getSocket();
 
     const onSlapped = ({ attackerId, targetId }: { attackerId: string; targetId: string }) => {
-      // Show attacker punching
-      setAttackingId(attackerId);
-      setTimeout(() => setAttackingId(null), 500);
-
       // Show target getting hit
       const emojis = ['💥', '⭐', '💫', '🌟', '😵', '🤕', '👊', '🫨'];
       setHitEmoji(emojis[Math.floor(Math.random() * emojis.length)]);
       setHitTargetId(targetId);
       setTimeout(() => setHitTargetId(null), 1000);
 
-      // Play bonk sound for the target (or slap for attacker)
       if (useUiStore.getState().isSoundEnabled) {
         if (targetId === localUserId) {
           playSound('bonk');
         } else if (attackerId !== localUserId) {
-          // Other players see someone else slapping — play lighter sound
           playSound('slap');
         }
       }
@@ -2034,7 +1148,7 @@ export function PlayerCircle({
     };
   }, [localUserId]);
 
-  // Listen for jump events from server (other players jumping)
+  // Listen for jump events from server
   useEffect(() => {
     const socket = getSocket();
 
@@ -2049,33 +1163,48 @@ export function PlayerCircle({
     };
   }, []);
 
+  // Pre-compute ground Y for each player's home position.
+  // The campfire sits on flat ground, and all players are arranged in a small circle
+  // around it. The campfire object sits ON the terrain surface, so fireCenterY
+  // IS the ground level at the gathering area. Use it directly for all player positions
+  // instead of raycasting (which is unreliable due to 5 overlapping terrain mesh layers).
+  const homeGroundYs = useMemo(() => {
+    if (!mapScene) return null;
+    // Use campfire Y as ground level for all players in the circle
+    const results = uniquePlayers.map(() => fireCenterY + GROUND_Y_OFFSET);
+    return results;
+  }, [mapScene, uniquePlayers.length, fireCenterY]);
+
   return (
     <group position={[0, 0, 0]}>
-      {/* Campfire in center */}
-      <CampFire isNight={isNight} />
-
       {uniquePlayers.map((player, i) => {
         const angle = (i / uniquePlayers.length) * Math.PI * 2 - Math.PI / 2;
-        const x = Math.cos(angle) * radius;
-        const z = Math.sin(angle) * radius;
+        const x = fireCenterX + Math.cos(angle) * radius;
+        const z = fireCenterZ + Math.sin(angle) * radius;
+        const homeY = homeGroundYs ? homeGroundYs[i] : fireCenterY;
         const isLocal = player.id === localUserId;
 
         return (
-          <ChibiCharacterWithPosTracking
+          <GLBCharacterWithPosTracking
             key={player.id}
             player={{ ...player, isSelected: selectedId === player.id }}
-            homePosition={[x, 0, z]}
+            homePosition={[x, homeY, z]}
             onClick={() => onSelect?.(player.id)}
             isNight={isNight}
             index={i}
             isLocalPlayer={isLocal}
             keys={keys}
             chatBubble={activeBubbles.get(player.id)}
-            isAttacking={attackingId === player.id}
             isBeingHit={hitTargetId === player.id}
             isJumping={jumpingId === player.id}
             hitEmoji={hitEmoji}
             positionsRef={playerPositionsRef}
+            facingRef={isLocal ? playerFacingRef : undefined}
+            emojiPickerOpen={isLocal ? emojiPickerOpen : false}
+            emojiSelectedIndex={isLocal ? emojiSelectedIndex : 0}
+            floatingEmoji={floatingEmojis.get(player.id)}
+            mapScene={mapScene}
+            onLocalPlayerPosition={isLocal ? onLocalPlayerPosition : undefined}
           />
         );
       })}
@@ -2083,8 +1212,8 @@ export function PlayerCircle({
   );
 }
 
-// ─── Wrapper that tracks position for proximity detection ────────
-function ChibiCharacterWithPosTracking(props: {
+// ─── Wrapper that tracks position + facing for proximity detection ────────
+function GLBCharacterWithPosTracking(props: {
   player: PlayerData;
   homePosition: [number, number, number];
   onClick?: () => void;
@@ -2093,120 +1222,53 @@ function ChibiCharacterWithPosTracking(props: {
   isLocalPlayer: boolean;
   keys: React.RefObject<Set<string>>;
   chatBubble?: { content: string; timestamp: number };
-  isAttacking?: boolean;
   isBeingHit?: boolean;
   isJumping?: boolean;
   hitEmoji?: string;
   positionsRef: React.RefObject<Map<string, THREE.Vector3>>;
+  facingRef?: React.RefObject<THREE.Vector3>;
+  emojiPickerOpen?: boolean;
+  emojiSelectedIndex?: number;
+  floatingEmoji?: { emoji: string; timestamp: number };
+  mapScene?: THREE.Object3D | null;
+  onLocalPlayerPosition?: (pos: THREE.Vector3, rot: number) => void;
 }) {
-  const { positionsRef, ...charProps } = props;
+  const { positionsRef, facingRef, mapScene, onLocalPlayerPosition, ...charProps } = props;
   const trackRef = useRef<THREE.Group>(null);
 
-  // Update position tracking every frame
   useFrame(() => {
     if (trackRef.current && positionsRef.current) {
       positionsRef.current.set(
         props.player.id,
         trackRef.current.getWorldPosition(new THREE.Vector3()),
       );
+      // Track facing direction for local player
+      if (facingRef && trackRef.current) {
+        const dir = new THREE.Vector3(0, 0, -1);
+        dir.applyQuaternion(trackRef.current.quaternion);
+        // Get rotation from child group (the actual character group)
+        const child = trackRef.current.children[0];
+        if (child) {
+          dir.set(0, 0, -1).applyQuaternion(child.quaternion);
+        }
+        facingRef.current.copy(dir);
+      }
+      // Report local player position for third-person camera
+      // Use the logical facing rotation (without model offset) for correct camera placement
+      if (onLocalPlayerPosition && props.isLocalPlayer) {
+        const worldPos = trackRef.current.getWorldPosition(new THREE.Vector3());
+        // The child group's rotation.y includes MODEL_FACING_OFFSET, subtract it for logical rotation
+        const child = trackRef.current.children[0];
+        const visualRot = child ? child.rotation.y : 0;
+        const logicalRot = visualRot - MODEL_FACING_OFFSET;
+        onLocalPlayerPosition(worldPos, logicalRot);
+      }
     }
   });
 
   return (
     <group ref={trackRef}>
-      <ChibiCharacter {...charProps} />
-    </group>
-  );
-}
-
-// ─── Campfire ────────────────────────────────
-function CampFire({ isNight }: { isNight: boolean }) {
-  const lightRef = useRef<THREE.PointLight>(null);
-  const flame1Ref = useRef<THREE.Mesh>(null);
-  const flame2Ref = useRef<THREE.Mesh>(null);
-
-  useFrame(({ clock }) => {
-    const t = clock.getElapsedTime();
-    if (lightRef.current) {
-      lightRef.current.intensity =
-        (isNight ? 2.5 : 0.5) + Math.sin(t * 5) * 0.3 + Math.sin(t * 7) * 0.2;
-    }
-    if (flame1Ref.current) {
-      flame1Ref.current.scale.y = 1 + Math.sin(t * 6) * 0.2;
-      flame1Ref.current.scale.x = 1 + Math.sin(t * 4 + 1) * 0.1;
-      flame1Ref.current.position.x = Math.sin(t * 3) * 0.02;
-    }
-    if (flame2Ref.current) {
-      flame2Ref.current.scale.y = 1 + Math.sin(t * 8 + 2) * 0.3;
-      flame2Ref.current.position.x = Math.sin(t * 5 + 1) * 0.03;
-    }
-  });
-
-  return (
-    <group position={[0, 0, 0]}>
-      {/* Stone ring */}
-      {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
-        const a = (i / 8) * Math.PI * 2;
-        return (
-          <mesh key={i} position={[Math.cos(a) * 0.35, 0.05, Math.sin(a) * 0.35]}>
-            <sphereGeometry args={[0.07, 5, 5]} />
-            <meshStandardMaterial color="#666" roughness={0.9} />
-          </mesh>
-        );
-      })}
-      {/* Log 1 */}
-      <mesh position={[-0.12, 0.1, 0.05]} rotation={[0, 0.3, 0.1]}>
-        <cylinderGeometry args={[0.05, 0.06, 0.45, 6]} />
-        <meshStandardMaterial color="#5C3A1E" roughness={0.9} />
-      </mesh>
-      {/* Log 2 */}
-      <mesh position={[0.12, 0.1, -0.03]} rotation={[0, -0.4, -0.1]}>
-        <cylinderGeometry args={[0.05, 0.06, 0.45, 6]} />
-        <meshStandardMaterial color="#4A2E16" roughness={0.9} />
-      </mesh>
-      {/* Log 3 */}
-      <mesh position={[0, 0.1, 0.1]} rotation={[0.1, 1.2, 0]}>
-        <cylinderGeometry args={[0.04, 0.05, 0.4, 6]} />
-        <meshStandardMaterial color="#6B4226" roughness={0.9} />
-      </mesh>
-
-      {/* Fire light */}
-      <pointLight
-        ref={lightRef}
-        position={[0, 0.5, 0]}
-        color="#FF6B35"
-        intensity={isNight ? 2.5 : 0.5}
-        distance={10}
-        decay={2}
-      />
-
-      {/* Flame 1 - main */}
-      <mesh ref={flame1Ref} position={[0, 0.35, 0]}>
-        <coneGeometry args={[0.1, 0.35, 7]} />
-        <meshBasicMaterial color="#FF6622" transparent opacity={0.85} />
-      </mesh>
-
-      {/* Flame 2 - inner bright */}
-      <mesh ref={flame2Ref} position={[0, 0.38, 0]}>
-        <coneGeometry args={[0.06, 0.2, 6]} />
-        <meshBasicMaterial color="#FFCC44" transparent opacity={0.7} />
-      </mesh>
-
-      {/* Flame 3 - tip */}
-      <mesh position={[0, 0.5, 0]}>
-        <coneGeometry args={[0.03, 0.12, 5]} />
-        <meshBasicMaterial color="#FFEE88" transparent opacity={0.5} />
-      </mesh>
-
-      {/* Embers / sparks */}
-      <mesh position={[0.05, 0.6, 0.02]}>
-        <sphereGeometry args={[0.01, 4, 4]} />
-        <meshBasicMaterial color="#FF8844" transparent opacity={0.6} />
-      </mesh>
-      <mesh position={[-0.03, 0.55, -0.02]}>
-        <sphereGeometry args={[0.008, 4, 4]} />
-        <meshBasicMaterial color="#FFAA44" transparent opacity={0.5} />
-      </mesh>
+      <GLBCharacter {...charProps} mapScene={mapScene} />
     </group>
   );
 }

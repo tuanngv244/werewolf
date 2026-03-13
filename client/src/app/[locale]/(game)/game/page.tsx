@@ -19,6 +19,7 @@ import dynamic from 'next/dynamic';
 import { useVoiceChat } from '@/hooks/useVoiceChat';
 import { VoiceControls } from '@/components/game/VoiceControls';
 import { useRoomStore } from '@/stores/room-store';
+import * as THREE from 'three';
 
 // Convert snake_case role to camelCase i18n key: 'alpha_werewolf' -> 'alphaWerewolf'
 function roleToCamel(role: string): string {
@@ -100,11 +101,20 @@ function PlayerList({
   isNight?: boolean;
 }) {
   const t = useTranslations();
-  const { players } = useGameStore();
+  const { players: rawPlayers } = useGameStore();
 
-  const displayPlayers = showDead
-    ? players
-    : players.filter((p) => p.isAlive && !excludeIds.includes(p.id));
+  // Deduplicate players by ID to prevent React key warnings
+  const displayPlayers = useMemo(() => {
+    const seen = new Set<string>();
+    const base = showDead
+      ? rawPlayers
+      : rawPlayers.filter((p) => p.isAlive && !excludeIds.includes(p.id));
+    return base.filter((p) => {
+      if (seen.has(p.id)) return false;
+      seen.add(p.id);
+      return true;
+    });
+  }, [rawPlayers, showDead, excludeIds]);
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -371,6 +381,8 @@ function NightActionPanel({
   const auraSeerResult = useGameStore((s) => s.auraSeerResult);
   const werewolfSeerResult = useGameStore((s) => s.werewolfSeerResult);
   const witchAttackedTarget = useGameStore((s) => s.witchAttackedTarget);
+  const witchHasHealPotion = useGameStore((s) => s.witchHasHealPotion);
+  const witchHasKillPotion = useGameStore((s) => s.witchHasKillPotion);
   const { user } = useAuthStore();
   const { emit } = useEmit();
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
@@ -553,8 +565,11 @@ function NightActionPanel({
               setWitchAction('heal');
               setSelectedTarget(null);
             }}
+            disabled={!witchHasHealPotion}
             className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all ${
-              witchAction === 'heal'
+              !witchHasHealPotion
+                ? 'bg-night-bg/20 border-night-border/20 opacity-40 cursor-not-allowed'
+                : witchAction === 'heal'
                 ? 'bg-emerald-500/25 border-emerald-400 ring-1 ring-emerald-400/40'
                 : 'bg-night-bg/40 border-night-border/30 hover:bg-night-bg/60 hover:border-emerald-400/50'
             }`}
@@ -562,7 +577,7 @@ function NightActionPanel({
             <span className="text-2xl">💚</span>
             <span
               className={`text-xs font-semibold ${
-                witchAction === 'heal' ? 'text-emerald-300' : 'text-night-muted'
+                !witchHasHealPotion ? 'text-night-muted/50 line-through' : witchAction === 'heal' ? 'text-emerald-300' : 'text-night-muted'
               }`}
             >
               {t('game.witchHeal')}
@@ -573,8 +588,11 @@ function NightActionPanel({
               setWitchAction('kill');
               setSelectedTarget(null);
             }}
+            disabled={!witchHasKillPotion}
             className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all ${
-              witchAction === 'kill'
+              !witchHasKillPotion
+                ? 'bg-night-bg/20 border-night-border/20 opacity-40 cursor-not-allowed'
+                : witchAction === 'kill'
                 ? 'bg-red-500/25 border-red-400 ring-1 ring-red-400/40'
                 : 'bg-night-bg/40 border-night-border/30 hover:bg-night-bg/60 hover:border-red-400/50'
             }`}
@@ -582,7 +600,7 @@ function NightActionPanel({
             <span className="text-2xl">☠️</span>
             <span
               className={`text-xs font-semibold ${
-                witchAction === 'kill' ? 'text-red-300' : 'text-night-muted'
+                !witchHasKillPotion ? 'text-night-muted/50 line-through' : witchAction === 'kill' ? 'text-red-300' : 'text-night-muted'
               }`}
             >
               {t('game.witchKill')}
@@ -640,7 +658,11 @@ function NightActionPanel({
             <Button
               className="w-full"
               onClick={handleConfirmAction}
-              disabled={witchAction === 'kill' && !selectedTarget}
+              disabled={
+                (witchAction === 'kill' && !selectedTarget) ||
+                (witchAction === 'heal' && !witchHasHealPotion) ||
+                (witchAction === 'kill' && !witchHasKillPotion)
+              }
             >
               {witchAction === 'heal'
                 ? `💚 ${t('game.witchHeal')}`
@@ -694,7 +716,16 @@ function VotePanel({
   onSelectPlayer?: (id: string) => void;
 }) {
   const t = useTranslations();
-  const { players, voteState, gameId } = useGameStore();
+  const { players: rawPlayers, voteState, gameId } = useGameStore();
+  // Deduplicate players by ID
+  const players = useMemo(() => {
+    const seen = new Set<string>();
+    return rawPlayers.filter((p) => {
+      if (seen.has(p.id)) return false;
+      seen.add(p.id);
+      return true;
+    });
+  }, [rawPlayers]);
   const isAlive = useGameStore((s) => s.isAlive);
   const { emit } = useEmit();
   const [votedFor, setVotedFor] = useState<string | null>(null);
@@ -1144,17 +1175,80 @@ function Game3DScene({
   onSelect?: (playerId: string) => void;
   chatBubbles?: Map<string, { content: string; timestamp: number }>;
 }) {
+  const [firePos, setFirePos] = useState<[number, number, number] | undefined>(undefined);
+  const [mapScene, setMapScene] = useState<THREE.Object3D | null>(null);
+
+  // Camera mode toggle: panoramic (overview) vs thirdPerson (follow character)
+  const [cameraMode, setCameraMode] = useState<'panoramic' | 'thirdPerson'>('panoramic');
+  const localPlayerPosRef = useRef<THREE.Vector3 | null>(null);
+  const localPlayerRotRef = useRef<number>(0);
+  const [localPlayerPos, setLocalPlayerPos] = useState<THREE.Vector3 | null>(null);
+  const [localPlayerRot, setLocalPlayerRot] = useState<number>(0);
+
+  const handleFireDetected = useCallback((pos: { x: number; y: number; z: number }) => {
+    console.log('[Game3D] Fire detected at world pos:', pos.x.toFixed(2), pos.y.toFixed(2), pos.z.toFixed(2));
+    setFirePos([pos.x, pos.y, pos.z]);
+  }, []);
+
+  const handleMapSceneReady = useCallback((scene: THREE.Object3D) => {
+    console.log('[Game3D] Map scene ready');
+    setMapScene(scene);
+  }, []);
+
+  const handleCameraToggle = useCallback(() => {
+    setCameraMode((prev) => (prev === 'panoramic' ? 'thirdPerson' : 'panoramic'));
+  }, []);
+
+  // Throttled position update to avoid excessive re-renders
+  const lastPosUpdateRef = useRef(0);
+  const handleLocalPlayerPosition = useCallback((pos: THREE.Vector3, rot: number) => {
+    localPlayerPosRef.current = pos;
+    localPlayerRotRef.current = rot;
+    // Throttle state updates to ~30fps
+    const now = Date.now();
+    if (now - lastPosUpdateRef.current > 33) {
+      lastPosUpdateRef.current = now;
+      setLocalPlayerPos(pos.clone());
+      setLocalPlayerRot(rot);
+    }
+  }, []);
+
   return (
     <div className="absolute inset-0 w-full h-full">
-      <ForestScene isNight={isNight}>
-        <PlayerCircle
-          players={players}
-          selectedId={selectedId}
-          onSelect={onSelect}
-          isNight={isNight}
-          chatBubbles={chatBubbles}
-        />
+      <ForestScene
+        isNight={isNight}
+        onFireDetected={handleFireDetected}
+        onMapSceneReady={handleMapSceneReady}
+        cameraMode={cameraMode}
+        localPlayerPosition={localPlayerPos}
+        localPlayerRotation={localPlayerRot}
+      >
+        {/* Only render players once map data is ready to ensure correct positioning */}
+        {firePos && mapScene && (
+          <PlayerCircle
+            players={players}
+            selectedId={selectedId}
+            onSelect={onSelect}
+            isNight={isNight}
+            chatBubbles={chatBubbles}
+            firePosition={firePos}
+            mapScene={mapScene}
+            onLocalPlayerPosition={handleLocalPlayerPosition}
+            onCameraToggle={handleCameraToggle}
+          />
+        )}
       </ForestScene>
+      {/* Camera mode indicator */}
+      <div className="absolute bottom-3 left-3 z-10 pointer-events-none">
+        <div className={`px-3 py-1.5 rounded-lg text-xs font-medium backdrop-blur-sm border ${
+          isNight
+            ? 'bg-night-card/60 border-night-border/40 text-night-text/80'
+            : 'bg-white/60 border-day-border/40 text-day-text/80'
+        }`}>
+          <span className="opacity-60">Y</span>{' '}
+          {cameraMode === 'panoramic' ? '🌐 Panoramic' : '🎮 Third Person'}
+        </div>
+      </div>
     </div>
   );
 }
@@ -1163,7 +1257,16 @@ function Game3DScene({
 export default function GamePage() {
   const t = useTranslations();
   const router = useRouter();
-  const { phase, myRole, myTeam, phaseEndAt, winners, round, gameId, players } = useGameStore();
+  const { phase, myRole, myTeam, phaseEndAt, winners, round, gameId, players: rawGamePlayers } = useGameStore();
+  // Deduplicate players to prevent React key errors (bot IDs can occasionally duplicate)
+  const players = useMemo(() => {
+    const seen = new Set<string>();
+    return rawGamePlayers.filter((p) => {
+      if (seen.has(p.id)) return false;
+      seen.add(p.id);
+      return true;
+    });
+  }, [rawGamePlayers]);
   const isAlive = useGameStore((s) => s.isAlive);
   const shouldShowIntro = useGameStore((s) => s.shouldShowIntro);
   const lastRoomCode = useGameStore((s) => s.lastRoomCode);

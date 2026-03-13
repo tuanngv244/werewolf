@@ -434,7 +434,11 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
               (s) => (s as unknown as AuthenticatedSocket).user?.id === witch.id,
             );
             if (witchSocket) {
-              witchSocket.emit('game:witch_target', { targetId: werewolfTarget });
+              witchSocket.emit('game:witch_target', {
+                targetId: werewolfTarget,
+                hasHealPotion: witch.witchState?.hasHealPotion ?? true,
+                hasKillPotion: witch.witchState?.hasKillPotion ?? true,
+              });
             }
           }
         }
@@ -612,6 +616,22 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     });
   }
 
+  // ─── Fun: Emoji (purely cosmetic) ────────────────────────
+  @SubscribeMessage('fun:emoji')
+  async handleEmoji(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() data: { emoji: string },
+  ) {
+    const roomCode = await this.roomsService.getPlayerRoom(client.user.id);
+    if (!roomCode) return;
+
+    // Broadcast to other players in the room (exclude sender — they already show it locally)
+    client.to(`room:${roomCode}`).emit('fun:emoji', {
+      playerId: client.user.id,
+      emoji: data.emoji,
+    });
+  }
+
   // ─── Voice Chat Signaling (WebRTC) ────────────────────────────
 
   @SubscribeMessage('voice:join')
@@ -745,7 +765,11 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
       (s) => (s as unknown as AuthenticatedSocket).user?.id === witch.id,
     );
     if (witchSocket) {
-      witchSocket.emit('game:witch_target', { targetId: werewolfTarget });
+      witchSocket.emit('game:witch_target', {
+        targetId: werewolfTarget,
+        hasHealPotion: witch.witchState?.hasHealPotion ?? true,
+        hasKillPotion: witch.witchState?.hasKillPotion ?? true,
+      });
     }
   }
 
@@ -855,6 +879,8 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
             if (witchSocket) {
               witchSocket.emit('game:witch_target', {
                 targetId: event.targetId,
+                hasHealPotion: witch.witchState?.hasHealPotion ?? true,
+                hasKillPotion: witch.witchState?.hasKillPotion ?? true,
               });
             }
           }

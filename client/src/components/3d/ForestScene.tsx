@@ -1,54 +1,113 @@
 'use client';
 
-import { useRef, useMemo } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
-import { Stars, Cloud, Float, OrbitControls } from '@react-three/drei';
+import { useRef, useMemo, useCallback, useEffect } from 'react';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { Stars, Cloud, Float, OrbitControls, useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 
-// ─── Procedural Tree ────────────────────────────────
-function Tree({ position, scale = 1 }: { position: [number, number, number]; scale?: number }) {
-  const trunkColor = useMemo(() => new THREE.Color('#4A3728'), []);
-  const leafColor = useMemo(() => new THREE.Color('#2D5A27'), []);
-  const darkLeafColor = useMemo(() => new THREE.Color('#1A3A15'), []);
+// Preload the map model
+const MAP_MODEL_PATH = '/models/map_model.glb';
+useGLTF.preload(MAP_MODEL_PATH);
 
+// ─── GLB Map Model ────────────────────────────────
+function MapModel({
+  onFireDetected,
+  onMapSceneReady,
+}: {
+  onFireDetected?: (pos: THREE.Vector3) => void;
+  onMapSceneReady?: (scene: THREE.Object3D) => void;
+}) {
+  const { scene } = useGLTF(MAP_MODEL_PATH);
+  const primitiveRef = useRef<THREE.Object3D>(null);
+
+  // Enable shadows on all meshes
+  useMemo(() => {
+    scene.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        const mesh = child as THREE.Mesh;
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+      }
+    });
+  }, [scene]);
+
+  // After primitive is mounted and world matrices are computed,
+  // detect fire/lamp positions in TRUE world space and notify parent
+  useEffect(() => {
+    if (primitiveRef.current) {
+      const timeout = setTimeout(() => {
+        if (!primitiveRef.current) return;
+
+        // Ensure world matrices are up to date (includes primitive position/scale)
+        primitiveRef.current.updateMatrixWorld(true);
+
+        // Detect campfire position in world space.
+        // Strategy: Find ground-level meshes with warm emissive materials (fire glow).
+        // Filter: Y < 1.5 (ground level, not fairy lights high up).
+        // Fall back to lamp posts if no ground-level emissive found.
+        if (onFireDetected) {
+          const campfirePositions: THREE.Vector3[] = [];
+          const lampPositions: THREE.Vector3[] = [];
+
+          primitiveRef.current.traverse((child) => {
+            if ((child as THREE.Mesh).isMesh) {
+              const mesh = child as THREE.Mesh;
+              const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+              for (const mat of materials) {
+                const stdMat = mat as THREE.MeshStandardMaterial;
+                if (stdMat.emissive && stdMat.emissiveIntensity > 0) {
+                  const e = stdMat.emissive;
+                  // Warm/fire-colored emissive (red/orange dominant)
+                  if (e.r > 0.3 && e.g < e.r) {
+                    const worldPos = new THREE.Vector3();
+                    child.getWorldPosition(worldPos);
+                    // Only ground-level emissive sources (campfire, not fairy lights)
+                    if (worldPos.y < 1.5) {
+                      campfirePositions.push(worldPos);
+                    }
+                    break;
+                  }
+                }
+              }
+            }
+            // Also collect lamp positions as fallback
+            const name = (child.name || '').toLowerCase();
+            if (name.includes('lamp') || name.includes('fire') || name.includes('flame')) {
+              const worldPos = new THREE.Vector3();
+              child.getWorldPosition(worldPos);
+              lampPositions.push(worldPos);
+            }
+          });
+
+          // Prefer campfire (ground-level emissive) over lamp posts
+          const positions = campfirePositions.length > 0 ? campfirePositions : lampPositions;
+
+          if (positions.length > 0) {
+            const avg = new THREE.Vector3();
+            positions.forEach((p) => avg.add(p));
+            avg.divideScalar(positions.length);
+            onFireDetected(avg);
+          }
+        }
+
+        // Notify parent that map scene is ready for raycasting
+        if (onMapSceneReady) {
+          onMapSceneReady(primitiveRef.current);
+        }
+      }, 150);
+      return () => clearTimeout(timeout);
+    }
+  }, [onFireDetected, onMapSceneReady]);
+
+  // The map model — scale=1, position adjusted so ground is near Y=0
   return (
-    <group position={position} scale={scale}>
-      {/* Trunk */}
-      <mesh position={[0, 0.8, 0]} castShadow>
-        <cylinderGeometry args={[0.08, 0.15, 1.6, 6]} />
-        <meshStandardMaterial color={trunkColor} roughness={0.9} />
-      </mesh>
-      {/* Leaves - bottom layer */}
-      <mesh position={[0, 2.0, 0]} castShadow>
-        <coneGeometry args={[0.9, 1.4, 7]} />
-        <meshStandardMaterial color={leafColor} roughness={0.8} flatShading />
-      </mesh>
-      {/* Leaves - middle layer */}
-      <mesh position={[0, 2.6, 0]} castShadow>
-        <coneGeometry args={[0.7, 1.2, 7]} />
-        <meshStandardMaterial color={darkLeafColor} roughness={0.8} flatShading />
-      </mesh>
-      {/* Leaves - top layer */}
-      <mesh position={[0, 3.1, 0]} castShadow>
-        <coneGeometry args={[0.45, 0.9, 6]} />
-        <meshStandardMaterial color={leafColor} roughness={0.8} flatShading />
-      </mesh>
-    </group>
-  );
-}
-
-// ─── Ground ────────────────────────────────
-function Ground({ isNight }: { isNight: boolean }) {
-  const groundColor = useMemo(
-    () => (isNight ? new THREE.Color('#1A2A15') : new THREE.Color('#5A8A3A')),
-    [isNight],
-  );
-
-  return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]} receiveShadow>
-      <circleGeometry args={[30, 32]} />
-      <meshStandardMaterial color={groundColor} roughness={1} />
-    </mesh>
+    <primitive
+      ref={primitiveRef}
+      object={scene}
+      scale={1.0}
+      position={[0, -1.0, 0]}
+      rotation={[0, 0, 0]}
+    />
   );
 }
 
@@ -58,9 +117,9 @@ function Fireflies({ count = 30 }: { count?: number }) {
   const positions = useMemo(() => {
     const pos = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) {
-      pos[i * 3] = (Math.random() - 0.5) * 16;
-      pos[i * 3 + 1] = Math.random() * 4 + 0.5;
-      pos[i * 3 + 2] = (Math.random() - 0.5) * 16;
+      pos[i * 3] = (Math.random() - 0.5) * 12;
+      pos[i * 3 + 1] = Math.random() * 3 + 0.5;
+      pos[i * 3 + 2] = (Math.random() - 0.5) * 12;
     }
     return pos;
   }, [count]);
@@ -99,74 +158,35 @@ function Moon() {
         <meshBasicMaterial color="#C4D7E0" />
       </mesh>
       {/* Moon glow */}
-      <pointLight position={[8, 12, -10]} color="#8899BB" intensity={2} distance={40} />
+      <pointLight position={[8, 12, -10]} color="#8899BB" intensity={4} distance={50} />
     </Float>
   );
 }
 
-// ─── Forest Ring (trees around the clearing) ────────────────────────
-function ForestRing() {
-  const trees = useMemo(() => {
-    const result: { pos: [number, number, number]; scale: number }[] = [];
-
-    // Inner ring
-    for (let i = 0; i < 16; i++) {
-      const angle = (i / 16) * Math.PI * 2 + Math.random() * 0.3;
-      const r = 6 + Math.random() * 2;
-      result.push({
-        pos: [Math.cos(angle) * r, 0, Math.sin(angle) * r],
-        scale: 0.7 + Math.random() * 0.6,
-      });
-    }
-
-    // Outer ring
-    for (let i = 0; i < 24; i++) {
-      const angle = (i / 24) * Math.PI * 2 + Math.random() * 0.2;
-      const r = 10 + Math.random() * 4;
-      result.push({
-        pos: [Math.cos(angle) * r, 0, Math.sin(angle) * r],
-        scale: 0.8 + Math.random() * 0.8,
-      });
-    }
-
-    // Scattered background
-    for (let i = 0; i < 20; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const r = 15 + Math.random() * 10;
-      result.push({
-        pos: [Math.cos(angle) * r, 0, Math.sin(angle) * r],
-        scale: 0.5 + Math.random() * 1.0,
-      });
-    }
-
-    return result;
-  }, []);
-
-  return (
-    <>
-      {trees.map((t, i) => (
-        <Tree key={i} position={t.pos} scale={t.scale} />
-      ))}
-    </>
-  );
-}
-
 // ─── Scene Content ────────────────────────────────
-function SceneContent({ isNight }: { isNight: boolean }) {
+function SceneContent({
+  isNight,
+  onFireDetected,
+  onMapSceneReady,
+}: {
+  isNight: boolean;
+  onFireDetected?: (pos: THREE.Vector3) => void;
+  onMapSceneReady?: (scene: THREE.Object3D) => void;
+}) {
   const ambientRef = useRef<THREE.AmbientLight>(null);
   const dirRef = useRef<THREE.DirectionalLight>(null);
 
   useFrame(() => {
     if (ambientRef.current) {
-      const target = isNight ? 0.15 : 0.6;
+      const target = isNight ? 0.35 : 0.6;
       ambientRef.current.intensity += (target - ambientRef.current.intensity) * 0.02;
-      const color = isNight ? new THREE.Color('#334466') : new THREE.Color('#FFF8E7');
+      const color = isNight ? new THREE.Color('#556688') : new THREE.Color('#FFF8E7');
       ambientRef.current.color.lerp(color, 0.02);
     }
     if (dirRef.current) {
-      const target = isNight ? 0.3 : 1.2;
+      const target = isNight ? 0.6 : 1.2;
       dirRef.current.intensity += (target - dirRef.current.intensity) * 0.02;
-      const color = isNight ? new THREE.Color('#6677AA') : new THREE.Color('#FFE4B5');
+      const color = isNight ? new THREE.Color('#7788BB') : new THREE.Color('#FFE4B5');
       dirRef.current.color.lerp(color, 0.02);
     }
   });
@@ -174,28 +194,25 @@ function SceneContent({ isNight }: { isNight: boolean }) {
   return (
     <>
       {/* Lights */}
-      <ambientLight ref={ambientRef} intensity={isNight ? 0.15 : 0.6} />
+      <ambientLight ref={ambientRef} intensity={isNight ? 0.35 : 0.6} />
       <directionalLight
         ref={dirRef}
-        position={isNight ? [5, 10, -5] : [10, 15, 5]}
-        intensity={isNight ? 0.3 : 1.2}
+        position={isNight ? [5, 15, -5] : [15, 20, 10]}
+        intensity={isNight ? 0.6 : 1.2}
         castShadow
-        shadow-mapSize={[1024, 1024]}
-        shadow-camera-far={50}
-        shadow-camera-left={-15}
-        shadow-camera-right={15}
-        shadow-camera-top={15}
-        shadow-camera-bottom={-15}
+        shadow-mapSize={[2048, 2048]}
+        shadow-camera-far={80}
+        shadow-camera-left={-25}
+        shadow-camera-right={25}
+        shadow-camera-top={25}
+        shadow-camera-bottom={-25}
       />
 
-      {/* Ground */}
-      <Ground isNight={isNight} />
-
-      {/* Forest */}
-      <ForestRing />
+      {/* GLB Map Model */}
+      <MapModel onFireDetected={onFireDetected} onMapSceneReady={onMapSceneReady} />
 
       {/* Fog */}
-      <fog attach="fog" args={[isNight ? '#0B1026' : '#C8DFF0', 8, 30]} />
+      <fog attach="fog" args={[isNight ? '#1A2240' : '#C8DFF0', 18, 55]} />
 
       {/* Night elements */}
       {isNight && (
@@ -217,36 +234,137 @@ function SceneContent({ isNight }: { isNight: boolean }) {
   );
 }
 
+// ─── Camera Controller (Panoramic vs Third-Person) ────────────────────
+type CameraMode = 'panoramic' | 'thirdPerson';
+
+function CameraController({
+  mode,
+  playerPosition,
+  playerRotation,
+}: {
+  mode: CameraMode;
+  playerPosition?: THREE.Vector3 | null;
+  playerRotation?: number;
+}) {
+  const { camera } = useThree();
+  const orbitRef = useRef<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const smoothPosRef = useRef(new THREE.Vector3(0, 2, 0));
+  const smoothLookRef = useRef(new THREE.Vector3(0, 1.5, 0));
+  const isFirstFrameRef = useRef(true);
+
+  // Third-person camera offset: behind and above the character
+  const cameraOffset = useRef(new THREE.Vector3(0, 3.5, 5.5));
+
+  useFrame((_, delta) => {
+    if (mode === 'thirdPerson' && playerPosition) {
+      // Disable orbit controls in third-person mode
+      if (orbitRef.current) {
+        orbitRef.current.enabled = false;
+      }
+
+      const rot = playerRotation ?? 0;
+
+      // Calculate desired camera position: behind the player
+      const offsetX = Math.sin(rot) * cameraOffset.current.z;
+      const offsetZ = Math.cos(rot) * cameraOffset.current.z;
+
+      const targetPos = new THREE.Vector3(
+        playerPosition.x + offsetX,
+        playerPosition.y + cameraOffset.current.y,
+        playerPosition.z + offsetZ,
+      );
+
+      const targetLook = new THREE.Vector3(
+        playerPosition.x,
+        playerPosition.y + 1.2,
+        playerPosition.z,
+      );
+
+      // Smooth interpolation (faster for first frame)
+      const lerpFactor = isFirstFrameRef.current ? 1.0 : Math.min(1.0, delta * 4.0);
+      isFirstFrameRef.current = false;
+
+      smoothPosRef.current.lerp(targetPos, lerpFactor);
+      smoothLookRef.current.lerp(targetLook, lerpFactor);
+
+      camera.position.copy(smoothPosRef.current);
+      camera.lookAt(smoothLookRef.current);
+    } else {
+      // Panoramic mode — enable orbit controls
+      if (orbitRef.current) {
+        orbitRef.current.enabled = true;
+      }
+      isFirstFrameRef.current = true;
+    }
+  });
+
+  return (
+    <OrbitControls
+      ref={orbitRef}
+      makeDefault
+      enablePan={false}
+      enableZoom={true}
+      enableRotate={true}
+      minDistance={6}
+      maxDistance={22}
+      maxPolarAngle={Math.PI / 2.2}
+      minPolarAngle={0.3}
+      enableDamping
+      dampingFactor={0.05}
+      target={[3, 1.0, 0]}
+    />
+  );
+}
+
 // ─── Main Export ────────────────────────────────
 export function ForestScene({
   isNight,
   children,
+  onFireDetected,
+  onMapSceneReady,
+  cameraMode,
+  localPlayerPosition,
+  localPlayerRotation,
 }: {
   isNight: boolean;
   children?: React.ReactNode;
+  onFireDetected?: (pos: THREE.Vector3) => void;
+  onMapSceneReady?: (scene: THREE.Object3D) => void;
+  cameraMode?: CameraMode;
+  localPlayerPosition?: THREE.Vector3 | null;
+  localPlayerRotation?: number;
 }) {
+  // Stable callback ref to avoid re-renders
+  const fireCallbackRef = useRef(onFireDetected);
+  fireCallbackRef.current = onFireDetected;
+  const stableFireCallback = useCallback((pos: THREE.Vector3) => {
+    fireCallbackRef.current?.(pos);
+  }, []);
+
+  const mapSceneCallbackRef = useRef(onMapSceneReady);
+  mapSceneCallbackRef.current = onMapSceneReady;
+  const stableMapSceneCallback = useCallback((scene: THREE.Object3D) => {
+    mapSceneCallbackRef.current?.(scene);
+  }, []);
+
   return (
     <div className="absolute inset-0 w-full h-full">
       <Canvas
         shadows
-        camera={{ position: [0, 6, 12], fov: 50, near: 0.1, far: 100 }}
+        camera={{ position: [3, 10, 16], fov: 50, near: 0.1, far: 200 }}
         gl={{ antialias: true, alpha: true }}
-        style={{ background: isNight ? '#0B1026' : '#87CEEB' }}
+        style={{ background: isNight ? '#1A2240' : '#87CEEB' }}
       >
-        <OrbitControls
-          makeDefault
-          enablePan={false}
-          enableZoom={true}
-          enableRotate={true}
-          minDistance={5}
-          maxDistance={20}
-          maxPolarAngle={Math.PI / 2.2}
-          minPolarAngle={0.3}
-          enableDamping
-          dampingFactor={0.05}
-          target={[0, 0.5, 0]}
+        <CameraController
+          mode={cameraMode ?? 'panoramic'}
+          playerPosition={localPlayerPosition}
+          playerRotation={localPlayerRotation}
         />
-        <SceneContent isNight={isNight} />
+        <SceneContent
+          isNight={isNight}
+          onFireDetected={stableFireCallback}
+          onMapSceneReady={stableMapSceneCallback}
+        />
         {children}
       </Canvas>
     </div>

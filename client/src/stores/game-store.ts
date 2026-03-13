@@ -77,6 +77,10 @@ interface GameState {
   // Witch target (who was attacked by werewolves)
   witchAttackedTarget: string | null;
 
+  // Witch potion availability (synced from server)
+  witchHasHealPotion: boolean;
+  witchHasKillPotion: boolean;
+
   // Werewolf team info
   werewolfTeam: WolfPlayer[];
 
@@ -115,6 +119,7 @@ interface GameState {
   setAuraSeerResult: (result: AuraSeerResultData) => void;
   setWerewolfSeerResult: (result: WerewolfSeerResultData) => void;
   setWitchAttackedTarget: (targetId: string | null) => void;
+  setWitchPotionState: (hasHeal: boolean, hasKill: boolean) => void;
   setWerewolfTeam: (wolves: WolfPlayer[]) => void;
   setIsAlive: (alive: boolean) => void;
   addDeathLogEntry: (entry: DeathLogEntry) => void;
@@ -141,6 +146,8 @@ const initialState = {
   auraSeerResult: null,
   werewolfSeerResult: null,
   witchAttackedTarget: null,
+  witchHasHealPotion: true,
+  witchHasKillPotion: true,
   werewolfTeam: [],
   headhunterTarget: null,
   roleList: [],
@@ -211,6 +218,9 @@ export const useGameStore = create<GameState>()((set) => ({
   setWerewolfSeerResult: (werewolfSeerResult) => set({ werewolfSeerResult }),
 
   setWitchAttackedTarget: (witchAttackedTarget) => set({ witchAttackedTarget }),
+
+  setWitchPotionState: (witchHasHealPotion, witchHasKillPotion) =>
+    set({ witchHasHealPotion, witchHasKillPotion }),
 
   setWerewolfTeam: (werewolfTeam) => set({ werewolfTeam }),
 
