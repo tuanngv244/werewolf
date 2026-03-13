@@ -1,12 +1,14 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { useRouter, usePathname } from '@/lib/navigation';
 import { Button } from '@/components/ui';
 import { Modal } from '@/components/ui';
 import { useAuthStore } from '@/stores/auth-store';
 import { getSocket, waitForConnection } from '@/lib/socket';
+import { Role, Team } from '@shared/types/game.types';
+import { ROLE_DEFINITIONS } from '@shared/constants/roles';
 
 export default function HomePage() {
   const t = useTranslations();
@@ -31,6 +33,43 @@ export default function HomePage() {
     color: string;
   } | null>(null);
   const [showHowToPlay, setShowHowToPlay] = useState(false);
+
+  // ─── Dynamic role lists from shared constants ────────────────────
+  const ROLE_EMOJI: Record<string, string> = {
+    villager: '🏘️', doctor: '💊', gunner: '🔫', seer: '🔮', aura_seer: '✨',
+    medium: '👻', witch: '🧙', avenger: '⚔️', beast_hunter: '🪤', cursed: '🌑',
+    bodyguard: '🛡️', priest: '✝️', vigilante: '🔫', spy: '🕵️', jailer: '🔒',
+    grave_robber: '⚰️', elder: '👴', baker: '🍞', drunk: '🍺',
+    mayor: '🎩', pacifist: '☮️', sleepwalker: '😴', hermit: '🏔️', apprentice_seer: '🌟',
+    werewolf: '🐺', werewolf_shaman: '🐺', alpha_werewolf: '🐺', werewolf_seer: '🐺',
+    nightmare_wolf: '🐺', shadow_wolf: '🐺', blood_moon_wolf: '🐺', howler_wolf: '🐺',
+    lone_wolf: '🐺', venom_wolf: '🐺', infector_wolf: '🐺', stalker_wolf: '🐺', cursed_wolf: '🐺',
+    headhunter: '🎯', fool: '🃏', bomber: '💣', serial_killer: '🔪', cupid: '💘',
+    arsonist: '🔥', survivor: '🦺', amnesiac: '❓', doppelganger: '🪞', jester: '🤡',
+    pirate: '🏴‍☠️', plague_doctor: '🩺', corruptor: '😈',
+  };
+
+  // Convert 'alpha_werewolf' to 'alphaWerewolf' for i18n key
+  const roleToKey = (role: string) => role.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+
+  // Team color mappings
+  const teamColors: Record<string, string> = {
+    village: 'bg-green-500/10 text-green-700 hover:bg-green-500/20',
+    werewolf: 'bg-red-500/10 text-red-700 hover:bg-red-500/20',
+    solo: 'bg-purple-500/10 text-purple-700 hover:bg-purple-500/20',
+  };
+
+  // Build dynamic role lists from ROLE_DEFINITIONS
+  const allRoles = useMemo(() => Object.values(Role), []);
+  const villageRoles = useMemo(() =>
+    allRoles.filter((r) => ROLE_DEFINITIONS[r].team === Team.VILLAGE),
+  [allRoles]);
+  const werewolfRoles = useMemo(() =>
+    allRoles.filter((r) => ROLE_DEFINITIONS[r].team === Team.WEREWOLF),
+  [allRoles]);
+  const soloRoles = useMemo(() =>
+    allRoles.filter((r) => ROLE_DEFINITIONS[r].team === Team.SOLO),
+  [allRoles]);
 
   const toggleLocale = () => {
     const nextLocale = locale === 'en' ? 'vi' : 'en';
@@ -327,77 +366,20 @@ export default function HomePage() {
             🏘️ {t('team.village')}
           </h3>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
-            {[
-              {
-                icon: '🏘️',
-                key: 'villager',
-                color: 'bg-green-500/10 text-green-700 hover:bg-green-500/20',
-              },
-              {
-                icon: '💊',
-                key: 'doctor',
-                color: 'bg-role-doctor/10 text-role-doctor hover:bg-role-doctor/20',
-              },
-              {
-                icon: '🔮',
-                key: 'seer',
-                color: 'bg-role-seer/10 text-role-seer hover:bg-role-seer/20',
-              },
-              {
-                icon: '✨',
-                key: 'auraSeer',
-                color: 'bg-cyan-500/10 text-cyan-600 hover:bg-cyan-500/20',
-              },
-              {
-                icon: '🧙',
-                key: 'witch',
-                color: 'bg-role-witch/10 text-role-witch hover:bg-role-witch/20',
-              },
-              {
-                icon: '🔫',
-                key: 'gunner',
-                color: 'bg-role-gunner/10 text-role-gunner hover:bg-role-gunner/20',
-              },
-              {
-                icon: '👻',
-                key: 'medium',
-                color: 'bg-purple-500/10 text-purple-600 hover:bg-purple-500/20',
-              },
-              {
-                icon: '⚔️',
-                key: 'avenger',
-                color: 'bg-red-500/10 text-red-600 hover:bg-red-500/20',
-              },
-              {
-                icon: '🪤',
-                key: 'beastHunter',
-                color: 'bg-amber-500/10 text-amber-700 hover:bg-amber-500/20',
-              },
-              {
-                icon: '🌑',
-                key: 'cursed',
-                color: 'bg-gray-500/10 text-gray-600 hover:bg-gray-500/20',
-              },
-              {
-                icon: '🛡️',
-                key: 'bodyguard',
-                color: 'bg-blue-500/10 text-blue-600 hover:bg-blue-500/20',
-              },
-              {
-                icon: '🌟',
-                key: 'apprenticeSeer',
-                color: 'bg-yellow-500/10 text-yellow-700 hover:bg-yellow-500/20',
-              },
-            ].map((role) => (
-              <button
-                key={role.key}
-                onClick={() => setSelectedRole({ ...role, team: 'village' })}
-                className={`rounded-xl p-4 text-center ${role.color} transition-all cursor-pointer hover:scale-105 hover:shadow-md`}
-              >
-                <span className="text-3xl block mb-2">{role.icon}</span>
-                <span className="font-heading font-semibold text-sm">{t(`roles.${role.key}`)}</span>
-              </button>
-            ))}
+            {villageRoles.map((role) => {
+              const key = roleToKey(role);
+              const icon = ROLE_EMOJI[role] || '❓';
+              return (
+                <button
+                  key={role}
+                  onClick={() => setSelectedRole({ icon, key, team: 'village', color: teamColors.village })}
+                  className={`rounded-xl p-4 text-center ${teamColors.village} transition-all cursor-pointer hover:scale-105 hover:shadow-md`}
+                >
+                  <span className="text-3xl block mb-2">{icon}</span>
+                  <span className="font-heading font-semibold text-sm">{t(`roles.${key}`)}</span>
+                </button>
+              );
+            })}
           </div>
 
           {/* Werewolf Team */}
@@ -405,37 +387,20 @@ export default function HomePage() {
             🐺 {t('team.werewolf')}
           </h3>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
-            {[
-              {
-                icon: '🐺',
-                key: 'werewolf',
-                color: 'bg-role-werewolf/10 text-role-werewolf hover:bg-role-werewolf/20',
-              },
-              {
-                icon: '🐺',
-                key: 'alphaWerewolf',
-                color: 'bg-red-600/10 text-red-700 hover:bg-red-600/20',
-              },
-              {
-                icon: '🐺',
-                key: 'werewolfShaman',
-                color: 'bg-violet-600/10 text-violet-700 hover:bg-violet-600/20',
-              },
-              {
-                icon: '🐺',
-                key: 'werewolfSeer',
-                color: 'bg-indigo-600/10 text-indigo-700 hover:bg-indigo-600/20',
-              },
-            ].map((role) => (
-              <button
-                key={role.key}
-                onClick={() => setSelectedRole({ ...role, team: 'werewolf' })}
-                className={`rounded-xl p-4 text-center ${role.color} transition-all cursor-pointer hover:scale-105 hover:shadow-md`}
-              >
-                <span className="text-3xl block mb-2">{role.icon}</span>
-                <span className="font-heading font-semibold text-sm">{t(`roles.${role.key}`)}</span>
-              </button>
-            ))}
+            {werewolfRoles.map((role) => {
+              const key = roleToKey(role);
+              const icon = ROLE_EMOJI[role] || '❓';
+              return (
+                <button
+                  key={role}
+                  onClick={() => setSelectedRole({ icon, key, team: 'werewolf', color: teamColors.werewolf })}
+                  className={`rounded-xl p-4 text-center ${teamColors.werewolf} transition-all cursor-pointer hover:scale-105 hover:shadow-md`}
+                >
+                  <span className="text-3xl block mb-2">{icon}</span>
+                  <span className="font-heading font-semibold text-sm">{t(`roles.${key}`)}</span>
+                </button>
+              );
+            })}
           </div>
 
           {/* Solo Team */}
@@ -443,47 +408,20 @@ export default function HomePage() {
             🎭 {t('team.solo')}
           </h3>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {[
-              {
-                icon: '🎯',
-                key: 'headhunter',
-                color: 'bg-role-headhunter/10 text-role-headhunter hover:bg-role-headhunter/20',
-              },
-              {
-                icon: '🃏',
-                key: 'fool',
-                color: 'bg-role-fool/10 text-role-fool hover:bg-role-fool/20',
-              },
-              {
-                icon: '💣',
-                key: 'bomber',
-                color: 'bg-role-bomber/10 text-role-bomber hover:bg-role-bomber/20',
-              },
-              {
-                icon: '🔪',
-                key: 'serialKiller',
-                color: 'bg-gray-800/10 text-gray-700 hover:bg-gray-800/20',
-              },
-              {
-                icon: '💘',
-                key: 'cupid',
-                color: 'bg-pink-400/10 text-pink-500 hover:bg-pink-400/20',
-              },
-              {
-                icon: '🔥',
-                key: 'arsonist',
-                color: 'bg-orange-500/10 text-orange-600 hover:bg-orange-500/20',
-              },
-            ].map((role) => (
-              <button
-                key={role.key}
-                onClick={() => setSelectedRole({ ...role, team: 'solo' })}
-                className={`rounded-xl p-4 text-center ${role.color} transition-all cursor-pointer hover:scale-105 hover:shadow-md`}
-              >
-                <span className="text-3xl block mb-2">{role.icon}</span>
-                <span className="font-heading font-semibold text-sm">{t(`roles.${role.key}`)}</span>
-              </button>
-            ))}
+            {soloRoles.map((role) => {
+              const key = roleToKey(role);
+              const icon = ROLE_EMOJI[role] || '❓';
+              return (
+                <button
+                  key={role}
+                  onClick={() => setSelectedRole({ icon, key, team: 'solo', color: teamColors.solo })}
+                  className={`rounded-xl p-4 text-center ${teamColors.solo} transition-all cursor-pointer hover:scale-105 hover:shadow-md`}
+                >
+                  <span className="text-3xl block mb-2">{icon}</span>
+                  <span className="font-heading font-semibold text-sm">{t(`roles.${key}`)}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
       </section>

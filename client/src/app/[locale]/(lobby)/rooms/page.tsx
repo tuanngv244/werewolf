@@ -148,11 +148,20 @@ export default function RoomsPage() {
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-heading font-bold text-day-text">{t('lobby.title')}</h1>
-            <p className="text-day-muted mt-1">
-              {t('lobby.welcome', { name: user?.username || t('common.guest') })}
-            </p>
+          <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              onClick={() => router.push('/')}
+              className="flex items-center gap-1 px-3"
+            >
+              ← {t('common.home')}
+            </Button>
+            <div>
+              <h1 className="text-3xl font-heading font-bold text-day-text">{t('lobby.title')}</h1>
+              <p className="text-day-muted mt-1">
+                {t('lobby.welcome', { name: user?.username || t('common.guest') })}
+              </p>
+            </div>
           </div>
           <Button onClick={() => router.push('/create-room')}>
             {t('lobby.createRoom')}

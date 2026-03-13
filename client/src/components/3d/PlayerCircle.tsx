@@ -177,52 +177,26 @@ const MODEL_FACING_OFFSET = 0;
 
 /**
  * Check if moving from (fromX, fromZ) to (toX, toZ) at height Y is blocked by a WALL object.
- * Casts a horizontal ray in the movement direction well above the ground surface
- * to avoid hitting the terrain mesh itself (which has multiple overlapping layers).
- * Only detects actual vertical obstacles like walls, fences, buildings.
+ *
+ * NOTE: Horizontal collision is currently disabled because the terrain model
+ * has a complex transform chain (Sketchfab wrapper with -90° X rotation) that
+ * causes world-space face normals to be unreliable. The terrain's "up-facing"
+ * normals get rotated to appear wall-like, blocking ALL movement.
+ * Movement boundaries are enforced by the maxRadius check and slope guard instead.
  */
 function canMoveTo(
-  mapScene: THREE.Object3D | null,
-  fromX: number,
-  fromZ: number,
-  toX: number,
-  toZ: number,
-  currentY: number,
-  characterHeight = 1.2,
+  _mapScene: THREE.Object3D | null,
+  _fromX: number,
+  _fromZ: number,
+  _toX: number,
+  _toZ: number,
+  _currentY: number,
+  _characterHeight = 1.2,
 ): boolean {
-  if (!mapScene) return true;
-
-  const dx = toX - fromX;
-  const dz = toZ - fromZ;
-  const dist = Math.sqrt(dx * dx + dz * dz);
-  if (dist < 0.001) return true;
-
-  _collisionDir.set(dx / dist, 0, dz / dist);
-
-  // Cast ray at character mid-body height (well above ground mesh layers)
-  _rayOrigin.set(fromX, currentY + characterHeight, fromZ);
-  _collisionRaycaster.set(_rayOrigin, _collisionDir);
-  _collisionRaycaster.far = dist + 0.15;
-
-  const intersects = _collisionRaycaster.intersectObject(mapScene, true);
-
-  // Filter out hits on mostly-horizontal surfaces (terrain/ground mesh layers)
-  // Only count hits on near-vertical surfaces (walls, fences, buildings)
-  for (const hit of intersects) {
-    if (hit.face) {
-      _faceNormal.copy(hit.face.normal);
-      if (hit.object.matrixWorld) {
-        _faceNormal.transformDirection(hit.object.matrixWorld);
-      }
-      // A vertical wall has a face normal that is mostly horizontal (normal.y ≈ 0)
-      // Terrain/ground has normal.y close to 1. Only block on wall-like surfaces.
-      if (Math.abs(_faceNormal.y) < 0.5) {
-        return false; // Hit a wall-like obstacle
-      }
-    }
-  }
-
-  return true; // Only ground/terrain hits, no walls blocking
+  // Disabled — terrain model normals in world space are unreliable due to
+  // the Sketchfab → GLTF root rotation chain. All movement appears blocked.
+  // Relying on maxRadius + slope guard for movement boundaries.
+  return true;
 }
 
 // ─── Emoji List for Picker ─────────────────────────
@@ -986,6 +960,7 @@ export function PlayerCircle({
   const radius = Math.max(2.5, uniquePlayers.length * 0.35);
   const { keys, justPressed } = useKeyboard();
   const localUserId = useAuthStore((s) => s.user?.id);
+  const localUsername = useAuthStore((s) => s.user?.username);
   const emptyBubbles = useMemo(() => new Map<string, { content: string; timestamp: number }>(), []);
   const activeBubbles = chatBubbles || emptyBubbles;
 
@@ -1182,7 +1157,7 @@ export function PlayerCircle({
         const x = fireCenterX + Math.cos(angle) * radius;
         const z = fireCenterZ + Math.sin(angle) * radius;
         const homeY = homeGroundYs ? homeGroundYs[i] : fireCenterY;
-        const isLocal = player.id === localUserId;
+        const isLocal = player.id === localUserId || (!!localUsername && player.username === localUsername);
 
         return (
           <GLBCharacterWithPosTracking
