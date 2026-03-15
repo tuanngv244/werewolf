@@ -4,6 +4,7 @@ import { useRef, useMemo, useCallback, useEffect } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Stars, Cloud, Float, OrbitControls, useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
+import { buildCollisionData, type CollisionData } from './collision-utils';
 
 // Preload the map model
 const MAP_MODEL_PATH = '/models/map_model.glb';
@@ -13,9 +14,11 @@ useGLTF.preload(MAP_MODEL_PATH);
 function MapModel({
   onFireDetected,
   onMapSceneReady,
+  onCollisionDataReady,
 }: {
   onFireDetected?: (pos: THREE.Vector3) => void;
   onMapSceneReady?: (scene: THREE.Object3D) => void;
+  onCollisionDataReady?: (data: CollisionData) => void;
 }) {
   const { scene } = useGLTF(MAP_MODEL_PATH);
   const primitiveRef = useRef<THREE.Object3D>(null);
@@ -94,10 +97,22 @@ function MapModel({
         if (onMapSceneReady) {
           onMapSceneReady(primitiveRef.current);
         }
+
+        // Build and emit collision data
+        if (onCollisionDataReady) {
+          const collisionData = buildCollisionData(primitiveRef.current);
+          console.log(
+            '[MapModel] Collision data built:',
+            collisionData.walkableMeshes.length, 'walkable,',
+            collisionData.blockingMeshes.length, 'blocking,',
+            collisionData.waterMeshes.length, 'water',
+          );
+          onCollisionDataReady(collisionData);
+        }
       }, 150);
       return () => clearTimeout(timeout);
     }
-  }, [onFireDetected, onMapSceneReady]);
+  }, [onFireDetected, onMapSceneReady, onCollisionDataReady]);
 
   // The map model — scale=1, position adjusted so ground is near Y=0
   return (
@@ -168,10 +183,12 @@ function SceneContent({
   isNight,
   onFireDetected,
   onMapSceneReady,
+  onCollisionDataReady,
 }: {
   isNight: boolean;
   onFireDetected?: (pos: THREE.Vector3) => void;
   onMapSceneReady?: (scene: THREE.Object3D) => void;
+  onCollisionDataReady?: (data: CollisionData) => void;
 }) {
   const ambientRef = useRef<THREE.AmbientLight>(null);
   const dirRef = useRef<THREE.DirectionalLight>(null);
@@ -209,7 +226,7 @@ function SceneContent({
       />
 
       {/* GLB Map Model */}
-      <MapModel onFireDetected={onFireDetected} onMapSceneReady={onMapSceneReady} />
+      <MapModel onFireDetected={onFireDetected} onMapSceneReady={onMapSceneReady} onCollisionDataReady={onCollisionDataReady} />
 
       {/* Fog */}
       <fog attach="fog" args={[isNight ? '#1A2240' : '#C8DFF0', 18, 55]} />
@@ -254,6 +271,8 @@ function CameraController({
 
   // Third-person camera offset: behind and above the character
   const cameraOffset = useRef(new THREE.Vector3(0, 3.5, 5.5));
+  // How far ahead of the character the camera looks
+  const lookAheadDist = 2.0;
 
   useFrame((_, delta) => {
     if (mode === 'thirdPerson' && playerPosition) {
@@ -265,6 +284,7 @@ function CameraController({
       const rot = playerRotation ?? 0;
 
       // Calculate desired camera position: behind the player
+      // sin(rot) and cos(rot) give the direction the character faces (+Z behind)
       const offsetX = Math.sin(rot) * cameraOffset.current.z;
       const offsetZ = Math.cos(rot) * cameraOffset.current.z;
 
@@ -274,10 +294,12 @@ function CameraController({
         playerPosition.z + offsetZ,
       );
 
+      // Look ahead of the character in the direction they're facing
+      // Character faces -sin(rot) on X and -cos(rot) on Z
       const targetLook = new THREE.Vector3(
-        playerPosition.x,
+        playerPosition.x - Math.sin(rot) * lookAheadDist,
         playerPosition.y + 1.2,
-        playerPosition.z,
+        playerPosition.z - Math.cos(rot) * lookAheadDist,
       );
 
       // Smooth interpolation (faster for first frame)
@@ -322,6 +344,7 @@ export function ForestScene({
   children,
   onFireDetected,
   onMapSceneReady,
+  onCollisionDataReady,
   cameraMode,
   localPlayerPosition,
   localPlayerRotation,
@@ -330,6 +353,7 @@ export function ForestScene({
   children?: React.ReactNode;
   onFireDetected?: (pos: THREE.Vector3) => void;
   onMapSceneReady?: (scene: THREE.Object3D) => void;
+  onCollisionDataReady?: (data: CollisionData) => void;
   cameraMode?: CameraMode;
   localPlayerPosition?: THREE.Vector3 | null;
   localPlayerRotation?: number;
@@ -345,6 +369,12 @@ export function ForestScene({
   mapSceneCallbackRef.current = onMapSceneReady;
   const stableMapSceneCallback = useCallback((scene: THREE.Object3D) => {
     mapSceneCallbackRef.current?.(scene);
+  }, []);
+
+  const collisionCallbackRef = useRef(onCollisionDataReady);
+  collisionCallbackRef.current = onCollisionDataReady;
+  const stableCollisionCallback = useCallback((data: CollisionData) => {
+    collisionCallbackRef.current?.(data);
   }, []);
 
   return (
@@ -364,6 +394,7 @@ export function ForestScene({
           isNight={isNight}
           onFireDetected={stableFireCallback}
           onMapSceneReady={stableMapSceneCallback}
+          onCollisionDataReady={stableCollisionCallback}
         />
         {children}
       </Canvas>

@@ -1,6 +1,6 @@
 // ============================================================
 // Game Types — Werewolf Game (Ma Soi)
-// 50 Roles: 23 Village + 13 Werewolf + 13 Solo + Villager filler
+// 57 Roles: 27 Village + 16 Werewolf + 13 Solo + Villager filler
 // ============================================================
 
 export enum Team {
@@ -35,6 +35,10 @@ export enum Role {
   SLEEPWALKER = 'sleepwalker',
   HERMIT = 'hermit',
   APPRENTICE_SEER = 'apprentice_seer',
+  MONK = 'monk',
+  LYCAN = 'lycan',
+  VAMPIRE = 'vampire',
+  CULT_LEADER = 'cult_leader',
   // Werewolf Team (13)
   WEREWOLF = 'werewolf',
   WEREWOLF_SHAMAN = 'werewolf_shaman',
@@ -49,6 +53,9 @@ export enum Role {
   INFECTOR_WOLF = 'infector_wolf',
   STALKER_WOLF = 'stalker_wolf',
   CURSED_WOLF = 'cursed_wolf',
+  SNOW_WOLF = 'snow_wolf',
+  VEGETARIAN_WOLF = 'vegetarian_wolf',
+  WOLF_FANG = 'wolf_fang',
   // Solo Team (13)
   HEADHUNTER = 'headhunter',
   FOOL = 'fool',
@@ -103,6 +110,8 @@ export enum DeathCause {
   PIRATE_DUEL = 'pirate_duel',
   PLAGUE = 'plague',
   CURSED_WOLF_REVENGE = 'cursed_wolf_revenge',
+  SNOW_WOLF_DRAG = 'snow_wolf_drag',
+  VAMPIRE_KILL = 'vampire_kill',
 }
 
 export enum WinCondition {
@@ -120,6 +129,8 @@ export enum WinCondition {
   PIRATE_WINS = 'pirate_wins',
   PLAGUE_DOCTOR_WINS = 'plague_doctor_wins',
   CORRUPTOR_WINS = 'corruptor_wins',
+  CULT_LEADER_WINS = 'cult_leader_wins',
+  VAMPIRE_WINS = 'vampire_wins',
 }
 
 export interface PlayerState {
@@ -176,6 +187,10 @@ export interface PlayerState {
   pirateState?: PirateState;
   plagueDoctorState?: PlagueDoctorState;
   corruptorState?: CorruptorState;
+  // ROLES.md new role states
+  snowWolfState?: SnowWolfState;
+  vampireState?: VampireState;
+  cultLeaderState?: CultLeaderState;
 }
 
 export interface GameTimers {
@@ -232,6 +247,12 @@ export interface NightActions {
   pirateTarget?: string;
   plagueDoctorTarget?: string;
   corruptorTarget?: string;
+  // New ROLES.md role actions
+  monkTarget?: string;
+  vampireTarget?: string;
+  vampireKill?: boolean; // true = kill all marked, false = just mark
+  cultLeaderTarget?: string;
+  snowWolfDragTarget?: string; // chosen on night 1
 }
 
 // Role-specific state
@@ -380,4 +401,18 @@ export interface PlagueDoctorState {
 
 export interface CorruptorState {
   corruptedPlayers: string[]; // players whose seer result is now Evil
+}
+
+// ─── ROLES.md New Role States ────────────────────
+
+export interface SnowWolfState {
+  dragTargetId?: string; // player who dies when snow wolf dies (chosen on night 1)
+}
+
+export interface VampireState {
+  markedPlayers: string[]; // players marked (bitten) for future kill
+}
+
+export interface CultLeaderState {
+  cultMembers: string[]; // recruited players
 }

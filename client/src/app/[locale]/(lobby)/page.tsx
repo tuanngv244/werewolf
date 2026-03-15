@@ -36,17 +36,63 @@ export default function HomePage() {
 
   // ─── Dynamic role lists from shared constants ────────────────────
   const ROLE_EMOJI: Record<string, string> = {
-    villager: '🏘️', doctor: '💊', gunner: '🔫', seer: '🔮', aura_seer: '✨',
-    medium: '👻', witch: '🧙', avenger: '⚔️', beast_hunter: '🪤', cursed: '🌑',
-    bodyguard: '🛡️', priest: '✝️', vigilante: '🔫', spy: '🕵️', jailer: '🔒',
-    grave_robber: '⚰️', elder: '👴', baker: '🍞', drunk: '🍺',
-    mayor: '🎩', pacifist: '☮️', sleepwalker: '😴', hermit: '🏔️', apprentice_seer: '🌟',
-    werewolf: '🐺', werewolf_shaman: '🐺', alpha_werewolf: '🐺', werewolf_seer: '🐺',
-    nightmare_wolf: '🐺', shadow_wolf: '🐺', blood_moon_wolf: '🐺', howler_wolf: '🐺',
-    lone_wolf: '🐺', venom_wolf: '🐺', infector_wolf: '🐺', stalker_wolf: '🐺', cursed_wolf: '🐺',
-    headhunter: '🎯', fool: '🃏', bomber: '💣', serial_killer: '🔪', cupid: '💘',
-    arsonist: '🔥', survivor: '🦺', amnesiac: '❓', doppelganger: '🪞', jester: '🤡',
-    pirate: '🏴‍☠️', plague_doctor: '🩺', corruptor: '😈',
+    villager: '🏘️',
+    doctor: '💊',
+    gunner: '🔫',
+    seer: '🔮',
+    aura_seer: '✨',
+    medium: '👻',
+    witch: '🧙',
+    avenger: '⚔️',
+    beast_hunter: '🪤',
+    cursed: '🌑',
+    bodyguard: '🛡️',
+    priest: '✝️',
+    vigilante: '🔫',
+    spy: '🕵️',
+    jailer: '🔒',
+    grave_robber: '⚰️',
+    elder: '👴',
+    baker: '🍞',
+    drunk: '🍺',
+    mayor: '🎩',
+    pacifist: '☮️',
+    sleepwalker: '😴',
+    hermit: '🏔️',
+    apprentice_seer: '🌟',
+    monk: '🙏',
+    lycan: '🌕',
+    vampire: '🧛',
+    cult_leader: '📿',
+    werewolf: '🐺',
+    werewolf_shaman: '🐺',
+    alpha_werewolf: '🐺',
+    werewolf_seer: '🐺',
+    nightmare_wolf: '🐺',
+    shadow_wolf: '🐺',
+    blood_moon_wolf: '🐺',
+    howler_wolf: '🐺',
+    lone_wolf: '🐺',
+    venom_wolf: '🐺',
+    infector_wolf: '🐺',
+    stalker_wolf: '🐺',
+    cursed_wolf: '🐺',
+    snow_wolf: '🐺',
+    vegetarian_wolf: '🐺',
+    wolf_fang: '🐺',
+    headhunter: '🎯',
+    fool: '🃏',
+    bomber: '💣',
+    serial_killer: '🔪',
+    cupid: '💘',
+    arsonist: '🔥',
+    survivor: '🦺',
+    amnesiac: '❓',
+    doppelganger: '🪞',
+    jester: '🤡',
+    pirate: '🏴‍☠️',
+    plague_doctor: '🩺',
+    corruptor: '😈',
   };
 
   // Convert 'alpha_werewolf' to 'alphaWerewolf' for i18n key
@@ -61,15 +107,19 @@ export default function HomePage() {
 
   // Build dynamic role lists from ROLE_DEFINITIONS
   const allRoles = useMemo(() => Object.values(Role), []);
-  const villageRoles = useMemo(() =>
-    allRoles.filter((r) => ROLE_DEFINITIONS[r].team === Team.VILLAGE),
-  [allRoles]);
-  const werewolfRoles = useMemo(() =>
-    allRoles.filter((r) => ROLE_DEFINITIONS[r].team === Team.WEREWOLF),
-  [allRoles]);
-  const soloRoles = useMemo(() =>
-    allRoles.filter((r) => ROLE_DEFINITIONS[r].team === Team.SOLO),
-  [allRoles]);
+
+  const villageRoles = useMemo(
+    () => allRoles.filter((r) => ROLE_DEFINITIONS[r].team === Team.VILLAGE),
+    [allRoles],
+  );
+  const werewolfRoles = useMemo(
+    () => allRoles.filter((r) => ROLE_DEFINITIONS[r].team === Team.WEREWOLF),
+    [allRoles],
+  );
+  const soloRoles = useMemo(
+    () => allRoles.filter((r) => ROLE_DEFINITIONS[r].team === Team.SOLO),
+    [allRoles],
+  );
 
   const toggleLocale = () => {
     const nextLocale = locale === 'en' ? 'vi' : 'en';
@@ -233,95 +283,111 @@ export default function HomePage() {
       {/* Language Toggle */}
       <button
         onClick={toggleLocale}
-        className="absolute top-4 right-4 z-10 px-3 py-2 rounded-xl border-2 border-day-border bg-white/80 backdrop-blur-sm hover:bg-white hover:border-primary transition-all text-sm font-semibold text-day-text shadow-sm"
+        className="absolute top-4 right-4 z-20 px-3 py-2 rounded-xl border-2 border-white/20 bg-black/30 backdrop-blur-sm hover:bg-black/50 hover:border-white/40 transition-all text-sm font-semibold text-white shadow-lg"
       >
         {locale === 'en' ? '🇻🇳 Tiếng Việt' : '🇬🇧 English'}
       </button>
 
-      {/* Hero Section */}
-      <section className="flex-1 flex flex-col items-center justify-center px-4 py-16 text-center">
-        <div className="animate-float mb-8">
-          <div className="w-32 h-32 rounded-full overflow-hidden mx-auto shadow-lg border-4 border-primary/30">
-            <img src="/wolf-face.jpg" alt="Werewolf" className="w-full h-full object-cover" />
+      {/* Hero Section with Background Image */}
+      <section className="relative flex flex-col items-center justify-center px-4 py-16 text-center min-h-[95vh] overflow-hidden">
+        {/* Background Image */}
+        <div className="absolute inset-0 z-0">
+          <img src="/background-hero.png" alt="" className="w-full h-full object-cover" />
+          {/* Dark gradient overlay for text readability */}
+          <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/30 to-black/70" />
+          {/* Bottom fade to page background */}
+          <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-[#fff] to-transparent" />
+        </div>
+
+        {/* Hero Content */}
+        <div className="relative z-10 flex flex-col items-center ">
+          <div className="animate-float mb-6">
+            <div className="w-28 h-28 rounded-full overflow-hidden mx-auto shadow-xl border-4 border-white/30 ring-4 ring-primary/30">
+              <img src="/wolf-face.jpg" alt="Werewolf" className="w-full h-full object-cover" />
+            </div>
           </div>
-        </div>
 
-        <h1 className="text-5xl md:text-7xl font-heading font-bold text-day-text mb-4">
-          {t('home.title')}
-        </h1>
+          <h1 className="text-5xl md:text-7xl font-heading font-bold text-white mb-4 drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)]">
+            {t('home.title')}
+          </h1>
 
-        <p className="text-lg md:text-xl text-day-muted max-w-xl mb-10">{t('home.subtitle')}</p>
+          <p className="text-lg md:text-xl text-white/80 max-w-xl mb-10 drop-shadow-[0_1px_4px_rgba(0,0,0,0.5)]">
+            {t('home.subtitle')}
+          </p>
 
-        {/* Name Input */}
-        <div className="w-full max-w-sm mb-6">
-          <label className="block text-sm font-semibold text-day-text mb-2 text-left">
-            {t('home.enterName')}
-          </label>
-          <input
-            type="text"
-            value={playerName}
-            onChange={(e) => {
-              setPlayerName(e.target.value);
-              if (nameError) setNameError('');
-            }}
-            placeholder={t('home.enterNamePlaceholder')}
-            maxLength={20}
-            className="w-full px-4 py-3 rounded-xl border-2 border-day-border bg-white text-day-text placeholder-day-muted focus:outline-none focus:border-primary transition-colors"
-          />
-          {nameError && <p className="text-sm text-red-500 mt-1 text-left">{nameError}</p>}
-        </div>
-
-        {/* Play / Login / Demo Buttons */}
-        <div className="flex flex-col sm:flex-row gap-4 mb-4">
-          <Button size="lg" onClick={handleQuickPlay} isLoading={isLoading}>
-            {t('home.quickPlay')}
-          </Button>
-          {/* <Button size="lg" variant="secondary" onClick={() => router.push('/login')}>
-            {t('home.login')}
-          </Button> */}
-        </div>
-
-        {/* Demo Room Button */}
-        <div className="mb-8">
-          <Button
-            size="lg"
-            variant="ghost"
-            onClick={handleDemoRoom}
-            isLoading={isDemoLoading}
-            className="border-2 border-dashed border-primary/40 hover:border-primary hover:bg-primary/5"
-          >
-            🤖 {t('home.demoRoom')}
-          </Button>
-          <p className="text-xs text-day-muted mt-2">{t('home.demoRoomDesc')}</p>
-        </div>
-
-        {/* Join by Room Code */}
-        <div className="w-full max-w-sm">
-          <p className="text-sm text-day-muted mb-2">{t('home.joinByCode')}</p>
-          <div className="flex gap-2">
+          {/* Name Input */}
+          <div className="w-full max-w-sm mb-6">
+            <label className="block text-sm font-semibold text-white/90 mb-2 text-left drop-shadow-sm">
+              {t('home.enterName')}
+            </label>
             <input
               type="text"
-              value={roomCode}
+              value={playerName}
               onChange={(e) => {
-                setRoomCode(e.target.value.toUpperCase());
-                setJoinError('');
+                setPlayerName(e.target.value);
+                if (nameError) setNameError('');
               }}
-              placeholder={t('home.joinByCodePlaceholder')}
-              maxLength={8}
-              className="flex-1 px-4 py-3 rounded-xl border-2 border-day-border bg-white text-day-text placeholder-day-muted focus:outline-none focus:border-primary transition-colors uppercase tracking-widest font-mono text-center"
-              onKeyDown={(e) => e.key === 'Enter' && handleJoinByCode()}
+              placeholder={t('home.enterNamePlaceholder')}
+              maxLength={20}
+              className="w-full px-4 py-3 rounded-xl border-2 border-white/20 bg-white/90 backdrop-blur-sm text-day-text placeholder-day-muted focus:outline-none focus:border-primary focus:bg-white transition-colors shadow-lg"
             />
-            <Button onClick={handleJoinByCode} disabled={!roomCode.trim()} isLoading={isJoining}>
-              {t('home.joinRoom')}
-            </Button>
+            {nameError && (
+              <p className="text-sm text-red-300 mt-1 text-left drop-shadow-sm">{nameError}</p>
+            )}
           </div>
-          {joinError && <p className="text-sm text-red-500 mt-2">{joinError}</p>}
-          <p className="text-xs text-day-muted mt-3">{t('home.orCreateRoom')}</p>
+
+          {/* Play / Login / Demo Buttons */}
+          <div className="flex flex-col sm:flex-row gap-4 mb-4">
+            <Button size="lg" onClick={handleQuickPlay} isLoading={isLoading}>
+              {t('home.quickPlay')}
+            </Button>
+            {/* <Button size="lg" variant="secondary" onClick={() => router.push('/login')}>
+              {t('home.login')}
+            </Button> */}
+          </div>
+
+          {/* Demo Room Button */}
+          <div className="mb-8">
+            <Button
+              size="lg"
+              variant="ghost"
+              onClick={handleDemoRoom}
+              isLoading={isDemoLoading}
+              className="border-2 border-dashed border-white/30 hover:border-white/60 hover:bg-white/10 text-white"
+            >
+              🤖 {t('home.demoRoom')}
+            </Button>
+            <p className="text-xs text-white/60 mt-2 drop-shadow-sm">{t('home.demoRoomDesc')}</p>
+          </div>
+
+          {/* Join by Room Code */}
+          <div className="w-full max-w-sm">
+            <p className="text-sm text-white/70 mb-2 drop-shadow-sm">{t('home.joinByCode')}</p>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={roomCode}
+                onChange={(e) => {
+                  setRoomCode(e.target.value.toUpperCase());
+                  setJoinError('');
+                }}
+                placeholder={t('home.joinByCodePlaceholder')}
+                maxLength={8}
+                className="flex-1 px-4 py-3 rounded-xl border-2 border-white/20 bg-white/90 backdrop-blur-sm text-day-text placeholder-day-muted focus:outline-none focus:border-primary focus:bg-white transition-colors uppercase tracking-widest font-mono text-center shadow-lg"
+                onKeyDown={(e) => e.key === 'Enter' && handleJoinByCode()}
+              />
+              <Button onClick={handleJoinByCode} disabled={!roomCode.trim()} isLoading={isJoining}>
+                {t('home.joinRoom')}
+              </Button>
+            </div>
+            {joinError && <p className="text-sm text-red-300 mt-2 drop-shadow-sm">{joinError}</p>}
+            <p className="text-xs text-white/50 mt-3 drop-shadow-sm">{t('home.orCreateRoom')}</p>
+          </div>
         </div>
       </section>
 
       {/* How to Play Section */}
-      <section className="px-4 py-16 bg-day-card">
+      <section className="px-4 py-16 bg-day-card rounded-t-[2rem]">
         <div className="max-w-4xl mx-auto">
           <h2 className="text-3xl font-heading font-bold text-center text-day-text mb-12">
             {t('home.howToPlay')}
@@ -372,7 +438,9 @@ export default function HomePage() {
               return (
                 <button
                   key={role}
-                  onClick={() => setSelectedRole({ icon, key, team: 'village', color: teamColors.village })}
+                  onClick={() =>
+                    setSelectedRole({ icon, key, team: 'village', color: teamColors.village })
+                  }
                   className={`rounded-xl p-4 text-center ${teamColors.village} transition-all cursor-pointer hover:scale-105 hover:shadow-md`}
                 >
                   <span className="text-3xl block mb-2">{icon}</span>
@@ -393,7 +461,9 @@ export default function HomePage() {
               return (
                 <button
                   key={role}
-                  onClick={() => setSelectedRole({ icon, key, team: 'werewolf', color: teamColors.werewolf })}
+                  onClick={() =>
+                    setSelectedRole({ icon, key, team: 'werewolf', color: teamColors.werewolf })
+                  }
                   className={`rounded-xl p-4 text-center ${teamColors.werewolf} transition-all cursor-pointer hover:scale-105 hover:shadow-md`}
                 >
                   <span className="text-3xl block mb-2">{icon}</span>
@@ -414,7 +484,9 @@ export default function HomePage() {
               return (
                 <button
                   key={role}
-                  onClick={() => setSelectedRole({ icon, key, team: 'solo', color: teamColors.solo })}
+                  onClick={() =>
+                    setSelectedRole({ icon, key, team: 'solo', color: teamColors.solo })
+                  }
                   className={`rounded-xl p-4 text-center ${teamColors.solo} transition-all cursor-pointer hover:scale-105 hover:shadow-md`}
                 >
                   <span className="text-3xl block mb-2">{icon}</span>

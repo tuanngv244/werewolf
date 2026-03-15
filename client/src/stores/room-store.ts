@@ -4,6 +4,7 @@ import type { RoomState, RoomPlayer, RoomSettings } from '@shared/types/room.typ
 interface RoomListItem {
   id: string;
   code: string;
+  hostId: string;
   hostName: string;
   playerCount: number;
   maxPlayers: number;
@@ -19,6 +20,12 @@ interface RoomStoreState {
   currentRoom: RoomState | null;
   isInRoom: boolean;
 
+  // Flag set when the room is deleted by the host (for non-host redirect)
+  roomDeletedByHost: boolean;
+
+  // Flag set when the player is kicked from the room by the host
+  roomKicked: boolean;
+
   // Actions
   setRooms: (rooms: RoomListItem[]) => void;
   setLoadingRooms: (loading: boolean) => void;
@@ -28,6 +35,8 @@ interface RoomStoreState {
   updateRoomSettings: (settings: Partial<RoomSettings>) => void;
   removeRoom: (code: string) => void;
   leaveRoom: () => void;
+  setRoomDeletedByHost: (deleted: boolean) => void;
+  setRoomKicked: (kicked: boolean) => void;
 }
 
 export const useRoomStore = create<RoomStoreState>()((set) => ({
@@ -35,6 +44,8 @@ export const useRoomStore = create<RoomStoreState>()((set) => ({
   isLoadingRooms: false,
   currentRoom: null,
   isInRoom: false,
+  roomDeletedByHost: false,
+  roomKicked: false,
 
   setRooms: (rooms) => set({ rooms }),
   setLoadingRooms: (isLoadingRooms) => set({ isLoadingRooms }),
@@ -80,4 +91,8 @@ export const useRoomStore = create<RoomStoreState>()((set) => ({
     })),
 
   leaveRoom: () => set({ currentRoom: null, isInRoom: false }),
+
+  setRoomDeletedByHost: (roomDeletedByHost) => set({ roomDeletedByHost }),
+
+  setRoomKicked: (roomKicked) => set({ roomKicked }),
 }));

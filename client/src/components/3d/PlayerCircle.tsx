@@ -9,6 +9,14 @@ import { useAuthStore } from '@/stores/auth-store';
 import { getSocket } from '@/lib/socket';
 import { playSound } from '@/lib/sounds';
 import { useUiStore } from '@/stores/ui-store';
+import {
+  type CollisionData,
+  getGroundYFromMeshes,
+  canMoveToWithMeshes,
+  trySlideMovement,
+  GROUND_Y_OFFSET,
+  MIN_GROUND_Y,
+} from './collision-utils';
 
 interface PlayerData {
   id: string;
@@ -100,104 +108,13 @@ function getCostume(role?: Role | string): RoleCostume {
   return ROLE_COSTUMES[role] || DEFAULT_COSTUME;
 }
 
-// ─── Ground & Collision Raycasting Utility ─────────────────────────────
-// Shared raycaster instances (reused to avoid GC pressure)
-const _groundRaycaster = new THREE.Raycaster();
-const _collisionRaycaster = new THREE.Raycaster();
-const _rayOrigin = new THREE.Vector3();
-const _rayDir = new THREE.Vector3(0, -1, 0);
-const _collisionDir = new THREE.Vector3();
-const _faceNormal = new THREE.Vector3();
-
-/**
- * Cast a ray downward from (x, highY, z) to find the walkable ground surface Y.
- *
- * Strategy: The raycaster returns hits sorted top-to-bottom (nearest first from Y=highY).
- * The map model has multiple stacked terrain layers (grass top, dirt paths, underside).
- * We want the TOPMOST walkable surface that is NOT a rooftop/canopy.
- *
- * - If referenceY is given, skip surfaces more than maxAboveRef above it (those are rooftops).
- * - Among remaining, pick the HIGHEST (first/topmost) walkable surface = actual ground top.
- * - If no referenceY, pick the first walkable surface (topmost).
- */
-function getGroundY(
-  mapScene: THREE.Object3D | null,
-  x: number,
-  z: number,
-  fallbackY: number,
-  highY = 30,
-  referenceY?: number,
-): number {
-  if (!mapScene) return fallbackY;
-
-  _rayOrigin.set(x, highY, z);
-  _groundRaycaster.set(_rayOrigin, _rayDir);
-  _groundRaycaster.far = highY + 20;
-
-  const intersects = _groundRaycaster.intersectObject(mapScene, true);
-  if (intersects.length === 0) return fallbackY;
-
-  // How far above the reference a surface can be before we consider it a rooftop
-  const maxAboveRef = 3.0;
-
-  // Intersects are sorted by distance from ray origin (Y=highY), so first hit = highest Y surface.
-  // Walk through top-to-bottom and return the FIRST walkable surface that isn't a rooftop.
-  for (const hit of intersects) {
-    // Check if this face is upward-facing (walkable)
-    let isWalkable = true;
-    if (hit.face) {
-      _faceNormal.copy(hit.face.normal);
-      if (hit.object.matrixWorld) {
-        _faceNormal.transformDirection(hit.object.matrixWorld);
-      }
-      isWalkable = _faceNormal.y > 0.3;
-    }
-
-    if (!isWalkable) continue;
-
-    // If we have a reference Y, skip surfaces that are way above it (rooftops/canopies)
-    if (referenceY !== undefined && hit.point.y > referenceY + maxAboveRef) {
-      continue;
-    }
-
-    // This is the topmost valid walkable ground surface
-    return hit.point.y;
-  }
-
-  // No valid walkable surface found — use fallback
-  return fallbackY;
-}
-
-// Small Y offset to prevent character feet from clipping into the ground mesh
-const GROUND_Y_OFFSET = 0.02;
+// ─── Ground & Collision ─────────────────────────────
+// Collision logic has been moved to collision-utils.ts.
+// Constants GROUND_Y_OFFSET, MIN_GROUND_Y are re-exported from there.
 
 // Model facing offset: Adjust if the GLB model's front doesn't align with Three.js -Z convention.
 // Set to 0 if model faces -Z (Blender default), or Math.PI if model faces +Z.
 const MODEL_FACING_OFFSET = 0;
-
-/**
- * Check if moving from (fromX, fromZ) to (toX, toZ) at height Y is blocked by a WALL object.
- *
- * NOTE: Horizontal collision is currently disabled because the terrain model
- * has a complex transform chain (Sketchfab wrapper with -90° X rotation) that
- * causes world-space face normals to be unreliable. The terrain's "up-facing"
- * normals get rotated to appear wall-like, blocking ALL movement.
- * Movement boundaries are enforced by the maxRadius check and slope guard instead.
- */
-function canMoveTo(
-  _mapScene: THREE.Object3D | null,
-  _fromX: number,
-  _fromZ: number,
-  _toX: number,
-  _toZ: number,
-  _currentY: number,
-  _characterHeight = 1.2,
-): boolean {
-  // Disabled — terrain model normals in world space are unreliable due to
-  // the Sketchfab → GLTF root rotation chain. All movement appears blocked.
-  // Relying on maxRadius + slope guard for movement boundaries.
-  return true;
-}
 
 // ─── Emoji List for Picker ─────────────────────────
 const EMOJI_LIST = ['😀', '😂', '😍', '😎', '🤔', '😱', '🤣', '😡', '👍', '👏', '🔥', '💀', '🐺', '😈', '🙏', '❤️'];
@@ -245,7 +162,7 @@ function useWander(
   homePos: [number, number, number],
   isAlive: boolean,
   seed: number,
-  mapScene: THREE.Object3D | null,
+  collisionData: CollisionData | null,
 ) {
   const posRef = useRef(new THREE.Vector3(homePos[0], homePos[1], homePos[2]));
   const targetRef = useRef(new THREE.Vector3(homePos[0], homePos[1], homePos[2]));
@@ -295,24 +212,22 @@ function useWander(
       const newX = current.x + (dx / dist) * step;
       const newZ = current.z + (dz / dist) * step;
 
-      // Check horizontal collision before moving
-      const pathClear = canMoveTo(mapScene, current.x, current.z, newX, newZ, current.y);
+      // Check collision before moving
+      let pathClear = true;
+      if (collisionData && collisionData.walkableMeshes.length > 0) {
+        pathClear = canMoveToWithMeshes(collisionData, current.x, current.z, newX, newZ, current.y);
+      }
 
       if (pathClear) {
         // Raycast to find ground at the new position, using current Y as reference
-        if (mapScene) {
-          const groundY = getGroundY(mapScene, newX, newZ, current.y, 30, current.y);
-          // Allow moderate slopes (max 2.0 per step), block extreme cliffs
-          const yDiff = Math.abs(groundY - current.y);
-          if (yDiff < 2.0) {
-            current.y = groundY + GROUND_Y_OFFSET;
-            current.x = newX;
-            current.z = newZ;
-          } else {
-            // Blocked by steep terrain — pick a new target
-            timerRef.current = 0;
-            isMovingRef.current = false;
+        if (collisionData && collisionData.walkableMeshes.length > 0) {
+          const groundY = getGroundYFromMeshes(collisionData.walkableMeshes, newX, newZ, current.y, current.y);
+          if (groundY > MIN_GROUND_Y) {
+            // Smooth Y interpolation instead of snapping
+            current.y += (groundY + GROUND_Y_OFFSET - current.y) * 0.3;
           }
+          current.x = newX;
+          current.z = newZ;
         } else {
           current.x = newX;
           current.z = newZ;
@@ -342,14 +257,13 @@ function usePlayerControl(
   homePos: [number, number, number],
   isAlive: boolean,
   keys: React.RefObject<Set<string>>,
-  mapScene: THREE.Object3D | null,
+  collisionData: CollisionData | null,
 ) {
   const posRef = useRef(new THREE.Vector3(homePos[0], homePos[1], homePos[2]));
   const rotRef = useRef(0);
   const isMovingRef = useRef(false);
   const walkPhaseRef = useRef(0); // Walk animation phase
   const speed = 2.5;
-  const maxRadius = 12; // Allow free roaming across the map
 
   // Set initial ground Y
   const initialGroundSet = useRef(false);
@@ -386,30 +300,43 @@ function usePlayerControl(
 
       const newX = posRef.current.x + moveX * speed * delta;
       const newZ = posRef.current.z + moveZ * speed * delta;
-      const distFromHome = Math.sqrt((newX - homePos[0]) ** 2 + (newZ - homePos[2]) ** 2);
 
-      if (distFromHome < maxRadius) {
-        // Check horizontal collision before moving
-        const pathClear = canMoveTo(mapScene, posRef.current.x, posRef.current.z, newX, newZ, posRef.current.y);
+      if (collisionData && collisionData.walkableMeshes.length > 0) {
+        // Use wall sliding: try full movement, then axis-separated
+        const slide = trySlideMovement(
+          collisionData,
+          posRef.current.x,
+          posRef.current.z,
+          newX,
+          newZ,
+          posRef.current.y,
+        );
 
-        if (pathClear) {
-          // Raycast to find ground at the new position
-          if (mapScene) {
-            const groundY = getGroundY(mapScene, newX, newZ, posRef.current.y, 30, posRef.current.y);
-            // Allow moderate slopes (max 2.0 per step), block extreme cliffs
-            const yDiff = Math.abs(groundY - posRef.current.y);
-            if (yDiff < 2.0) {
-              posRef.current.x = newX;
-              posRef.current.z = newZ;
-              posRef.current.y = groundY + GROUND_Y_OFFSET;
-            }
-            // If too steep, don't move (acts as collision with steep terrain)
-          } else {
-            posRef.current.x = newX;
-            posRef.current.z = newZ;
+        if (slide.allowed) {
+          // Find ground at the valid position
+          const groundY = getGroundYFromMeshes(
+            collisionData.walkableMeshes,
+            slide.x,
+            slide.z,
+            posRef.current.y,
+            posRef.current.y,
+          );
+          if (groundY > MIN_GROUND_Y) {
+            // Smooth Y interpolation instead of snapping
+            posRef.current.y += (groundY + GROUND_Y_OFFSET - posRef.current.y) * 0.3;
           }
+          posRef.current.x = slide.x;
+          posRef.current.z = slide.z;
         }
-        // If collision detected, don't move (blocked by object)
+        // If not allowed, don't move (blocked by object on all axes)
+      } else {
+        // No collision data yet — allow free movement with basic radius check
+        const maxRadius = 12;
+        const distFromHome = Math.sqrt((newX - homePos[0]) ** 2 + (newZ - homePos[2]) ** 2);
+        if (distFromHome < maxRadius) {
+          posRef.current.x = newX;
+          posRef.current.z = newZ;
+        }
       }
 
       // Face in the direction of movement
@@ -570,7 +497,7 @@ function GLBCharacter({
   emojiPickerOpen,
   emojiSelectedIndex,
   floatingEmoji,
-  mapScene,
+  collisionData,
 }: {
   player: PlayerData;
   homePosition: [number, number, number];
@@ -586,7 +513,7 @@ function GLBCharacter({
   emojiPickerOpen?: boolean;
   emojiSelectedIndex?: number;
   floatingEmoji?: { emoji: string; timestamp: number };
-  mapScene?: THREE.Object3D | null;
+  collisionData?: CollisionData | null;
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const costume = useMemo(() => getCostume(player.role), [player.role]);
@@ -635,8 +562,8 @@ function GLBCharacter({
   }, [clonedScene, player.isAlive]);
 
   // Movement — local player uses keyboard, bots/others use AI wander
-  const wanderState = useWander(homePosition, !isLocalPlayer && player.isAlive, index, mapScene ?? null);
-  const playerState = usePlayerControl(homePosition, isLocalPlayer && player.isAlive, keys, mapScene ?? null);
+  const wanderState = useWander(homePosition, !isLocalPlayer && player.isAlive, index, collisionData ?? null);
+  const playerState = usePlayerControl(homePosition, isLocalPlayer && player.isAlive, keys, collisionData ?? null);
 
   const posRef = isLocalPlayer ? playerState.posRef : wanderState.posRef;
   const rotRef = isLocalPlayer ? playerState.rotRef : wanderState.rotRef;
@@ -652,6 +579,9 @@ function GLBCharacter({
   const jumpHeightRef = useRef(0);
   const isJumpingRef = useRef(false);
   const jumpCooldownRef = useRef(0);
+
+  // Ground clamp frame counter (throttle to every 3rd frame)
+  const groundClampFrameRef = useRef(0);
 
   // Trigger jump from external prop
   useEffect(() => {
@@ -702,6 +632,21 @@ function GLBCharacter({
       groupRef.current.position.z = posRef.current.z;
       // Apply model facing offset so the model's visual front faces the movement direction
       groupRef.current.rotation.y = rotRef.current + MODEL_FACING_OFFSET;
+
+      // ── Ground clamp: ensure character never sinks below the map ──
+      // Re-check ground at current position periodically to prevent sinking
+      // Throttle to every 3rd frame for performance
+      if (collisionData && collisionData.walkableMeshes.length > 0 && !isJumpingRef.current) {
+        groundClampFrameRef.current++;
+        if (groundClampFrameRef.current >= 3) {
+          groundClampFrameRef.current = 0;
+          const groundY = getGroundYFromMeshes(collisionData.walkableMeshes, posRef.current.x, posRef.current.z, posRef.current.y, posRef.current.y);
+          if (groundY > MIN_GROUND_Y && posRef.current.y < groundY + GROUND_Y_OFFSET - 0.1) {
+            // Character is below ground — smooth lerp back up
+            posRef.current.y += (groundY + GROUND_Y_OFFSET - posRef.current.y) * 0.3;
+          }
+        }
+      }
 
       const isMoving = isMovingRef.current;
       const walkPhase = walkPhaseRef.current;
@@ -934,6 +879,7 @@ export function PlayerCircle({
   chatBubbles,
   firePosition,
   mapScene,
+  collisionData,
   onLocalPlayerPosition,
   onCameraToggle,
 }: {
@@ -944,6 +890,7 @@ export function PlayerCircle({
   chatBubbles?: Map<string, { content: string; timestamp: number }>;
   firePosition?: [number, number, number];
   mapScene?: THREE.Object3D | null;
+  collisionData?: CollisionData | null;
   onLocalPlayerPosition?: (pos: THREE.Vector3, rot: number) => void;
   onCameraToggle?: () => void;
 }) {
@@ -1178,7 +1125,7 @@ export function PlayerCircle({
             emojiPickerOpen={isLocal ? emojiPickerOpen : false}
             emojiSelectedIndex={isLocal ? emojiSelectedIndex : 0}
             floatingEmoji={floatingEmojis.get(player.id)}
-            mapScene={mapScene}
+            collisionData={collisionData}
             onLocalPlayerPosition={isLocal ? onLocalPlayerPosition : undefined}
           />
         );
@@ -1205,45 +1152,46 @@ function GLBCharacterWithPosTracking(props: {
   emojiPickerOpen?: boolean;
   emojiSelectedIndex?: number;
   floatingEmoji?: { emoji: string; timestamp: number };
-  mapScene?: THREE.Object3D | null;
+  collisionData?: CollisionData | null;
   onLocalPlayerPosition?: (pos: THREE.Vector3, rot: number) => void;
 }) {
-  const { positionsRef, facingRef, mapScene, onLocalPlayerPosition, ...charProps } = props;
+  const { positionsRef, facingRef, collisionData, onLocalPlayerPosition, ...charProps } = props;
   const trackRef = useRef<THREE.Group>(null);
+  const _worldPos = useMemo(() => new THREE.Vector3(), []);
 
   useFrame(() => {
-    if (trackRef.current && positionsRef.current) {
-      positionsRef.current.set(
-        props.player.id,
-        trackRef.current.getWorldPosition(new THREE.Vector3()),
-      );
-      // Track facing direction for local player
-      if (facingRef && trackRef.current) {
-        const dir = new THREE.Vector3(0, 0, -1);
-        dir.applyQuaternion(trackRef.current.quaternion);
-        // Get rotation from child group (the actual character group)
-        const child = trackRef.current.children[0];
-        if (child) {
-          dir.set(0, 0, -1).applyQuaternion(child.quaternion);
-        }
-        facingRef.current.copy(dir);
-      }
-      // Report local player position for third-person camera
-      // Use the logical facing rotation (without model offset) for correct camera placement
-      if (onLocalPlayerPosition && props.isLocalPlayer) {
-        const worldPos = trackRef.current.getWorldPosition(new THREE.Vector3());
-        // The child group's rotation.y includes MODEL_FACING_OFFSET, subtract it for logical rotation
-        const child = trackRef.current.children[0];
-        const visualRot = child ? child.rotation.y : 0;
-        const logicalRot = visualRot - MODEL_FACING_OFFSET;
-        onLocalPlayerPosition(worldPos, logicalRot);
-      }
+    if (!trackRef.current) return;
+
+    // The actual character group is the first child (GLBCharacter's groupRef)
+    const charGroup = trackRef.current.children[0] as THREE.Object3D | undefined;
+    if (!charGroup) return;
+
+    // Get the character's actual world position (from the inner animated group)
+    charGroup.getWorldPosition(_worldPos);
+
+    if (positionsRef.current) {
+      positionsRef.current.set(props.player.id, _worldPos.clone());
+    }
+
+    // Track facing direction for local player
+    if (facingRef) {
+      const dir = new THREE.Vector3(0, 0, -1);
+      dir.applyQuaternion(charGroup.quaternion);
+      facingRef.current.copy(dir);
+    }
+
+    // Report local player position for third-person camera
+    if (onLocalPlayerPosition && props.isLocalPlayer) {
+      // charGroup.rotation.y = rotRef + MODEL_FACING_OFFSET
+      // For camera placement we want the logical facing rotation (without model offset)
+      const logicalRot = charGroup.rotation.y - MODEL_FACING_OFFSET;
+      onLocalPlayerPosition(_worldPos.clone(), logicalRot);
     }
   });
 
   return (
     <group ref={trackRef}>
-      <GLBCharacter {...charProps} mapScene={mapScene} />
+      <GLBCharacter {...charProps} collisionData={collisionData} />
     </group>
   );
 }

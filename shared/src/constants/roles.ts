@@ -35,7 +35,7 @@ export const ROLE_DEFINITIONS: Record<Role, RoleDefinition> = {
   [Role.GUNNER]: {
     role: Role.GUNNER,
     team: Team.VILLAGE,
-    seerResult: SeerResult.UNKNOWN,
+    seerResult: SeerResult.GOOD,
     nameKey: 'role.gunner.name',
     descKey: 'role.gunner.desc',
     hasNightAction: false,
@@ -68,7 +68,7 @@ export const ROLE_DEFINITIONS: Record<Role, RoleDefinition> = {
   [Role.MEDIUM]: {
     role: Role.MEDIUM,
     team: Team.VILLAGE,
-    seerResult: SeerResult.UNKNOWN,
+    seerResult: SeerResult.GOOD,
     nameKey: 'role.medium.name',
     descKey: 'role.medium.desc',
     hasNightAction: true,
@@ -79,7 +79,7 @@ export const ROLE_DEFINITIONS: Record<Role, RoleDefinition> = {
   [Role.WITCH]: {
     role: Role.WITCH,
     team: Team.VILLAGE,
-    seerResult: SeerResult.UNKNOWN,
+    seerResult: SeerResult.GOOD,
     nameKey: 'role.witch.name',
     descKey: 'role.witch.desc',
     hasNightAction: true,
@@ -101,7 +101,7 @@ export const ROLE_DEFINITIONS: Record<Role, RoleDefinition> = {
   [Role.BEAST_HUNTER]: {
     role: Role.BEAST_HUNTER,
     team: Team.VILLAGE,
-    seerResult: SeerResult.UNKNOWN,
+    seerResult: SeerResult.GOOD,
     nameKey: 'role.beastHunter.name',
     descKey: 'role.beastHunter.desc',
     hasNightAction: true,
@@ -178,7 +178,7 @@ export const ROLE_DEFINITIONS: Record<Role, RoleDefinition> = {
   [Role.GRAVE_ROBBER]: {
     role: Role.GRAVE_ROBBER,
     team: Team.VILLAGE,
-    seerResult: SeerResult.UNKNOWN,
+    seerResult: SeerResult.GOOD,
     nameKey: 'role.graveRobber.name',
     descKey: 'role.graveRobber.desc',
     hasNightAction: true,
@@ -215,7 +215,7 @@ export const ROLE_DEFINITIONS: Record<Role, RoleDefinition> = {
   [Role.DRUNK]: {
     role: Role.DRUNK,
     team: Team.VILLAGE,
-    seerResult: SeerResult.UNKNOWN,
+    seerResult: SeerResult.GOOD,
     nameKey: 'role.drunk.name',
     descKey: 'role.drunk.desc',
     hasNightAction: false,
@@ -248,7 +248,7 @@ export const ROLE_DEFINITIONS: Record<Role, RoleDefinition> = {
   [Role.SLEEPWALKER]: {
     role: Role.SLEEPWALKER,
     team: Team.VILLAGE,
-    seerResult: SeerResult.UNKNOWN,
+    seerResult: SeerResult.GOOD,
     nameKey: 'role.sleepwalker.name',
     descKey: 'role.sleepwalker.desc',
     hasNightAction: false,
@@ -259,7 +259,7 @@ export const ROLE_DEFINITIONS: Record<Role, RoleDefinition> = {
   [Role.HERMIT]: {
     role: Role.HERMIT,
     team: Team.VILLAGE,
-    seerResult: SeerResult.UNKNOWN,
+    seerResult: SeerResult.GOOD,
     nameKey: 'role.hermit.name',
     descKey: 'role.hermit.desc',
     hasNightAction: false,
@@ -277,6 +277,50 @@ export const ROLE_DEFINITIONS: Record<Role, RoleDefinition> = {
     hasDayAction: false,
     isUnique: true,
     priority: 25, // right after Seer
+  },
+  [Role.MONK]: {
+    role: Role.MONK,
+    team: Team.VILLAGE,
+    seerResult: SeerResult.GOOD,
+    nameKey: 'role.monk.name',
+    descKey: 'role.monk.desc',
+    hasNightAction: true,
+    hasDayAction: false,
+    isUnique: true,
+    priority: 108, // just before doctor
+  },
+  [Role.LYCAN]: {
+    role: Role.LYCAN,
+    team: Team.VILLAGE,
+    seerResult: SeerResult.EVIL, // appears Evil to Seer despite being Village
+    nameKey: 'role.lycan.name',
+    descKey: 'role.lycan.desc',
+    hasNightAction: false,
+    hasDayAction: false,
+    isUnique: true,
+    priority: 999,
+  },
+  [Role.VAMPIRE]: {
+    role: Role.VAMPIRE,
+    team: Team.SOLO,
+    seerResult: SeerResult.UNKNOWN,
+    nameKey: 'role.vampire.name',
+    descKey: 'role.vampire.desc',
+    hasNightAction: true,
+    hasDayAction: false,
+    isUnique: true,
+    priority: 85, // after wolf kill resolution
+  },
+  [Role.CULT_LEADER]: {
+    role: Role.CULT_LEADER,
+    team: Team.VILLAGE,
+    seerResult: SeerResult.GOOD,
+    nameKey: 'role.cultLeader.name',
+    descKey: 'role.cultLeader.desc',
+    hasNightAction: true,
+    hasDayAction: false,
+    isUnique: true,
+    priority: 140, // late: recruits after combat
   },
 
   // ═══════════════════════════════════════════════════
@@ -307,7 +351,7 @@ export const ROLE_DEFINITIONS: Record<Role, RoleDefinition> = {
   [Role.ALPHA_WEREWOLF]: {
     role: Role.ALPHA_WEREWOLF,
     team: Team.WEREWOLF,
-    seerResult: SeerResult.UNKNOWN,
+    seerResult: SeerResult.EVIL,
     nameKey: 'role.alphaWerewolf.name',
     descKey: 'role.alphaWerewolf.desc',
     hasNightAction: true,
@@ -340,7 +384,7 @@ export const ROLE_DEFINITIONS: Record<Role, RoleDefinition> = {
   [Role.SHADOW_WOLF]: {
     role: Role.SHADOW_WOLF,
     team: Team.WEREWOLF,
-    seerResult: SeerResult.UNKNOWN, // appears unknown to seers
+    seerResult: SeerResult.EVIL, // werewolf team = evil
     nameKey: 'role.shadowWolf.name',
     descKey: 'role.shadowWolf.desc',
     hasNightAction: true,
@@ -417,9 +461,42 @@ export const ROLE_DEFINITIONS: Record<Role, RoleDefinition> = {
   [Role.CURSED_WOLF]: {
     role: Role.CURSED_WOLF,
     team: Team.WEREWOLF,
-    seerResult: SeerResult.UNKNOWN, // sneaky, appears unknown to seer
+    seerResult: SeerResult.EVIL, // werewolf team = evil
     nameKey: 'role.cursedWolf.name',
     descKey: 'role.cursedWolf.desc',
+    hasNightAction: true,
+    hasDayAction: false,
+    isUnique: true,
+    priority: 70,
+  },
+  [Role.SNOW_WOLF]: {
+    role: Role.SNOW_WOLF,
+    team: Team.WEREWOLF,
+    seerResult: SeerResult.EVIL,
+    nameKey: 'role.snowWolf.name',
+    descKey: 'role.snowWolf.desc',
+    hasNightAction: true,
+    hasDayAction: false,
+    isUnique: true,
+    priority: 70,
+  },
+  [Role.VEGETARIAN_WOLF]: {
+    role: Role.VEGETARIAN_WOLF,
+    team: Team.WEREWOLF,
+    seerResult: SeerResult.EVIL,
+    nameKey: 'role.vegetarianWolf.name',
+    descKey: 'role.vegetarianWolf.desc',
+    hasNightAction: true,
+    hasDayAction: false,
+    isUnique: true,
+    priority: 70,
+  },
+  [Role.WOLF_FANG]: {
+    role: Role.WOLF_FANG,
+    team: Team.WEREWOLF,
+    seerResult: SeerResult.EVIL,
+    nameKey: 'role.wolfFang.name',
+    descKey: 'role.wolfFang.desc',
     hasNightAction: true,
     hasDayAction: false,
     isUnique: true,
@@ -476,7 +553,7 @@ export const ROLE_DEFINITIONS: Record<Role, RoleDefinition> = {
   [Role.CUPID]: {
     role: Role.CUPID,
     team: Team.SOLO,
-    seerResult: SeerResult.GOOD,
+    seerResult: SeerResult.UNKNOWN, // solo team = unknown
     nameKey: 'role.cupid.name',
     descKey: 'role.cupid.desc',
     hasNightAction: true, // only on first night

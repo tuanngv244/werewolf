@@ -2,7 +2,7 @@
 
 import { useTranslations } from 'next-intl';
 import { useGameStore } from '@/stores/game-store';
-import type { DeathLogEntry } from '@/stores/game-store';
+import type { DeathLogEntry, GameLogEntry } from '@/stores/game-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { useChatStore } from '@/stores/chat-store';
 import { useCountdown } from '@/hooks/useCountdown';
@@ -20,6 +20,7 @@ import { useVoiceChat } from '@/hooks/useVoiceChat';
 import { VoiceControls } from '@/components/game/VoiceControls';
 import { useRoomStore } from '@/stores/room-store';
 import * as THREE from 'three';
+import type { CollisionData } from '@/components/3d/collision-utils';
 
 // Convert snake_case role to camelCase i18n key: 'alpha_werewolf' -> 'alphaWerewolf'
 function roleToCamel(role: string): string {
@@ -166,6 +167,7 @@ const ChatPanel = React.memo(function ChatPanel({ isNight }: { isNight: boolean 
   const phase = useGameStore((s) => s.phase);
   const isAlive = useGameStore((s) => s.isAlive);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const isComposingRef = useRef(false);
 
   const channelMessages = messages.filter((m) => m.channel === activeChannel);
 
@@ -290,7 +292,18 @@ const ChatPanel = React.memo(function ChatPanel({ isNight }: { isNight: boolean 
           } ${!canSendMessage || noChatAvailable ? 'opacity-50 cursor-not-allowed' : ''}`}
           value={input}
           onChange={(e) => canSendMessage && !noChatAvailable && setInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+          onCompositionStart={() => {
+            isComposingRef.current = true;
+          }}
+          onCompositionEnd={() => {
+            isComposingRef.current = false;
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.nativeEvent.isComposing && !isComposingRef.current) {
+              e.preventDefault();
+              handleSend();
+            }
+          }}
           placeholder={
             noChatAvailable
               ? `🌙 ${t('game.nightSilence')}`
@@ -362,9 +375,16 @@ const ROLE_ICONS: Record<string, string> = {
   [Role.INFECTOR_WOLF]: '🐺',
   [Role.STALKER_WOLF]: '🐺',
   [Role.CURSED_WOLF]: '🐺',
+  [Role.SNOW_WOLF]: '🐺',
+  [Role.VEGETARIAN_WOLF]: '🐺',
+  [Role.WOLF_FANG]: '🐺',
   [Role.PIRATE]: '🏴‍☠️',
   [Role.PLAGUE_DOCTOR]: '🩺',
   [Role.CORRUPTOR]: '👿',
+  [Role.MONK]: '🙏',
+  [Role.LYCAN]: '🌕',
+  [Role.VAMPIRE]: '🧛',
+  [Role.CULT_LEADER]: '📿',
 };
 
 // ─── Night Action Panel ─────────────────────────────
@@ -387,13 +407,16 @@ function NightActionPanel({
   const { emit } = useEmit();
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
   const [witchAction, setWitchAction] = useState<'heal' | 'kill' | null>(null);
+  const [vampireAction, setVampireAction] = useState<'mark' | 'kill' | null>(null);
 
   // Sync 3D selection with night action target
+  // Doctor and Beast Hunter can target themselves, so allow self-selection for those roles
+  const canSelfTarget = myRole === Role.DOCTOR || myRole === Role.BEAST_HUNTER;
   useEffect(() => {
-    if (selectedPlayerId && selectedPlayerId !== user?.id) {
+    if (selectedPlayerId && (canSelfTarget || selectedPlayerId !== user?.id)) {
       setSelectedTarget(selectedPlayerId);
     }
-  }, [selectedPlayerId, user?.id]);
+  }, [selectedPlayerId, user?.id, canSelfTarget]);
 
   if (!myRole || nightActionDone) {
     return (
@@ -497,9 +520,15 @@ function NightActionPanel({
     Role.INFECTOR_WOLF,
     Role.STALKER_WOLF,
     Role.CURSED_WOLF,
+    Role.SNOW_WOLF,
+    Role.VEGETARIAN_WOLF,
+    Role.WOLF_FANG,
     Role.PIRATE,
     Role.PLAGUE_DOCTOR,
     Role.CORRUPTOR,
+    Role.MONK,
+    Role.VAMPIRE,
+    Role.CULT_LEADER,
   ].includes(myRole);
 
   const handleConfirmAction = () => {
@@ -528,6 +557,9 @@ function NightActionPanel({
     else if (myRole === Role.PIRATE) action = 'duel';
     else if (myRole === Role.PLAGUE_DOCTOR) action = 'plague';
     else if (myRole === Role.CORRUPTOR) action = 'corrupt';
+    else if (myRole === Role.MONK) action = 'protect';
+    else if (myRole === Role.VAMPIRE) action = vampireAction || 'mark';
+    else if (myRole === Role.CULT_LEADER) action = 'recruit';
 
     emit('game:night_action', { gameId, action, targetId: selectedTarget });
     useGameStore.getState().setNightAction(selectedTarget);
@@ -570,14 +602,18 @@ function NightActionPanel({
               !witchHasHealPotion
                 ? 'bg-night-bg/20 border-night-border/20 opacity-40 cursor-not-allowed'
                 : witchAction === 'heal'
-                ? 'bg-emerald-500/25 border-emerald-400 ring-1 ring-emerald-400/40'
-                : 'bg-night-bg/40 border-night-border/30 hover:bg-night-bg/60 hover:border-emerald-400/50'
+                  ? 'bg-emerald-500/25 border-emerald-400 ring-1 ring-emerald-400/40'
+                  : 'bg-night-bg/40 border-night-border/30 hover:bg-night-bg/60 hover:border-emerald-400/50'
             }`}
           >
             <span className="text-2xl">💚</span>
             <span
               className={`text-xs font-semibold ${
-                !witchHasHealPotion ? 'text-night-muted/50 line-through' : witchAction === 'heal' ? 'text-emerald-300' : 'text-night-muted'
+                !witchHasHealPotion
+                  ? 'text-night-muted/50 line-through'
+                  : witchAction === 'heal'
+                    ? 'text-emerald-300'
+                    : 'text-night-muted'
               }`}
             >
               {t('game.witchHeal')}
@@ -593,14 +629,18 @@ function NightActionPanel({
               !witchHasKillPotion
                 ? 'bg-night-bg/20 border-night-border/20 opacity-40 cursor-not-allowed'
                 : witchAction === 'kill'
-                ? 'bg-red-500/25 border-red-400 ring-1 ring-red-400/40'
-                : 'bg-night-bg/40 border-night-border/30 hover:bg-night-bg/60 hover:border-red-400/50'
+                  ? 'bg-red-500/25 border-red-400 ring-1 ring-red-400/40'
+                  : 'bg-night-bg/40 border-night-border/30 hover:bg-night-bg/60 hover:border-red-400/50'
             }`}
           >
             <span className="text-2xl">☠️</span>
             <span
               className={`text-xs font-semibold ${
-                !witchHasKillPotion ? 'text-night-muted/50 line-through' : witchAction === 'kill' ? 'text-red-300' : 'text-night-muted'
+                !witchHasKillPotion
+                  ? 'text-night-muted/50 line-through'
+                  : witchAction === 'kill'
+                    ? 'text-red-300'
+                    : 'text-night-muted'
               }`}
             >
               {t('game.witchKill')}
@@ -676,6 +716,73 @@ function NightActionPanel({
     );
   }
 
+  // ─── Vampire-specific UI ───
+  if (myRole === Role.VAMPIRE) {
+    return (
+      <GlassCard isNight>
+        <div className="flex items-center gap-3 mb-3">
+          <span className="text-3xl">🧛</span>
+          <div>
+            <h3 className="font-heading font-semibold text-night-text">
+              {t(`roles.${roleToCamel(myRole)}`)}
+            </h3>
+            <p className="text-xs text-night-muted">{t('game.vampireChoose')}</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          <button
+            onClick={() => setVampireAction('mark')}
+            className={`p-3 rounded-lg border text-sm font-semibold transition-all ${
+              vampireAction === 'mark'
+                ? 'bg-purple-500/30 border-purple-400 text-purple-200'
+                : 'bg-night-surface/50 border-night-border/30 text-night-muted hover:border-purple-400/50'
+            }`}
+          >
+            🦇 {t('game.vampireMark')}
+          </button>
+          <button
+            onClick={() => setVampireAction('kill')}
+            className={`p-3 rounded-lg border text-sm font-semibold transition-all ${
+              vampireAction === 'kill'
+                ? 'bg-red-500/30 border-red-400 text-red-200'
+                : 'bg-night-surface/50 border-night-border/30 text-night-muted hover:border-red-400/50'
+            }`}
+          >
+            💀 {t('game.vampireKill')}
+          </button>
+        </div>
+        {vampireAction === 'mark' && (
+          <div className="mb-3">
+            <p className="text-xs text-night-muted mb-2">{t('game.vampireMarkDesc')}</p>
+            <PlayerList
+              onSelect={(id) => {
+                setSelectedTarget(id);
+                onSelectPlayer?.(id);
+              }}
+              selectedId={selectedTarget}
+              excludeIds={[user?.id || '']}
+              isNight
+            />
+          </div>
+        )}
+        {vampireAction && (
+          <div className="mt-3">
+            <Button
+              className="w-full"
+              onClick={handleConfirmAction}
+              disabled={vampireAction === 'mark' && !selectedTarget}
+            >
+              {vampireAction === 'mark' ? t('game.vampireMark') : t('game.vampireKillAll')}
+            </Button>
+          </div>
+        )}
+      </GlassCard>
+    );
+  }
+
+  // Roles that can target themselves (Doctor can self-heal, Beast Hunter can self-trap)
+  const selfTargetExcludeIds = canSelfTarget ? [] : [user?.id || ''];
+
   return (
     <GlassCard isNight>
       <div className="flex items-center gap-3 mb-3">
@@ -693,7 +800,7 @@ function NightActionPanel({
           onSelectPlayer?.(id);
         }}
         selectedId={selectedTarget}
-        excludeIds={[user?.id || '']}
+        excludeIds={selfTargetExcludeIds}
         isNight
       />
       <div className="mt-3">
@@ -864,11 +971,7 @@ function DawnPanel() {
                   : 'text-amber-400'
             }`}
           >
-            {seerResult.alignment === 'good'
-              ? '✅'
-              : seerResult.alignment === 'evil'
-                ? '❌'
-                : '❓'}{' '}
+            {seerResult.alignment === 'good' ? '✅' : seerResult.alignment === 'evil' ? '❌' : '❓'}{' '}
             {t(`seerResult.${seerResult.alignment}`)}
           </p>
         </div>
@@ -971,6 +1074,7 @@ function RoleListButton({ isNight }: { isNight: boolean }) {
   const t = useTranslations();
   const roleList = useGameStore((s) => s.roleList);
   const [isOpen, setIsOpen] = useState(false);
+  const [hoveredRole, setHoveredRole] = useState<string | null>(null);
 
   if (roleList.length === 0) return null;
 
@@ -1003,7 +1107,7 @@ function RoleListButton({ isNight }: { isNight: boolean }) {
 
           {/* Popover panel */}
           <div
-            className={`absolute top-full mt-2 z-50 min-w-[200px] max-w-[320px] rounded-xl border backdrop-blur-xl shadow-xl ${
+            className={`absolute top-full mt-2 z-50 min-w-[240px] max-w-[360px] rounded-xl border backdrop-blur-xl shadow-xl ${
               isNight
                 ? 'bg-night-card/90 border-night-border/50'
                 : 'bg-white/90 border-day-border/50'
@@ -1020,9 +1124,18 @@ function RoleListButton({ isNight }: { isNight: boolean }) {
               {Object.entries(roleCounts).map(([role, count]) => (
                 <div
                   key={role}
-                  className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs ${
-                    isNight ? 'bg-night-bg/50 text-night-text' : 'bg-day-bg/50 text-day-text'
+                  className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs cursor-default transition-colors ${
+                    hoveredRole === role
+                      ? isNight
+                        ? 'bg-night-border/60 text-night-text'
+                        : 'bg-primary/10 text-day-text'
+                      : isNight
+                        ? 'bg-night-bg/50 text-night-text hover:bg-night-border/40'
+                        : 'bg-day-bg/50 text-day-text hover:bg-primary/5'
                   }`}
+                  onMouseEnter={() => setHoveredRole(role)}
+                  onMouseLeave={() => setHoveredRole(null)}
+                  onClick={() => setHoveredRole(hoveredRole === role ? null : role)}
                 >
                   <span className="text-sm">{ROLE_ICONS[role] || '❓'}</span>
                   <span className="truncate">{t(`roles.${roleToCamel(role)}`)}</span>
@@ -1034,6 +1147,22 @@ function RoleListButton({ isNight }: { isNight: boolean }) {
                 </div>
               ))}
             </div>
+
+            {/* Role description tooltip */}
+            {hoveredRole && (
+              <div
+                className={`px-3 py-2.5 border-t text-xs leading-relaxed ${
+                  isNight
+                    ? 'border-night-border/30 bg-night-bg/60 text-night-text/90'
+                    : 'border-day-border/30 bg-day-bg/60 text-day-text/90'
+                }`}
+              >
+                <p className="font-semibold mb-0.5">
+                  {ROLE_ICONS[hoveredRole] || '❓'} {t(`roles.${roleToCamel(hoveredRole)}`)}
+                </p>
+                <p className="opacity-80">{t(`role.${roleToCamel(hoveredRole)}.desc`)}</p>
+              </div>
+            )}
           </div>
         </>
       )}
@@ -1177,6 +1306,7 @@ function Game3DScene({
 }) {
   const [firePos, setFirePos] = useState<[number, number, number] | undefined>(undefined);
   const [mapScene, setMapScene] = useState<THREE.Object3D | null>(null);
+  const [collisionData, setCollisionData] = useState<CollisionData | null>(null);
 
   // Camera mode toggle: panoramic (overview) vs thirdPerson (follow character)
   const [cameraMode, setCameraMode] = useState<'panoramic' | 'thirdPerson'>('panoramic');
@@ -1186,13 +1316,27 @@ function Game3DScene({
   const [localPlayerRot, setLocalPlayerRot] = useState<number>(0);
 
   const handleFireDetected = useCallback((pos: { x: number; y: number; z: number }) => {
-    console.log('[Game3D] Fire detected at world pos:', pos.x.toFixed(2), pos.y.toFixed(2), pos.z.toFixed(2));
+    console.log(
+      '[Game3D] Fire detected at world pos:',
+      pos.x.toFixed(2),
+      pos.y.toFixed(2),
+      pos.z.toFixed(2),
+    );
     setFirePos([pos.x, pos.y, pos.z]);
   }, []);
 
   const handleMapSceneReady = useCallback((scene: THREE.Object3D) => {
     console.log('[Game3D] Map scene ready');
     setMapScene(scene);
+  }, []);
+
+  const handleCollisionDataReady = useCallback((data: CollisionData) => {
+    console.log(
+      '[Game3D] Collision data ready:',
+      data.walkableMeshes.length, 'walkable,',
+      data.blockingMeshes.length, 'blocking',
+    );
+    setCollisionData(data);
   }, []);
 
   const handleCameraToggle = useCallback(() => {
@@ -1219,6 +1363,7 @@ function Game3DScene({
         isNight={isNight}
         onFireDetected={handleFireDetected}
         onMapSceneReady={handleMapSceneReady}
+        onCollisionDataReady={handleCollisionDataReady}
         cameraMode={cameraMode}
         localPlayerPosition={localPlayerPos}
         localPlayerRotation={localPlayerRot}
@@ -1233,6 +1378,7 @@ function Game3DScene({
             chatBubbles={chatBubbles}
             firePosition={firePos}
             mapScene={mapScene}
+            collisionData={collisionData}
             onLocalPlayerPosition={handleLocalPlayerPosition}
             onCameraToggle={handleCameraToggle}
           />
@@ -1240,11 +1386,13 @@ function Game3DScene({
       </ForestScene>
       {/* Camera mode indicator */}
       <div className="absolute bottom-3 left-3 z-10 pointer-events-none">
-        <div className={`px-3 py-1.5 rounded-lg text-xs font-medium backdrop-blur-sm border ${
-          isNight
-            ? 'bg-night-card/60 border-night-border/40 text-night-text/80'
-            : 'bg-white/60 border-day-border/40 text-day-text/80'
-        }`}>
+        <div
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium backdrop-blur-sm border ${
+            isNight
+              ? 'bg-night-card/60 border-night-border/40 text-night-text/80'
+              : 'bg-white/60 border-day-border/40 text-day-text/80'
+          }`}
+        >
           <span className="opacity-60">Y</span>{' '}
           {cameraMode === 'panoramic' ? '🌐 Panoramic' : '🎮 Third Person'}
         </div>
@@ -1257,7 +1405,16 @@ function Game3DScene({
 export default function GamePage() {
   const t = useTranslations();
   const router = useRouter();
-  const { phase, myRole, myTeam, phaseEndAt, winners, round, gameId, players: rawGamePlayers } = useGameStore();
+  const {
+    phase,
+    myRole,
+    myTeam,
+    phaseEndAt,
+    winners,
+    round,
+    gameId,
+    players: rawGamePlayers,
+  } = useGameStore();
   // Deduplicate players to prevent React key errors (bot IDs can occasionally duplicate)
   const players = useMemo(() => {
     const seen = new Set<string>();
@@ -1270,6 +1427,8 @@ export default function GamePage() {
   const isAlive = useGameStore((s) => s.isAlive);
   const shouldShowIntro = useGameStore((s) => s.shouldShowIntro);
   const lastRoomCode = useGameStore((s) => s.lastRoomCode);
+  const deathLog = useGameStore((s) => s.deathLog);
+  const { user } = useAuthStore();
   const { emit } = useEmit();
 
   // ── Voice chat ──
@@ -1370,28 +1529,248 @@ export default function GamePage() {
   const isNight =
     phase === GamePhase.NIGHT || phase === GamePhase.STARTING || phase === GamePhase.INTRO;
 
-  // ── Game Over screen ──
+  // ── Game Over screen with full summary ──
   if (winners) {
+    // Use revealed players from server (with roles exposed), fallback to game state players
+    const allPlayers = winners.revealedPlayers || players;
+    const winnerIds = new Set(winners.playerIds);
+
+    // Build player name lookup for action log
+    const playerNameMap: Record<string, string> = {};
+    for (const p of allPlayers) {
+      playerNameMap[p.id] = p.username;
+    }
+
+    // Determine team color/icon for each player
+    const getTeamColor = (team?: Team) => {
+      if (!team) return 'text-day-muted';
+      if (team === Team.VILLAGE) return 'text-emerald-600';
+      if (team === Team.WEREWOLF) return 'text-red-500';
+      return 'text-purple-500';
+    };
+
+    // Group game log by round
+    const gameLog = winners.gameLog || [];
+    const logByRound: Map<number, GameLogEntry[]> = new Map();
+    for (const entry of gameLog) {
+      if (!logByRound.has(entry.round)) logByRound.set(entry.round, []);
+      logByRound.get(entry.round)!.push(entry);
+    }
+    const roundNumbers = Array.from(logByRound.keys()).sort((a, b) => a - b);
+
+    // Helper to get seer result translation
+    const getSeerResultText = (result?: string) => {
+      if (!result) return '';
+      if (result === 'good' || result === 'GOOD') return t('game.seer_good');
+      if (result === 'evil' || result === 'EVIL') return t('game.seer_evil');
+      if (result === 'unknown' || result === 'UNKNOWN') return t('game.seer_unknown');
+      // If it's a role name (werewolf seer result), translate it
+      return t(`roles.${roleToCamel(result)}`);
+    };
+
+    // Helper to render an action log entry
+    const renderActionEntry = (entry: GameLogEntry, idx: number) => {
+      const targetName = entry.targetId ? playerNameMap[entry.targetId] || '???' : '???';
+      const actionKey = `game.action_${entry.action}`;
+      const resultText = entry.result ? getSeerResultText(entry.result) : '';
+
+      // Phase-based background color
+      const bgColor =
+        entry.phase === 'night'
+          ? 'bg-indigo-50/60'
+          : entry.phase === 'vote'
+            ? 'bg-amber-50/60'
+            : 'bg-sky-50/60';
+
+      return (
+        <div
+          key={`${entry.round}-${entry.action}-${entry.targetId}-${idx}`}
+          className={`text-xs px-2.5 py-1.5 rounded-lg ${bgColor} text-day-text`}
+        >
+          {t(actionKey, { target: targetName, result: resultText })}
+        </div>
+      );
+    };
+
+    // Format duration
+    const durationText = winners.duration
+      ? t('game.gameDuration', {
+          minutes: Math.floor(winners.duration / 60),
+          seconds: winners.duration % 60,
+        })
+      : null;
+
     return (
       <div className="relative w-full h-screen-safe overflow-hidden">
         <Suspense fallback={null}>
           <Game3DScene isNight={false} players={players} />
         </Suspense>
-        <div className="absolute inset-0 flex items-center justify-center z-10">
-          <GlassCard isNight={false} className="text-center max-w-sm w-full mx-4">
-            <span className="text-6xl block mb-4">
-              {winners.team === Team.VILLAGE ? '🏘️' : winners.team === Team.WEREWOLF ? '🐺' : '🎭'}
-            </span>
-            <h1 className="text-3xl font-heading font-bold mb-2">{t('game.gameOver')}</h1>
-            <p className="text-lg text-day-muted mb-2">
-              {t(`game.win_${winners.team.toLowerCase()}`)}
-            </p>
-            {myRole && (
-              <p className="text-sm text-day-muted mb-6">
-                {t('game.yourRole')}: {t(`roles.${roleToCamel(myRole)}`)}
+        <div className="absolute inset-0 flex items-center justify-center z-10 p-4">
+          <GlassCard
+            isNight={false}
+            className="max-w-lg w-full mx-auto max-h-[90vh] overflow-y-auto [scrollbar-color:transparent_transparent] "
+          >
+            {/* Winner banner */}
+            <div className="text-center mb-4">
+              <span className="text-5xl block mb-2">
+                {winners.team === Team.VILLAGE
+                  ? '🏘️'
+                  : winners.team === Team.WEREWOLF
+                    ? '🐺'
+                    : '🎭'}
+              </span>
+              <h1 className="text-2xl font-heading font-bold mb-1">{t('game.gameOver')}</h1>
+              <p className="text-lg font-semibold text-primary">
+                {t(`game.win_${winners.team.toLowerCase()}`)}
               </p>
+              {myRole && (
+                <p className="text-sm text-day-muted mt-1">
+                  {t('game.yourRole')}: {ROLE_ICONS[myRole] || '❓'}{' '}
+                  {t(`roles.${roleToCamel(myRole)}`)}
+                </p>
+              )}
+              {/* Game stats */}
+              <div className="flex items-center justify-center gap-3 mt-2 text-xs text-day-muted">
+                {winners.rounds && (
+                  <span>📊 {t('game.totalRounds', { rounds: winners.rounds })}</span>
+                )}
+                {durationText && <span>⏱️ {durationText}</span>}
+              </div>
+            </div>
+
+            {/* All players reveal */}
+            <div className="mb-4">
+              <h2 className="text-sm font-heading font-bold text-day-text mb-2 uppercase tracking-wider">
+                {t('game.summaryPlayers')}
+              </h2>
+              <div className="space-y-1.5">
+                {allPlayers.map((p) => {
+                  const isWinner = winnerIds.has(p.id);
+                  const isMe = p.id === user?.id;
+                  return (
+                    <div
+                      key={p.id}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${
+                        isWinner
+                          ? 'bg-yellow-50 border border-yellow-200'
+                          : p.isAlive
+                            ? 'bg-day-card'
+                            : 'bg-day-card/50 opacity-70'
+                      }`}
+                    >
+                      <span className="text-base flex-shrink-0">
+                        {p.role ? ROLE_ICONS[p.role] || '❓' : '❓'}
+                      </span>
+                      <span
+                        className={`font-semibold truncate ${isMe ? 'text-primary' : 'text-day-text'}`}
+                      >
+                        {p.username}
+                        {isMe && ' ⭐'}
+                      </span>
+                      <span
+                        className={`ml-auto text-xs font-medium flex-shrink-0 ${getTeamColor(p.team)}`}
+                      >
+                        {p.role ? t(`roles.${roleToCamel(p.role)}`) : '???'}
+                      </span>
+                      {!p.isAlive && <span className="text-xs text-red-400 flex-shrink-0">☠️</span>}
+                      {isWinner && <span className="text-xs flex-shrink-0">🏆</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Game Action Timeline (round-by-round) */}
+            {roundNumbers.length > 0 && (
+              <div className="mb-4">
+                <h2 className="text-sm font-heading font-bold text-day-text mb-2 uppercase tracking-wider">
+                  {t('game.actionLog')}
+                </h2>
+                <div className="space-y-3">
+                  {roundNumbers.map((round) => {
+                    const entries = logByRound.get(round) || [];
+                    // Split by phase
+                    const nightEntries = entries.filter((e) => e.phase === 'night');
+                    const dayEntries = entries.filter((e) => e.phase === 'day');
+                    const voteEntries = entries.filter((e) => e.phase === 'vote');
+
+                    return (
+                      <div
+                        key={round}
+                        className="border border-day-border/30 rounded-lg overflow-hidden"
+                      >
+                        {/* Night phase entries */}
+                        {nightEntries.length > 0 && (
+                          <div>
+                            <div className="px-2.5 py-1 bg-indigo-100/80 text-xs font-bold text-indigo-700 uppercase tracking-wide">
+                              🌙 {t('game.nightPhase', { round })}
+                            </div>
+                            <div className="px-1 py-1 space-y-0.5">
+                              {nightEntries.map((e, i) => renderActionEntry(e, i))}
+                            </div>
+                          </div>
+                        )}
+                        {/* Day phase entries */}
+                        {dayEntries.length > 0 && (
+                          <div>
+                            <div className="px-2.5 py-1 bg-sky-100/80 text-xs font-bold text-sky-700 uppercase tracking-wide">
+                              ☀️ {t('game.dayPhase', { round })}
+                            </div>
+                            <div className="px-1 py-1 space-y-0.5">
+                              {dayEntries.map((e, i) => renderActionEntry(e, i))}
+                            </div>
+                          </div>
+                        )}
+                        {/* Vote phase entries */}
+                        {voteEntries.length > 0 && (
+                          <div>
+                            <div className="px-2.5 py-1 bg-amber-100/80 text-xs font-bold text-amber-700 uppercase tracking-wide">
+                              🗳️ {t('game.votePhase', { round })}
+                            </div>
+                            <div className="px-1 py-1 space-y-0.5">
+                              {voteEntries.map((e, i) => renderActionEntry(e, i))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             )}
+
+            {/* Fallback: simple death log if no game action log available */}
+            {roundNumbers.length === 0 && deathLog.length > 0 && (
+              <div className="mb-4">
+                <h2 className="text-sm font-heading font-bold text-day-text mb-2 uppercase tracking-wider">
+                  {t('game.deathLog')}
+                </h2>
+                <div className="space-y-1">
+                  {deathLog.map((entry, i) => (
+                    <div
+                      key={`${entry.playerId}-${i}`}
+                      className="flex items-center gap-2 text-xs text-day-muted px-2 py-1.5 bg-red-50/50 rounded-lg"
+                    >
+                      <span className="font-medium text-day-text">{entry.playerName}</span>
+                      <span className="text-red-400">
+                        {entry.cause === 'night'
+                          ? t('game.deathNight')
+                          : entry.cause === 'voted'
+                            ? t('game.deathVoted')
+                            : t('game.deathGunner')}
+                      </span>
+                      <span className="ml-auto text-day-muted">
+                        {t('game.round', { round: entry.round })}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Back button */}
             <Button
+              className="w-full sticky bottom-0"
               onClick={() => {
                 const roomCode = useGameStore.getState().lastRoomCode;
                 useGameStore.getState().resetGame();
@@ -1485,7 +1864,10 @@ export default function GamePage() {
               </GlassCard>
 
               {myRole && (
-                <GlassCard isNight={isNight} className="!py-1.5 !px-2 md:!py-2 md:!px-3 hidden sm:block">
+                <GlassCard
+                  isNight={isNight}
+                  className="!py-1.5 !px-2 md:!py-2 md:!px-3 hidden sm:block"
+                >
                   <p className="text-xs font-semibold opacity-80 truncate">
                     {t('game.yourRole')}: {t(`roles.${roleToCamel(myRole)}`)}
                   </p>
@@ -1561,7 +1943,9 @@ export default function GamePage() {
 
           <div className="flex flex-col md:flex-row gap-2 md:gap-3 items-stretch md:items-end max-w-7xl mx-auto w-full">
             {/* Action Panel — always visible on md+, toggleable on mobile */}
-            <div className={`flex-1 max-w-none md:max-w-md ${mobileTab !== 'action' ? 'hidden md:block' : ''}`}>
+            <div
+              className={`flex-1 max-w-none md:max-w-md ${mobileTab !== 'action' ? 'hidden md:block' : ''}`}
+            >
               {phase === GamePhase.NIGHT && isAlive && (
                 <NightActionPanel
                   selectedPlayerId={selectedPlayerId}
@@ -1596,20 +1980,26 @@ export default function GamePage() {
               {phase === GamePhase.VOTE_RESULT && (
                 <GlassCard isNight={false} className="text-center py-4 md:py-6">
                   <span className="text-3xl md:text-4xl block mb-2">🗳️</span>
-                  <h3 className="font-heading font-semibold text-base md:text-lg">{t('phases.voteResult')}</h3>
+                  <h3 className="font-heading font-semibold text-base md:text-lg">
+                    {t('phases.voteResult')}
+                  </h3>
                 </GlassCard>
               )}
               {phase === GamePhase.LAST_WORDS && (
                 <GlassCard isNight={false} className="text-center py-4 md:py-6">
                   <span className="text-3xl md:text-4xl block mb-2">💬</span>
-                  <h3 className="font-heading font-semibold text-base md:text-lg">{t('phases.lastWords')}</h3>
+                  <h3 className="font-heading font-semibold text-base md:text-lg">
+                    {t('phases.lastWords')}
+                  </h3>
                 </GlassCard>
               )}
               {/* INTRO and STARTING phases render as full-screen overlays below */}
             </div>
 
             {/* Chat Panel — always visible on md+, toggleable on mobile */}
-            <div className={`flex-1 max-w-none md:max-w-sm h-48 md:h-72 ${mobileTab !== 'chat' ? 'hidden md:block' : ''}`}>
+            <div
+              className={`flex-1 max-w-none md:max-w-sm h-48 md:h-72 ${mobileTab !== 'chat' ? 'hidden md:block' : ''}`}
+            >
               <ChatPanel isNight={isNight} />
             </div>
           </div>

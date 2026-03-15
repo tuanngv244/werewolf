@@ -39,6 +39,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
   server: Server;
 
   private phaseTimers = new Map<string, NodeJS.Timeout>();
+  private disconnectTimers = new Map<string, NodeJS.Timeout>();
   private witchNotifyTimers = new Map<string, NodeJS.Timeout>();
 
   constructor(
@@ -67,6 +68,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
       }
       const payload = this.jwtService.verify(token);
       client.user = { id: payload.sub, username: payload.username };
+      console.log('[Gateway] Socket connected:', client.user.username, '(', client.user.id, ')');
 
       // Rejoin room if player was in one — validate Redis state first
       const roomCode = await this.roomsService.getPlayerRoom(client.user.id);
@@ -77,6 +79,12 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
           // Mark player as reconnected in Redis
           const player = room.players.find((p) => p.id === client.user.id);
           if (player && !player.isConnected) {
+            // Cancel any pending disconnect timer
+            const disconnectTimer = this.disconnectTimers.get(client.user.id);
+            if (disconnectTimer) {
+              clearTimeout(disconnectTimer);
+              this.disconnectTimers.delete(client.user.id);
+            }
             player.isConnected = true;
             await this.roomsService.updateRoom(roomCode, room);
             this.server.to(`room:${roomCode}`).emit('room:player_reconnected', {
@@ -96,19 +104,52 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
 
   async handleDisconnect(client: AuthenticatedSocket) {
     if (!client.user) return;
-    const roomCode = await this.roomsService.getPlayerRoom(client.user.id);
-    if (roomCode) {
-      // Mark player as disconnected in Redis room state
-      const room = await this.roomsService.getRoom(roomCode);
-      if (room) {
-        const player = room.players.find((p) => p.id === client.user.id);
-        if (player) {
-          player.isConnected = false;
-          await this.roomsService.updateRoom(roomCode, room);
+    const playerId = client.user.id;
+    const roomCode = await this.roomsService.getPlayerRoom(playerId);
+    if (!roomCode) return;
+
+    const room = await this.roomsService.getRoom(roomCode);
+    if (!room) return;
+
+    if (room.status === RoomStatus.WAITING) {
+      // In WAITING rooms, remove the player after a short grace period (15s)
+      // to allow quick reconnects (e.g. page refresh) without losing their slot
+      const timer = setTimeout(async () => {
+        this.disconnectTimers.delete(playerId);
+        // Re-check the room state — player may have reconnected
+        const currentRoom = await this.roomsService.getRoom(roomCode);
+        if (!currentRoom) return;
+        const player = currentRoom.players.find((p) => p.id === playerId);
+        if (!player || player.isConnected) return; // Reconnected, do nothing
+
+        // Remove the player from the room
+        const updatedRoom = await this.roomsService.leaveRoom(roomCode, playerId);
+        await this.roomsService.setPlayerRoom(playerId, null);
+        if (updatedRoom) {
+          this.server.to(`room:${roomCode}`).emit('room:player_left', { playerId });
+          this.server.to(`room:${roomCode}`).emit('room:state', updatedRoom);
         }
+      }, 15000);
+      this.disconnectTimers.set(playerId, timer);
+
+      // Still mark as disconnected immediately so other players see the status
+      const player = room.players.find((p) => p.id === playerId);
+      if (player) {
+        player.isConnected = false;
+        await this.roomsService.updateRoom(roomCode, room);
       }
       this.server.to(`room:${roomCode}`).emit('room:player_disconnected', {
-        playerId: client.user.id,
+        playerId,
+      });
+    } else {
+      // In IN_GAME rooms, just mark as disconnected (allow reconnection)
+      const player = room.players.find((p) => p.id === playerId);
+      if (player) {
+        player.isConnected = false;
+        await this.roomsService.updateRoom(roomCode, room);
+      }
+      this.server.to(`room:${roomCode}`).emit('room:player_disconnected', {
+        playerId,
       });
     }
   }
@@ -120,15 +161,36 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() data: { maxPlayers?: number; isPrivate?: boolean; roles?: string[] },
   ) {
-    const room = await this.roomsService.createRoom(client.user, {
-      maxPlayers: data.maxPlayers,
-      isPrivate: data.isPrivate,
-      roles: data.roles as any,
-    });
+    try {
+      console.log('[Gateway] room:create from', client.user.username, '(', client.user.id, ')');
 
-    await this.roomsService.setPlayerRoom(client.user.id, room.code);
-    client.join(`room:${room.code}`);
-    client.emit('room:created', room);
+      // Evict from previous room if any
+      const prevRoomCode = await this.roomsService.getPlayerRoom(client.user.id);
+      if (prevRoomCode) {
+        console.log('[Gateway] Player was in room', prevRoomCode, '— evicting before creating new room');
+        const leftRoom = await this.roomsService.leaveRoom(prevRoomCode, client.user.id);
+        await this.roomsService.setPlayerRoom(client.user.id, null);
+        client.leave(`room:${prevRoomCode}`);
+        if (leftRoom) {
+          this.server.to(`room:${prevRoomCode}`).emit('room:player_left', { playerId: client.user.id });
+          this.server.to(`room:${prevRoomCode}`).emit('room:state', leftRoom);
+        }
+      }
+
+      const room = await this.roomsService.createRoom(client.user, {
+        maxPlayers: data.maxPlayers,
+        isPrivate: data.isPrivate,
+        roles: data.roles as any,
+      });
+
+      await this.roomsService.setPlayerRoom(client.user.id, room.code);
+      client.join(`room:${room.code}`);
+      console.log('[Gateway] Room created:', room.code, '— emitting room:created');
+      client.emit('room:created', room);
+    } catch (error) {
+      console.error('[Gateway] Failed to create room:', error?.message || error);
+      client.emit('room:error', { message: 'Failed to create room. Please try again.' });
+    }
   }
 
   @SubscribeMessage('room:create_demo')
@@ -253,11 +315,27 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
   @SubscribeMessage('room:leave')
   async handleLeaveRoom(@ConnectedSocket() client: AuthenticatedSocket) {
     const roomCode = await this.roomsService.getPlayerRoom(client.user.id);
-    if (!roomCode) return;
+    if (!roomCode) {
+      // Acknowledge even if not in a room — so the client can proceed
+      client.emit('room:left', { success: true });
+      return;
+    }
+
+    // Cancel any pending disconnect timer
+    const disconnectTimer = this.disconnectTimers.get(client.user.id);
+    if (disconnectTimer) {
+      clearTimeout(disconnectTimer);
+      this.disconnectTimers.delete(client.user.id);
+    }
 
     const room = await this.roomsService.leaveRoom(roomCode, client.user.id);
     await this.roomsService.setPlayerRoom(client.user.id, null);
-    // Leave Socket.io room BEFORE broadcasting so we don't receive our own events
+
+    // Acknowledge the leave to the leaving player BEFORE leaving the socket.io room
+    // so the event is guaranteed to arrive before any potential disconnect
+    client.emit('room:left', { success: true });
+
+    // Leave Socket.io room AFTER acknowledgment
     client.leave(`room:${roomCode}`);
 
     if (room) {
@@ -265,6 +343,59 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
         playerId: client.user.id,
       });
       this.server.to(`room:${roomCode}`).emit('room:state', room);
+    }
+  }
+
+  @SubscribeMessage('room:kick')
+  async handleKickPlayer(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() data: { playerId: string },
+  ) {
+    const roomCode = await this.roomsService.getPlayerRoom(client.user.id);
+    if (!roomCode || !data?.playerId) return;
+
+    const room = await this.roomsService.getRoom(roomCode);
+    if (!room || room.hostId !== client.user.id) return;
+
+    // Cannot kick while a game is in progress
+    if (room.status === RoomStatus.IN_GAME) {
+      client.emit('room:error', { message: 'Cannot kick players while a game is in progress' });
+      return;
+    }
+
+    // Cannot kick yourself (the host)
+    if (data.playerId === client.user.id) return;
+
+    // Check that the target player is actually in the room
+    if (!room.players.some((p) => p.id === data.playerId)) return;
+
+    // Remove the player from the room
+    const updatedRoom = await this.roomsService.leaveRoom(roomCode, data.playerId);
+    await this.roomsService.setPlayerRoom(data.playerId, null);
+
+    // Cancel any pending disconnect timer for the kicked player
+    const disconnectTimer = this.disconnectTimers.get(data.playerId);
+    if (disconnectTimer) {
+      clearTimeout(disconnectTimer);
+      this.disconnectTimers.delete(data.playerId);
+    }
+
+    // Notify the kicked player directly and remove them from the socket.io room
+    const sockets = await this.server.in(`room:${roomCode}`).fetchSockets();
+    for (const s of sockets) {
+      const authSocket = s as unknown as AuthenticatedSocket;
+      if (authSocket.user?.id === data.playerId) {
+        s.emit('room:kicked', { code: roomCode });
+        s.leave(`room:${roomCode}`);
+      }
+    }
+
+    // Broadcast updated state to remaining players
+    if (updatedRoom) {
+      this.server.to(`room:${roomCode}`).emit('room:player_left', {
+        playerId: data.playerId,
+      });
+      this.server.to(`room:${roomCode}`).emit('room:state', updatedRoom);
     }
   }
 
@@ -309,6 +440,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     const list = rooms.map((r) => ({
       id: r.id,
       code: r.code,
+      hostId: r.hostId,
       hostName: r.players.find((p) => p.id === r.hostId)?.username || 'Unknown',
       playerCount: r.players.length,
       maxPlayers: r.settings.maxPlayers,
@@ -502,6 +634,10 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
       target.isAlive = false;
       target.deathCause = DeathCause.GUNNER_SHOT;
       target.deathRound = game.round;
+
+      // Log gunner shot in game action log
+      if (!game.gameLog) game.gameLog = [];
+      game.gameLog.push({ round: game.round, phase: 'day', action: 'gunner_shoot', actorId: client.user.id, targetId: data.targetId, result: 'killed' });
 
       await this.gameService.saveGame(game);
 
@@ -915,6 +1051,9 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
             winningTeam: event.team,
             winners: event.playerIds,
             players: updatedGame.players,
+            gameLog: updatedGame.gameLog || [],
+            rounds: updatedGame.round,
+            duration: Math.floor((Date.now() - updatedGame.startedAt) / 1000),
           });
 
           // Update user stats (skip bots)

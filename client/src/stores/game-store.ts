@@ -51,6 +51,15 @@ export interface DeathLogEntry {
   phase: string;
 }
 
+export interface GameLogEntry {
+  round: number;
+  phase: 'night' | 'day' | 'vote';
+  action: string;
+  actorId?: string;
+  targetId?: string;
+  result?: string;
+}
+
 interface GameState {
   gameId: string | null;
   phase: GamePhase | null;
@@ -63,7 +72,7 @@ interface GameState {
   phaseEndAt: number | null;
   nightResult: NightResult | null;
   voteState: VoteState | null;
-  winners: { team: Team; playerIds: string[] } | null;
+  winners: { team: Team; playerIds: string[]; winCondition?: string; revealedPlayers?: GamePlayer[]; gameLog?: GameLogEntry[]; rounds?: number; duration?: number } | null;
 
   // Night action state
   nightActionDone: boolean;
@@ -114,7 +123,7 @@ interface GameState {
   setNightResult: (result: NightResult) => void;
   setVoteState: (state: VoteState) => void;
   setNightAction: (target: string | null) => void;
-  setWinners: (team: Team, playerIds: string[]) => void;
+  setWinners: (team: Team, playerIds: string[], winCondition?: string, revealedPlayers?: GamePlayer[], gameLog?: GameLogEntry[], rounds?: number, duration?: number) => void;
   setSeerResult: (result: SeerResultData) => void;
   setAuraSeerResult: (result: AuraSeerResultData) => void;
   setWerewolfSeerResult: (result: WerewolfSeerResultData) => void;
@@ -209,7 +218,8 @@ export const useGameStore = create<GameState>()((set) => ({
 
   setNightAction: (target) => set({ nightActionDone: true, nightActionTarget: target }),
 
-  setWinners: (team, playerIds) => set({ winners: { team, playerIds } }),
+  setWinners: (team, playerIds, winCondition, revealedPlayers, gameLog, rounds, duration) =>
+    set({ winners: { team, playerIds, winCondition, revealedPlayers, gameLog, rounds, duration } }),
 
   setSeerResult: (seerResult) => set({ seerResult }),
 

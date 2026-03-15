@@ -23,6 +23,8 @@ export function useSocket() {
   const updateRoomSettings = useRoomStore((s) => s.updateRoomSettings);
   const leaveRoom = useRoomStore((s) => s.leaveRoom);
   const removeRoom = useRoomStore((s) => s.removeRoom);
+  const setRoomDeletedByHost = useRoomStore((s) => s.setRoomDeletedByHost);
+  const setRoomKicked = useRoomStore((s) => s.setRoomKicked);
 
   const setGame = useGameStore((s) => s.setGame);
   const setMyRole = useGameStore((s) => s.setMyRole);
@@ -76,6 +78,13 @@ export function useSocket() {
       console.warn('[socket] room:error:', err?.message);
     };
     const handleRoomDeleted = () => {
+      // Set flag first so the redirect component can pick it up
+      setRoomDeletedByHost(true);
+      leaveRoom();
+    };
+    const handleRoomKicked = () => {
+      // Set flag so the redirect component can pick it up
+      setRoomKicked(true);
       leaveRoom();
     };
     const handleRoomRemoved = ({ code }: { code: string }) => {
@@ -158,8 +167,8 @@ export function useSocket() {
         setActiveChannel('DEAD');
       }
     };
-    const handleGameOver = ({ winningTeam, winners }: any) => {
-      setWinners(winningTeam, winners);
+    const handleGameOver = ({ winningTeam, winners, winCondition, players: revealedPlayers, gameLog, rounds, duration }: any) => {
+      setWinners(winningTeam, winners, winCondition, revealedPlayers, gameLog, rounds, duration);
     };
     const handleSeerResult = (result: any) => {
       setSeerResult(result);
@@ -220,6 +229,7 @@ export function useSocket() {
       socket.on('room:settings_updated', handleSettingsUpdated);
       socket.on('room:error', handleRoomError);
       socket.on('room:deleted', handleRoomDeleted);
+      socket.on('room:kicked', handleRoomKicked);
       socket.on('room:removed', handleRoomRemoved);
       socket.on('game:started', handleGameStarted);
       socket.on('game:role_assigned', handleRoleAssigned);
@@ -248,6 +258,7 @@ export function useSocket() {
       socket.off('room:settings_updated', handleSettingsUpdated);
       socket.off('room:error', handleRoomError);
       socket.off('room:deleted', handleRoomDeleted);
+      socket.off('room:kicked', handleRoomKicked);
       socket.off('room:removed', handleRoomRemoved);
       socket.off('game:started', handleGameStarted);
       socket.off('game:role_assigned', handleRoleAssigned);
@@ -290,6 +301,8 @@ export function useSocket() {
     updateRoomSettings,
     leaveRoom,
     removeRoom,
+    setRoomDeletedByHost,
+    setRoomKicked,
     setGame,
     setMyRole,
     setPhase,

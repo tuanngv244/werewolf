@@ -108,7 +108,9 @@
     "totalRoles": "Tổng: {count} / {max}",
     "villageTeam": "Phe Dân",
     "werewolfTeam": "Phe Sói",
-    "soloTeam": "Phe Riêng"
+    "soloTeam": "Phe Riêng",
+    "kickPlayer": "Đuổi người chơi",
+    "playerKicked": "Bạn đã bị chủ phòng đuổi khỏi phòng."
   },
   "game": {
     "round": "Vòng {round}",
@@ -161,7 +163,44 @@
     "deathVoted": "Bị treo cổ",
     "deathGunner": "Bị Xạ Thủ bắn",
     "rolesInGame": "Vai Trò Trong Game",
-    "viewRoles": "Xem Vai Trò"
+    "viewRoles": "Xem Vai Trò",
+    "summaryPlayers": "Tất Cả Người Chơi",
+    "actionLog": "Diễn Biến Trận Đấu",
+    "nightPhase": "Đêm {round}",
+    "dayPhase": "Ngày {round}",
+    "votePhase": "Bình Chọn {round}",
+    "gameDuration": "Thời gian: {minutes}p {seconds}s",
+    "totalRounds": "{rounds} Vòng",
+    "action_werewolf_attack": "🐺 Ma Sói tấn công {target}",
+    "action_werewolf_kill": "🐺 {target} bị Ma Sói giết",
+    "action_doctor_save": "💉 Bác Sĩ cứu {target}",
+    "action_doctor_protect": "💉 Bác Sĩ bảo vệ {target}",
+    "action_witch_heal": "🧪 Phù Thủy chữa trị {target}",
+    "action_witch_kill": "☠️ Phù Thủy hạ độc {target}",
+    "action_seer_check": "🔮 Tiên Tri soi {target} — {result}",
+    "action_aura_seer_check": "✨ Thầy Bói soi {target} — {result}",
+    "action_werewolf_seer_check": "👁️ Sói Tiên Tri soi {target} — {result}",
+    "action_vote_out": "🗳️ {target} bị treo cổ",
+    "action_gunner_shoot": "🔫 Xạ Thủ bắn {target}",
+    "action_beast_hunter_trap": "🪤 Bẫy Thợ Săn giết {target}",
+    "action_bodyguard_protect": "🛡️ Cận Vệ hy sinh để cứu {target}",
+    "action_avenger_revenge": "⚔️ Kẻ Báo Thù trả thù {target}",
+    "action_bomber_explode": "💣 Bom nổ giết {target}",
+    "action_serial_killer_kill": "🔪 Sát Nhân giết {target}",
+    "action_cursed_transform": "🌑 {target} bị cắn và trở thành Ma Sói",
+    "action_monk_protect": "🙏 Tu Sĩ ban phước cho {target} — được bảo vệ khỏi Sói",
+    "action_vampire_mark": "🧛 Ma Cà Rồng đánh dấu {target}",
+    "action_vampire_kill": "🧛 {target} bị Ma Cà Rồng giết",
+    "action_cult_recruit": "📿 Trưởng Giáo Phái chiêu mộ {target}",
+    "action_snow_wolf_drag": "❄️ Sói Tuyết kéo {target} chết cùng",
+    "vampireChoose": "Chọn đánh dấu một người hoặc giết tất cả người đã đánh dấu",
+    "vampireMark": "Đánh dấu",
+    "vampireKill": "Giết đã đánh dấu",
+    "vampireKillAll": "Giết tất cả đã đánh dấu",
+    "vampireMarkDesc": "Chọn người để đánh dấu cho lần giết sau",
+    "seer_good": "Thiện",
+    "seer_evil": "Ác",
+    "seer_unknown": "Không Rõ"
   },
   "voice": {
     "muteSound": "Tắt âm thanh",
@@ -238,7 +277,14 @@
     "cursedWolf": "Sói Nguyền Rủa",
     "pirate": "Hải Tặc",
     "plagueDoctor": "Bác Sĩ Dịch",
-    "corruptor": "Kẻ Tha Hoá"
+    "corruptor": "Kẻ Tha Hoá",
+    "snowWolf": "Sói Tuyết",
+    "vegetarianWolf": "Sói Ăn Chay",
+    "wolfFang": "Nanh Sói",
+    "monk": "Tu Sĩ",
+    "lycan": "Người Hoá Sói",
+    "vampire": "Ma Cà Rồng",
+    "cultLeader": "Trưởng Giáo Phái"
   },
   "role": {
     "villager": {
@@ -440,6 +486,34 @@
     "corruptor": {
       "name": "Kẻ Tha Hoá",
       "desc": "Tha hoá một người mỗi đêm — họ vĩnh viễn xuất hiện là Ác với Tiên Tri. Thắng khi 3 người bị tha hoá"
+    },
+    "snowWolf": {
+      "name": "Sói Tuyết",
+      "desc": "Chọn một người trong đêm đầu tiên. Khi Sói Tuyết chết (bất kỳ nguyên nhân nào), người được chọn cũng chết theo"
+    },
+    "vegetarianWolf": {
+      "name": "Sói Ăn Chay",
+      "desc": "Thuộc phe Sói và biết Sói khác. Tham gia bỏ phiếu giết người nhưng không thể giết một mình — nếu chỉ còn Sói Ăn Chay thì Sói không thể giết"
+    },
+    "wolfFang": {
+      "name": "Nanh Sói",
+      "desc": "Chỉ có thể sử dụng khả năng cắn khi là con sói cuối cùng còn sống. Trước đó chỉ tham gia thảo luận"
+    },
+    "monk": {
+      "name": "Tu Sĩ",
+      "desc": "Mỗi đêm, ban phước cho một người để bảo vệ họ khỏi bị Sói giết"
+    },
+    "lycan": {
+      "name": "Người Hoá Sói",
+      "desc": "Là dân làng nhưng khi bị Tiên Tri soi thì xuất hiện là Ác. Không có kỹ năng đặc biệt"
+    },
+    "vampire": {
+      "name": "Ma Cà Rồng",
+      "desc": "Mỗi đêm, đánh dấu một người. Chọn giết — tất cả người bị đánh dấu sẽ chết. Miễn nhiễm với cắn của Sói. Phe ác đơn độc — thắng khi là người cuối cùng sống sót"
+    },
+    "cultLeader": {
+      "name": "Trưởng Giáo Phái",
+      "desc": "Mỗi đêm, chiêu mộ một người vào Giáo Phái. Thắng khi thành viên Giáo Phái chiếm đa số người sống. Miễn nhiễm với cắn của Sói"
     }
   },
   "team": {
@@ -468,7 +542,9 @@
     "jailer": "{player} đã bị hành hình trong ngục",
     "pirate": "{player} đã bị giết trong trận đấu tay đôi",
     "plague": "{player} đã chết vì dịch bệnh",
-    "cursedWolfRevenge": "{player} đã bị nguyền rủa và chết sau khi bỏ phiếu"
+    "cursedWolfRevenge": "{player} đã bị nguyền rủa và chết sau khi bỏ phiếu",
+    "snowWolfDrag": "{player} bị Sói Tuyết kéo chết cùng",
+    "vampireKillDeath": "{player} bị Ma Cà Rồng giết"
   },
   "win": {
     "village": "Dân Làng Chiến Thắng!",
@@ -484,6 +560,8 @@
     "loneWolf": "Sói Cô Độc Chiến Thắng!",
     "pirate": "Hải Tặc Chiến Thắng!",
     "plagueDoctor": "Bác Sĩ Dịch Chiến Thắng!",
-    "corruptor": "Kẻ Tha Hoá Chiến Thắng!"
+    "corruptor": "Kẻ Tha Hoá Chiến Thắng!",
+    "cultLeader": "Giáo Phái Chiến Thắng!",
+    "vampire": "Ma Cà Rồng Chiến Thắng!"
   }
 }

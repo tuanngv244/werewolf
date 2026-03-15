@@ -108,7 +108,9 @@
     "totalRoles": "Total: {count} / {max}",
     "villageTeam": "Village",
     "werewolfTeam": "Werewolf",
-    "soloTeam": "Solo"
+    "soloTeam": "Solo",
+    "kickPlayer": "Remove player",
+    "playerKicked": "You have been removed from the room by the host."
   },
   "game": {
     "round": "Round {round}",
@@ -161,7 +163,44 @@
     "deathVoted": "Voted out",
     "deathGunner": "Shot by Gunner",
     "rolesInGame": "Roles in Game",
-    "viewRoles": "View Roles"
+    "viewRoles": "View Roles",
+    "summaryPlayers": "All Players",
+    "actionLog": "Game Timeline",
+    "nightPhase": "Night {round}",
+    "dayPhase": "Day {round}",
+    "votePhase": "Vote {round}",
+    "gameDuration": "Duration: {minutes}m {seconds}s",
+    "totalRounds": "{rounds} Rounds",
+    "action_werewolf_attack": "🐺 Werewolves attacked {target}",
+    "action_werewolf_kill": "🐺 {target} was killed by werewolves",
+    "action_doctor_save": "💉 Doctor saved {target}",
+    "action_doctor_protect": "💉 Doctor protected {target}",
+    "action_witch_heal": "🧪 Witch healed {target}",
+    "action_witch_kill": "☠️ Witch poisoned {target}",
+    "action_seer_check": "🔮 Seer checked {target} — {result}",
+    "action_aura_seer_check": "✨ Aura Seer checked {target} — {result}",
+    "action_werewolf_seer_check": "👁️ Werewolf Seer checked {target} — {result}",
+    "action_vote_out": "🗳️ {target} was voted out",
+    "action_gunner_shoot": "🔫 Gunner shot {target}",
+    "action_beast_hunter_trap": "🪤 Beast Hunter's trap killed {target}",
+    "action_bodyguard_protect": "🛡️ Bodyguard sacrificed to save {target}",
+    "action_avenger_revenge": "⚔️ Avenger's revenge killed {target}",
+    "action_bomber_explode": "💣 Bomber's explosion killed {target}",
+    "action_serial_killer_kill": "🔪 Serial Killer killed {target}",
+    "action_cursed_transform": "🌑 {target} was bitten and became a Werewolf",
+    "action_monk_protect": "🙏 Monk blessed {target} — protected from wolves",
+    "action_vampire_mark": "🧛 Vampire marked {target}",
+    "action_vampire_kill": "🧛 {target} was killed by the Vampire",
+    "action_cult_recruit": "📿 Cult Leader recruited {target}",
+    "action_snow_wolf_drag": "❄️ Snow Wolf dragged {target} to death",
+    "vampireChoose": "Choose to mark a player or kill all marked players",
+    "vampireMark": "Mark",
+    "vampireKill": "Kill Marked",
+    "vampireKillAll": "Kill All Marked",
+    "vampireMarkDesc": "Select a player to mark for future kill",
+    "seer_good": "Good",
+    "seer_evil": "Evil",
+    "seer_unknown": "Unknown"
   },
   "voice": {
     "muteSound": "Mute sound",
@@ -238,7 +277,14 @@
     "cursedWolf": "Cursed Wolf",
     "pirate": "Pirate",
     "plagueDoctor": "Plague Doctor",
-    "corruptor": "Corruptor"
+    "corruptor": "Corruptor",
+    "snowWolf": "Snow Wolf",
+    "vegetarianWolf": "Vegetarian Wolf",
+    "wolfFang": "Wolf Fang",
+    "monk": "Monk",
+    "lycan": "Lycan",
+    "vampire": "Vampire",
+    "cultLeader": "Cult Leader"
   },
   "role": {
     "villager": {
@@ -440,6 +486,34 @@
     "corruptor": {
       "name": "Corruptor",
       "desc": "Corrupt a player each night — they permanently appear Evil to seers. Win when 3 players are corrupted"
+    },
+    "snowWolf": {
+      "name": "Snow Wolf",
+      "desc": "Choose a player on the first night. When Snow Wolf dies (any cause), the chosen player dies too"
+    },
+    "vegetarianWolf": {
+      "name": "Vegetarian Wolf",
+      "desc": "Part of the wolf pack and knows who the wolves are. Participates in wolf vote but cannot kill alone — if only Vegetarian Wolves remain, wolves cannot kill"
+    },
+    "wolfFang": {
+      "name": "Wolf Fang",
+      "desc": "Can only use the bite ability when it is the last wolf alive. Until then, participates in wolf discussions but cannot vote to kill"
+    },
+    "monk": {
+      "name": "Monk",
+      "desc": "Each night, bless one player to protect them from being killed by werewolves"
+    },
+    "lycan": {
+      "name": "Lycan",
+      "desc": "A villager who appears as Evil when checked by the Seer. No special abilities"
+    },
+    "vampire": {
+      "name": "Vampire",
+      "desc": "Each night, mark a player. Choose to kill — all marked players die. Immune to werewolf bite. Solo evil role — wins by being the last one standing"
+    },
+    "cultLeader": {
+      "name": "Cult Leader",
+      "desc": "Each night, recruit one player into the cult. Win when cult members are the majority of living players. Immune to werewolf bite"
     }
   },
   "team": {
@@ -468,7 +542,9 @@
     "jailer": "{player} was executed in jail",
     "pirate": "{player} was killed in a pirate duel",
     "plague": "{player} died from the plague",
-    "cursedWolfRevenge": "{player} was cursed and died after voting"
+    "cursedWolfRevenge": "{player} was cursed and died after voting",
+    "snowWolfDrag": "{player} was dragged to death by the Snow Wolf",
+    "vampireKillDeath": "{player} was killed by the Vampire"
   },
   "win": {
     "village": "The Village Wins!",
@@ -484,6 +560,8 @@
     "loneWolf": "The Lone Wolf Wins!",
     "pirate": "The Pirate Wins!",
     "plagueDoctor": "The Plague Doctor Wins!",
-    "corruptor": "The Corruptor Wins!"
+    "corruptor": "The Corruptor Wins!",
+    "cultLeader": "The Cult Takes Over!",
+    "vampire": "The Vampire Wins!"
   }
 }

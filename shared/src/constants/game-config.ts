@@ -35,14 +35,14 @@ export const GAME_CONFIG = {
 } as const;
 
 export const DEFAULT_TIMERS: GameTimers = {
-  night: 60,
+  night: 45,
   day: 60,
   vote: 30,
   lastWords: 15,
 };
 
 export const TIMER_OPTIONS = {
-  night: [30, 60, 90],
+  night: [30, 45, 60, 90],
   day: [60, 120, 180],
   vote: [20, 30, 45],
   lastWords: [10, 15, 20],

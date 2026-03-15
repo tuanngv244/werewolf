@@ -6,6 +6,7 @@ import { useSocket } from '@/hooks/useSocket';
 import { useRouter } from '@/lib/navigation';
 import { getSocket } from '@/lib/socket';
 import { useGameStore } from '@/stores/game-store';
+import { useRoomStore } from '@/stores/room-store';
 
 function SocketEventListener() {
   useSocket();
@@ -30,6 +31,45 @@ function GameStartRedirect() {
       hasRedirected.current = false;
     }
   }, [gameId]);
+
+  return null;
+}
+
+/**
+ * Watches for the roomDeletedByHost flag and redirects non-host players
+ * to the rooms page when the host deletes a room they were in.
+ */
+function RoomDeletedRedirect() {
+  const router = useRouter();
+  const roomDeletedByHost = useRoomStore((s) => s.roomDeletedByHost);
+  const setRoomDeletedByHost = useRoomStore((s) => s.setRoomDeletedByHost);
+
+  useEffect(() => {
+    if (roomDeletedByHost) {
+      // Clear the flag before navigating to avoid re-triggering
+      setRoomDeletedByHost(false);
+      router.push('/rooms');
+    }
+  }, [roomDeletedByHost, setRoomDeletedByHost, router]);
+
+  return null;
+}
+
+/**
+ * Watches for the roomKicked flag and redirects the kicked player
+ * to the rooms page.
+ */
+function RoomKickedRedirect() {
+  const router = useRouter();
+  const roomKicked = useRoomStore((s) => s.roomKicked);
+  const setRoomKicked = useRoomStore((s) => s.setRoomKicked);
+
+  useEffect(() => {
+    if (roomKicked) {
+      setRoomKicked(false);
+      router.push('/rooms');
+    }
+  }, [roomKicked, setRoomKicked, router]);
 
   return null;
 }
@@ -61,6 +101,8 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     <>
       <SocketEventListener />
       <GameStartRedirect />
+      <RoomDeletedRedirect />
+      <RoomKickedRedirect />
       {children}
     </>
   );

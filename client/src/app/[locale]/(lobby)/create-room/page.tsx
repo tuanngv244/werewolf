@@ -16,11 +16,15 @@ const ROLE_EMOJI: Record<string, string> = {
   medium: '👻', witch: '🧙', avenger: '⚔️', beast_hunter: '🪤', cursed: '🌑',
   bodyguard: '🛡️', priest: '✝️', elder: '👴', baker: '🍞', drunk: '🍺',
   mayor: '🎩', pacifist: '☮️', sleepwalker: '😴', hermit: '🏔️', apprentice_seer: '🌟',
+  vigilante: '🔫', spy: '🕵️', jailer: '🔒', grave_robber: '⚰️',
+  monk: '🙏', lycan: '🌕', vampire: '🧛', cult_leader: '📿',
   werewolf: '🐺', werewolf_shaman: '🐺', alpha_werewolf: '🐺', werewolf_seer: '🐺',
   nightmare_wolf: '🐺', shadow_wolf: '🐺', blood_moon_wolf: '🐺', howler_wolf: '🐺',
-  lone_wolf: '🐺', venom_wolf: '🐺',
+  lone_wolf: '🐺', venom_wolf: '🐺', infector_wolf: '🐺', stalker_wolf: '🐺', cursed_wolf: '🐺',
+  snow_wolf: '🐺', vegetarian_wolf: '🐺', wolf_fang: '🐺',
   headhunter: '🎯', fool: '🃏', bomber: '💣', serial_killer: '🔪', cupid: '💘',
   arsonist: '🔥', survivor: '🦺', amnesiac: '❓', doppelganger: '🪞', jester: '🤡',
+  pirate: '🏴‍☠️', plague_doctor: '🩺', corruptor: '😈',
 };
 
 // ─── Group roles by team ────────────────────────

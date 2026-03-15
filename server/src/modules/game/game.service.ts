@@ -4,11 +4,20 @@ import { Repository } from 'typeorm';
 import { RedisService } from '../../common/redis/redis.service';
 import { GameEngine } from './game.engine';
 import { GameRecord } from '../../database/entities/game-record.entity';
-import { GamePhase, Role, Team, PlayerState, GameTimers, WinCondition } from '@shared/types/game.types';
+import { GamePhase, Role, Team, PlayerState, GameTimers, WinCondition, DeathCause } from '@shared/types/game.types';
 import { RoomState } from '@shared/types/room.types';
 import { v4 as uuid } from 'uuid';
 
 const GAME_TTL = 7200; // 2 hours
+
+export interface GameLogEntry {
+  round: number;
+  phase: 'night' | 'day' | 'vote';
+  action: string;     // e.g. 'werewolf_attack', 'doctor_save', 'witch_heal', 'witch_kill', 'seer_check', 'vote_out', 'gunner_shot'
+  actorId?: string;   // who performed the action (null for some)
+  targetId?: string;  // who was affected
+  result?: string;    // extra info (e.g. seer alignment, 'saved', 'killed')
+}
 
 export interface GameState {
   id: string;
@@ -20,6 +29,7 @@ export interface GameState {
   phaseEndAt: number;
   nightActions: NightActions;
   startedAt: number;
+  gameLog: GameLogEntry[];
 }
 
 export interface NightActions {
@@ -45,6 +55,12 @@ export interface NightActions {
   nightmareWolfTarget?: string;
   venomWolfTarget?: string;
   loneWolfTarget?: string;
+  // ROLES.md new role actions
+  monkTarget?: string;
+  vampireTarget?: string;
+  vampireKill?: boolean;
+  cultLeaderTarget?: string;
+  snowWolfDragTarget?: string;
 }
 
 @Injectable()
@@ -70,6 +86,7 @@ export class GameService {
       phaseEndAt: Date.now() + 15000, // 15s intro phase (12s story + 3s buffer)
       nightActions: { werewolfVotes: {} },
       startedAt: Date.now(),
+      gameLog: [],
     };
 
     await this.saveGame(game);
@@ -121,6 +138,10 @@ export class GameService {
         const nightResult = this.engine.resolveNight(game);
         game.phase = GamePhase.DAWN;
         game.phaseEndAt = Date.now() + 8000; // 8s for dawn reveal
+
+        // Append night action log entries
+        if (!game.gameLog) game.gameLog = [];
+        game.gameLog.push(...nightResult.logEntries);
 
         for (const death of nightResult.deaths) {
           const player = game.players.find((p) => p.id === death.playerId);
@@ -202,7 +223,23 @@ export class GameService {
             eliminated.isAlive = false;
             eliminated.deathCause = 'VOTED';
             eliminated.deathRound = game.round;
+
+            // Snow Wolf drag — if Snow Wolf is voted out, drag target dies too
+            if (eliminated.role === Role.SNOW_WOLF && eliminated.snowWolfState?.dragTargetId) {
+              const dragTarget = game.players.find((p) => p.id === eliminated.snowWolfState!.dragTargetId && p.isAlive);
+              if (dragTarget) {
+                dragTarget.isAlive = false;
+                dragTarget.deathCause = DeathCause.SNOW_WOLF_DRAG;
+                dragTarget.deathRound = game.round;
+                if (!game.gameLog) game.gameLog = [];
+                game.gameLog.push({ round: game.round, phase: 'vote', action: 'snow_wolf_drag', actorId: eliminated.id, targetId: dragTarget.id, result: 'killed' });
+              }
+            }
           }
+
+          // Log vote elimination
+          if (!game.gameLog) game.gameLog = [];
+          game.gameLog.push({ round: game.round, phase: 'vote', action: 'vote_out', targetId: voteResult.eliminatedId, result: 'eliminated' });
 
           // Check solo win conditions (Fool, Headhunter)
           const soloWin = this.engine.checkSoloWinOnVote(game, voteResult.eliminatedId);
@@ -400,6 +437,36 @@ export class GameService {
         if (player.apprenticeSeerState?.isActivated && targetId) {
           game.nightActions.seerTarget = targetId;
         }
+        break;
+      // ROLES.md new roles
+      case Role.SNOW_WOLF:
+        if (action === 'werewolf_kill' && targetId) {
+          game.nightActions.werewolfVotes[playerId] = targetId;
+        }
+        if (action === 'drag' && targetId && game.round === 1) {
+          game.nightActions.snowWolfDragTarget = targetId;
+        }
+        if (action !== 'werewolf_kill' && action !== 'drag' && targetId) {
+          game.nightActions.werewolfVotes[playerId] = targetId;
+        }
+        break;
+      case Role.VEGETARIAN_WOLF:
+      case Role.WOLF_FANG:
+        if (targetId) game.nightActions.werewolfVotes[playerId] = targetId;
+        break;
+      case Role.MONK:
+        if (targetId) game.nightActions.monkTarget = targetId;
+        break;
+      case Role.VAMPIRE:
+        if (action === 'mark' && targetId) game.nightActions.vampireTarget = targetId;
+        if (action === 'kill') game.nightActions.vampireKill = true;
+        // Default to mark
+        if (action !== 'mark' && action !== 'kill' && targetId) {
+          game.nightActions.vampireTarget = targetId;
+        }
+        break;
+      case Role.CULT_LEADER:
+        if (targetId) game.nightActions.cultLeaderTarget = targetId;
         break;
     }
 

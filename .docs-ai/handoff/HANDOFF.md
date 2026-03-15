@@ -1,20 +1,66 @@
 # Werewolf Game — Session Handoff
 
-> Last updated: 2026-03-13
+> Last updated: 2026-03-14
 
 ---
 
 ## Current Session
 
-**Status:** errors.md BUGS #1 & #2 — FIXED
-**Date:** 2026-03-13
-**Summary:** Fixed two bugs from errors.md:
-1. **Witch potion disable**: Server now sends `hasHealPotion`/`hasKillPotion` state via `game:witch_target` event. Client stores and uses these to disable used potion buttons (greyed out, strikethrough text).
-2. **Character movement broken**: Fixed 3 issues — `canMoveTo` now filters out terrain mesh hits (only blocks wall-like surfaces), slope guard increased from 0.5 to 2.0, and WASD keys added to keyboard listener alongside arrow keys.
+**Status:** IMPROVES.md Cases 2-4 — COMPLETED
+**Date:** 2026-03-14
+**Summary (latest):**
+1. **IMPROVES #2 — Third-person camera rotation** — Fixed camera to look forward over the character's shoulder instead of just at the character's back. Camera now looks 2 units ahead in the character's facing direction. Also fixed position tracking in `GLBCharacterWithPosTracking` — was using outer wrapper group position (always 0,0,0) instead of inner animated character group position.
+2. **IMPROVES #3 — Default panoramic camera** — Changed default camera mode from `'thirdPerson'` to `'panoramic'`. Players start with overview camera, press Y to switch to third-person.
+3. **IMPROVES #4 — Character movement collision & terrain following** — Re-implemented `canMoveTo()` with 3-layer collision:
+   - Height-based: blocks movement if ground drops >0.8 (cliff) or rises >0.6 (wall) per step
+   - Void detection: blocks movement if no valid ground at target (below MIN_GROUND_Y = -1.5)
+   - Horizontal raycast: detects walls at waist height (normal.y < 0.3 = clearly a wall)
+   - Ground clamp: added per-frame safety check that snaps character back up if they sink below ground
+4. **Stale shared/src JS files** — Removed 12 stale .js/.d.ts/.js.map files from `shared/src/` that were causing webpack to load old 17-role enum instead of 57-role .ts source. Added `shared/.gitignore` to prevent recurrence.
+5. **Create-room page ROLE_EMOJI** — Updated missing 17 role emojis in create-room page.
+
+**Previous session:**
+1. Fixed Seer/Aura Seer results to follow team-based rules: Village team → Good, Werewolf team → Evil, Solo team → Unknown. Fixed 12 roles with mismatched seer results.
+2. Implemented 7 new roles from ROLES.md:
+   - **Snow Wolf** (Sói Tuyết) — Werewolf team. On night 1, chooses a drag target. When Snow Wolf dies, the drag target dies too.
+   - **Vegetarian Wolf** (Sói Ăn Chay) — Werewolf team. Participates in wolf vote but if only veggie wolves remain, no kill occurs.
+   - **Wolf Fang** (Nanh Sói) — Werewolf team. Normal wolf but vote is skipped if other wolves exist (decoy role).
+   - **Monk** (Tu Sĩ) — Village team. Protects a player each night (like Doctor but separate role, checked after Doctor).
+   - **Lycan** (Người Hoá Sói) — Village team. Normal villager but appears as Evil to Seer/Aura Seer.
+   - **Vampire** (Ma Cà Rồng) — Village team. Marks players at night; can choose to kill all marked players. Immune to wolf kill.
+   - **Cult Leader** (Trưởng Giáo Phái) — Village team. Recruits players into cult. Wins when cult > half of living players.
+
+**Architecture:**
+- **Types** (`shared/src/types/game.types.ts`): Added 7 Role enum values, 2 DeathCause entries (SNOW_WOLF_DRAG, VAMPIRE_KILL), 1 WinCondition (CULT_LEADER_WINS), NightActions fields (monkTarget, vampireTarget, vampireKill, cultLeaderTarget, snowWolfDragTarget), state interfaces (SnowWolfState, VampireState, CultLeaderState), PlayerState fields.
+- **Role Definitions** (`shared/src/constants/roles.ts`): Added ROLE_DEFINITIONS for all 7 new roles with correct team, seerResult, priority, and hasNightAction values.
+- **Engine** (`server/src/modules/game/game.engine.ts`): Role state init in assignRoles(). Wolf vote modifications (Wolf Fang skip, Vegetarian Wolf null kill). Snow Wolf drag (night 1 + on vote death). Monk protection (section 7.2). Vampire/Cult Leader wolf immunity. Vampire mark/kill resolution (section 14). Cult Leader recruitment (section 15). Snow Wolf drag death (section 16.5). Cult Leader win condition.
+- **Service** (`server/src/modules/game/game.service.ts`): NightActions fields added. recordNightAction switch cases for all 7 roles. Snow Wolf drag on vote elimination. DeathCause import.
+- **Client UI** (`client/src/app/[locale]/(game)/game/page.tsx`): ROLE_ICONS for 7 roles. hasNightAction array updated. Vampire-specific UI panel (mark/kill buttons). Action string mappings.
+- **i18n** (`client/src/messages/en.json`, `vi.json`): Role display names, descriptions, action strings, death messages, vampire UI strings, win conditions — all in both English and Vietnamese.
+
+**Files Modified:**
+- `shared/src/types/game.types.ts` — New Role enums, DeathCause, WinCondition, NightActions, state interfaces
+- `shared/src/constants/roles.ts` — 12 seer result fixes + 7 new ROLE_DEFINITIONS
+- `server/src/modules/game/game.engine.ts` — Role initialization, wolf voting, night resolution sections, win condition
+- `server/src/modules/game/game.service.ts` — NightActions interface, recordNightAction, Snow Wolf vote drag
+- `client/src/app/[locale]/(game)/game/page.tsx` — Role icons, night action UI, Vampire panel
+- `client/src/messages/en.json` — All i18n keys for 7 new roles
+- `client/src/messages/vi.json` — All i18n keys for 7 new roles (Vietnamese)
+
+**Build Status:** Both client (`npx next build`) and server (`npx nest build`) pass with zero errors.
 
 ---
 
 ## Active Tasks
+
+None — awaiting user verification of 7 new roles implementation.
+
+---
+
+## Completed (Recent)
+
+### IMPROVES.md Cases 1-4 (Round 2) — Deep Fix (2026-03-14)
+- See above for Seer Result Fix (Case 3) and New Roles (Case 4)
 
 ### IMPROVE_TASKS #14 — Character Positioning: Fire Center + Ground Detection (Awaiting Verification)
 - **Root Cause #1 — Wrong fire center:** The fire detection searched for nodes named "lamp"/"fire"/"flame" and found 2 lamp POSTS (Lamp_smal, Lamp_smal.001) on the far eastern periphery of the island. Their average position (8.89, 0.51, 2.65) is far from the flat village center. Characters arranged in a circle around this point (radius ~2.8) landed on slopes, shoreline, and even over water — causing them to sink through terrain edges.
@@ -242,6 +288,6 @@
 ## Project Context
 - **Stack:** Next.js 15 + NestJS + PostgreSQL + Redis + Socket.io + TypeScript
 - **3D:** React Three Fiber v9 + Three.js 0.170 + Drei 10.x
-- **Roles:** 16 total (ROLES.md is source of truth)
-- **Teams:** Village (9), Werewolf (4), Solo (3)
+- **Roles:** 50+ total (ROLES.md is source of truth)
+- **Teams:** Village, Werewolf, Solo (+ Vampire/Cult Leader on Village team)
 - **i18n:** English + Vietnamese (next-intl)

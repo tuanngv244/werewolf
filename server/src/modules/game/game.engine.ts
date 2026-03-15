@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { GameState, NightActions } from './game.service';
+import { GameState, NightActions, GameLogEntry } from './game.service';
 import {
   Role,
   Team,
@@ -21,6 +21,7 @@ interface NightResolution {
   deaths: { playerId: string; cause: DeathCause }[];
   saved: string[];
   messages: string[];
+  logEntries: GameLogEntry[];
   seerResult?: { targetId: string; alignment: SeerResult };
   auraSeerResult?: { targetId: string; result: SeerResult };
   werewolfSeerResult?: { targetId: string; role: Role };
@@ -142,6 +143,16 @@ export class GameEngine {
       if (role === Role.VENOM_WOLF) {
         ps.venomWolfState = { hasVenom: true };
       }
+      // ─── ROLES.md new role states ───
+      if (role === Role.SNOW_WOLF) {
+        ps.snowWolfState = {};
+      }
+      if (role === Role.VAMPIRE) {
+        ps.vampireState = { markedPlayers: [] };
+      }
+      if (role === Role.CULT_LEADER) {
+        ps.cultLeaderState = { cultMembers: [] };
+      }
 
       return ps;
     });
@@ -152,6 +163,7 @@ export class GameEngine {
       deaths: [],
       saved: [],
       messages: [],
+      logEntries: [],
     };
 
     const actions = game.nightActions;
@@ -191,6 +203,7 @@ export class GameEngine {
             ? SeerResult.EVIL
             : getRoleSeerResult(target.role);
           result.seerResult = { targetId: target.id, alignment };
+          result.logEntries.push({ round: game.round, phase: 'night', action: 'seer_check', actorId: seer.id, targetId: target.id, result: alignment });
         }
       }
     }
@@ -206,6 +219,7 @@ export class GameEngine {
             seerResult = SeerResult.EVIL;
           }
           result.auraSeerResult = { targetId: target.id, result: seerResult };
+          result.logEntries.push({ round: game.round, phase: 'night', action: 'aura_seer_check', actorId: auraSeer.id, targetId: target.id, result: seerResult });
         }
       }
     }
@@ -217,6 +231,7 @@ export class GameEngine {
         const target = game.players.find((p) => p.id === actions.werewolfSeerTarget);
         if (target) {
           result.werewolfSeerResult = { targetId: target.id, role: target.role };
+          result.logEntries.push({ round: game.round, phase: 'night', action: 'werewolf_seer_check', actorId: wSeer.id, targetId: target.id, result: target.role });
         }
       }
     }
@@ -227,6 +242,11 @@ export class GameEngine {
       const voteCounts: Record<string, number> = {};
       for (const [wolfId, targetId] of Object.entries(actions.werewolfVotes)) {
         const wolf = game.players.find((p) => p.id === wolfId);
+        // Wolf Fang can only vote when it's the last wolf alive
+        if (wolf?.role === Role.WOLF_FANG) {
+          const otherWolves = alive.filter((p) => isWerewolfRole(p.role) && p.id !== wolf.id);
+          if (otherWolves.length > 0) continue; // skip vote, not last wolf
+        }
         const weight = wolf?.role === Role.ALPHA_WEREWOLF ? 2 : 1;
         voteCounts[targetId] = (voteCounts[targetId] || 0) + weight;
       }
@@ -237,6 +257,25 @@ export class GameEngine {
           maxVotes = count;
           werewolfTarget = targetId;
         }
+      }
+    }
+
+    // ─── 4.2 Vegetarian Wolf check — if only vegetarian wolves are alive, no kill ───
+    if (werewolfTarget) {
+      const nonVeggieWolves = alive.filter((p) => isWerewolfRole(p.role) && p.role !== Role.VEGETARIAN_WOLF);
+      if (nonVeggieWolves.length === 0) {
+        // Only vegetarian wolves remain — they cannot kill
+        werewolfTarget = null;
+        result.messages.push('vegetarian_wolf_no_kill');
+      }
+    }
+
+    // ─── 4.3 Snow Wolf drag target (first night only) ───
+    if (actions.snowWolfDragTarget && game.round === 1) {
+      const snowWolf = alive.find((p) => p.role === Role.SNOW_WOLF);
+      if (snowWolf && snowWolf.snowWolfState) {
+        snowWolf.snowWolfState.dragTargetId = actions.snowWolfDragTarget;
+        result.messages.push('snow_wolf_target_set');
       }
     }
 
@@ -261,7 +300,10 @@ export class GameEngine {
               [Role.VENOM_WOLF]: 7,
               [Role.BLOOD_MOON_WOLF]: 8,
               [Role.LONE_WOLF]: 9,
-              [Role.ALPHA_WEREWOLF]: 10,
+              [Role.VEGETARIAN_WOLF]: 10,
+              [Role.WOLF_FANG]: 11,
+              [Role.SNOW_WOLF]: 12,
+              [Role.ALPHA_WEREWOLF]: 13,
             };
             return (priority[a.role] || 0) - (priority[b.role] || 0);
           });
@@ -269,6 +311,7 @@ export class GameEngine {
         if (wolves.length > 0) {
           result.deaths.push({ playerId: wolves[0].id, cause: DeathCause.TRAP });
           result.messages.push('beast_hunter_trap_triggered');
+          result.logEntries.push({ round: game.round, phase: 'night', action: 'beast_hunter_trap', actorId: bh.id, targetId: wolves[0].id, result: 'killed' });
         }
         werewolfTarget = null;
       }
@@ -296,6 +339,7 @@ export class GameEngine {
             // Bodyguard dies instead
             result.deaths.push({ playerId: bodyguard.id, cause: DeathCause.WEREWOLF_KILL });
             result.messages.push('bodyguard_sacrifice');
+            result.logEntries.push({ round: game.round, phase: 'night', action: 'bodyguard_protect', actorId: bodyguard.id, targetId: actions.bodyguardTarget, result: 'sacrifice' });
             werewolfTarget = null;
           }
         }
@@ -309,6 +353,21 @@ export class GameEngine {
       if (doctor && !doctor.nightmareBlocked && !isBloodMoonNight) {
         doctorSaved = true;
         result.saved.push(werewolfTarget);
+        result.logEntries.push({ round: game.round, phase: 'night', action: 'doctor_save', actorId: doctor.id, targetId: werewolfTarget, result: 'saved' });
+        werewolfTarget = null;
+      }
+    } else if (actions.doctorTarget) {
+      // Doctor protected someone who was NOT the wolf target — no log needed
+    }
+
+    // ─── 7.2 Monk protection (bless/protect from wolf kill) ───
+    let monkSaved = false;
+    if (actions.monkTarget && werewolfTarget && werewolfTarget === actions.monkTarget) {
+      const monk = alive.find((p) => p.role === Role.MONK);
+      if (monk && !monk.nightmareBlocked && !isBloodMoonNight) {
+        monkSaved = true;
+        result.saved.push(werewolfTarget!);
+        result.logEntries.push({ round: game.round, phase: 'night', action: 'monk_protect', actorId: monk.id, targetId: werewolfTarget!, result: 'saved' });
         werewolfTarget = null;
       }
     }
@@ -324,6 +383,7 @@ export class GameEngine {
       // Heal
       if (actions.witchHeal && werewolfTarget && witch.witchState.hasHealPotion && !isBloodMoonNight) {
         result.saved.push(werewolfTarget);
+        result.logEntries.push({ round: game.round, phase: 'night', action: 'witch_heal', actorId: witch.id, targetId: werewolfTarget, result: 'saved' });
         witch.witchState.hasHealPotion = false;
         werewolfTarget = null;
       }
@@ -332,6 +392,7 @@ export class GameEngine {
         const witchTarget = alive.find((p) => p.id === actions.witchKillTarget);
         if (witchTarget) {
           result.deaths.push({ playerId: witchTarget.id, cause: DeathCause.WITCH_KILL });
+          result.logEntries.push({ round: game.round, phase: 'night', action: 'witch_kill', actorId: witch.id, targetId: witchTarget.id, result: 'killed' });
         }
         witch.witchState.hasKillPotion = false;
       }
@@ -348,9 +409,16 @@ export class GameEngine {
           target.role = Role.WEREWOLF;
           result.cursedTransformed = target.id;
           result.messages.push('cursed_transformed');
+          result.logEntries.push({ round: game.round, phase: 'night', action: 'cursed_transform', targetId: target.id });
         } else if (target.role === Role.BOMBER) {
           // Bomber can't be killed by werewolves
           result.messages.push('bomber_immune');
+        } else if (target.role === Role.VAMPIRE) {
+          // Vampire is immune to wolf bite
+          result.messages.push('vampire_immune');
+        } else if (target.role === Role.CULT_LEADER) {
+          // Cult Leader is immune to wolf bite
+          result.messages.push('cult_leader_immune');
         } else if (target.role === Role.ELDER && target.elderState && target.elderState.extraLives > 0) {
           // Elder survives first wolf attack
           target.elderState.extraLives--;
@@ -363,6 +431,7 @@ export class GameEngine {
           result.messages.push('survivor_vest');
         } else {
           result.deaths.push({ playerId: target.id, cause: DeathCause.WEREWOLF_KILL });
+          result.logEntries.push({ round: game.round, phase: 'night', action: 'werewolf_kill', targetId: target.id, result: 'killed' });
 
           // Priest holy water — if priest is killed by wolves, the attacking wolf dies too
           if (target.role === Role.PRIEST && target.priestState?.hasHolyWater) {
@@ -383,6 +452,7 @@ export class GameEngine {
             if (revengeTarget) {
               result.deaths.push({ playerId: revengeTarget.id, cause: DeathCause.AVENGER_REVENGE });
               result.messages.push('avenger_revenge');
+              result.logEntries.push({ round: game.round, phase: 'night', action: 'avenger_revenge', actorId: target.id, targetId: revengeTarget.id, result: 'killed' });
             }
           }
         }
@@ -400,6 +470,7 @@ export class GameEngine {
             result.saved.push(skTarget.id);
           } else {
             result.deaths.push({ playerId: skTarget.id, cause: DeathCause.SERIAL_KILLER });
+            result.logEntries.push({ round: game.round, phase: 'night', action: 'serial_killer_kill', actorId: sk.id, targetId: skTarget.id, result: 'killed' });
             if (sk.serialKillerState) sk.serialKillerState.killCount++;
           }
         }
@@ -444,6 +515,7 @@ export class GameEngine {
       if (bombTarget && !result.deaths.some((d) => d.playerId === bombTarget.id)) {
         result.deaths.push({ playerId: bombTarget.id, cause: DeathCause.BOMBER_EXPLOSION });
         result.messages.push('bomb_exploded');
+        result.logEntries.push({ round: game.round, phase: 'night', action: 'bomber_explode', actorId: bomber.id, targetId: bombTarget.id, result: 'killed' });
       }
       bomber.bomberState.bombTarget = undefined;
     }
@@ -477,7 +549,43 @@ export class GameEngine {
       }
     }
 
-    // ─── 14. Lovers death check ───
+    // ─── 14. Vampire mark/kill ───
+    const vampire = alive.find((p) => p.role === Role.VAMPIRE);
+    if (vampire && !vampire.nightmareBlocked && vampire.vampireState) {
+      if (actions.vampireKill) {
+        // Kill all marked players
+        for (const markedId of vampire.vampireState.markedPlayers) {
+          const markedPlayer = alive.find((p) => p.id === markedId);
+          if (markedPlayer && !result.deaths.some((d) => d.playerId === markedPlayer.id)) {
+            result.deaths.push({ playerId: markedPlayer.id, cause: DeathCause.VAMPIRE_KILL });
+            result.logEntries.push({ round: game.round, phase: 'night', action: 'vampire_kill', actorId: vampire.id, targetId: markedPlayer.id, result: 'killed' });
+          }
+        }
+        vampire.vampireState.markedPlayers = [];
+        result.messages.push('vampire_killed');
+      } else if (actions.vampireTarget) {
+        // Mark a player
+        if (!vampire.vampireState.markedPlayers.includes(actions.vampireTarget)) {
+          vampire.vampireState.markedPlayers.push(actions.vampireTarget);
+          result.logEntries.push({ round: game.round, phase: 'night', action: 'vampire_mark', actorId: vampire.id, targetId: actions.vampireTarget, result: 'marked' });
+        }
+      }
+    }
+
+    // ─── 15. Cult Leader recruitment ───
+    if (actions.cultLeaderTarget) {
+      const cultLeader = alive.find((p) => p.role === Role.CULT_LEADER);
+      if (cultLeader && !cultLeader.nightmareBlocked && cultLeader.cultLeaderState) {
+        const recruitTarget = alive.find((p) => p.id === actions.cultLeaderTarget);
+        if (recruitTarget && !cultLeader.cultLeaderState.cultMembers.includes(recruitTarget.id)) {
+          cultLeader.cultLeaderState.cultMembers.push(recruitTarget.id);
+          result.logEntries.push({ round: game.round, phase: 'night', action: 'cult_recruit', actorId: cultLeader.id, targetId: recruitTarget.id, result: 'recruited' });
+          result.messages.push('cult_recruited');
+        }
+      }
+    }
+
+    // ─── 16. Lovers death check ───
     // If one lover dies, the other dies too
     for (const death of [...result.deaths]) {
       const deadPlayer = game.players.find((p) => p.id === death.playerId);
@@ -490,7 +598,20 @@ export class GameEngine {
       }
     }
 
-    // ─── 15. Apprentice Seer activation ───
+    // ─── 16.5 Snow Wolf drag — if snow wolf dies, drag target dies too ───
+    for (const death of [...result.deaths]) {
+      const deadPlayer = game.players.find((p) => p.id === death.playerId);
+      if (deadPlayer?.role === Role.SNOW_WOLF && deadPlayer.snowWolfState?.dragTargetId) {
+        const dragTarget = alive.find((p) => p.id === deadPlayer.snowWolfState!.dragTargetId);
+        if (dragTarget && !result.deaths.some((d) => d.playerId === dragTarget.id)) {
+          result.deaths.push({ playerId: dragTarget.id, cause: DeathCause.SNOW_WOLF_DRAG });
+          result.logEntries.push({ round: game.round, phase: 'night', action: 'snow_wolf_drag', actorId: deadPlayer.id, targetId: dragTarget.id, result: 'killed' });
+          result.messages.push('snow_wolf_dragged');
+        }
+      }
+    }
+
+    // ─── 17. Apprentice Seer activation ───
     // If original Seer died this round, activate Apprentice Seer
     const seerDied = result.deaths.some((d) => {
       const p = game.players.find((pl) => pl.id === d.playerId);
@@ -675,13 +796,40 @@ export class GameEngine {
     }
 
     // Check Arsonist solo win — only arsonist alive
-    const arsonist = alive.find((p) => p.role === Role.ARSONIST);
-    if (arsonist && alive.length === 1) {
+    const arsonist2 = alive.find((p) => p.role === Role.ARSONIST);
+    if (arsonist2 && alive.length === 1) {
       return {
         winCondition: WinCondition.ARSONIST_WINS,
         team: Team.SOLO,
-        playerIds: [arsonist.id],
+        playerIds: [arsonist2.id],
       };
+    }
+
+    // Check Vampire solo win — only vampire alive
+    const vampire = alive.find((p) => p.role === Role.VAMPIRE);
+    if (vampire && alive.length === 1) {
+      return {
+        winCondition: WinCondition.VAMPIRE_WINS,
+        team: Team.SOLO,
+        playerIds: [vampire.id],
+      };
+    }
+
+    // Check Cult Leader win — cult members are majority of alive players
+    const cultLeader = alive.find((p) => p.role === Role.CULT_LEADER);
+    if (cultLeader && cultLeader.cultLeaderState) {
+      const aliveCultMembers = cultLeader.cultLeaderState.cultMembers.filter(
+        (id) => alive.some((p) => p.id === id),
+      );
+      // Cult leader + alive cult members >= majority of alive players
+      const cultSize = aliveCultMembers.length + 1; // +1 for the cult leader
+      if (cultSize > alive.length / 2) {
+        return {
+          winCondition: WinCondition.CULT_LEADER_WINS,
+          team: Team.VILLAGE,
+          playerIds: [cultLeader.id, ...aliveCultMembers],
+        };
+      }
     }
 
     return null;

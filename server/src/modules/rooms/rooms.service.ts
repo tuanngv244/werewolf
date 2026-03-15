@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { RedisService } from '../../common/redis/redis.service';
 import { RoomState, RoomPlayer, RoomSettings, RoomStatus } from '@shared/types/room.types';
+import { DEFAULT_TIMERS } from '@shared/constants/game-config';
 import { v4 as uuid } from 'uuid';
 
 const ROOM_TTL = 3600; // 1 hour
@@ -29,12 +30,7 @@ export class RoomsService {
         maxPlayers: settings.maxPlayers || 8,
         isPrivate: settings.isPrivate || false,
         roles: settings.roles || [],
-        timers: settings.timers || {
-          night: 60,
-          day: 60,
-          vote: 30,
-          lastWords: 15,
-        },
+        timers: settings.timers || DEFAULT_TIMERS,
       },
     };
 
