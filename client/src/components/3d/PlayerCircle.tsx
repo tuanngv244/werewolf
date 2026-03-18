@@ -114,7 +114,7 @@ function getCostume(role?: Role | string): RoleCostume {
 
 // Model facing offset: Adjust if the GLB model's front doesn't align with Three.js -Z convention.
 // Set to 0 if model faces -Z (Blender default), or Math.PI if model faces +Z.
-const MODEL_FACING_OFFSET = 0;
+const MODEL_FACING_OFFSET = Math.PI;
 
 // ─── Emoji List for Picker ─────────────────────────
 const EMOJI_LIST = ['😀', '😂', '😍', '😎', '🤔', '😱', '🤣', '😡', '👍', '👏', '🔥', '💀', '🐺', '😈', '🙏', '❤️'];
