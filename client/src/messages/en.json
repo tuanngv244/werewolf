@@ -211,6 +211,20 @@
     "micBlocked": "Microphone access denied",
     "deadCantTalk": "Dead players cannot talk"
   },
+  "meeting": {
+    "title": "Meeting",
+    "connecting": "Connecting...",
+    "failed": "Connection failed",
+    "noRoom": "No room",
+    "showMeeting": "Show meeting",
+    "muteMic": "Mute microphone",
+    "unmuteMic": "Unmute microphone",
+    "cameraOn": "Turn on camera",
+    "cameraOff": "Turn off camera",
+    "muteSound": "Mute sound",
+    "unmuteSound": "Unmute sound",
+    "leaveMeeting": "Leave meeting"
+  },
   "chat": {
     "title": "Chat",
     "placeholder": "Type a message...",

@@ -12,6 +12,7 @@ import { waitForConnection, getSocket } from '@/lib/socket';
 import { GAME_CONFIG, DEFAULT_ROLES } from '@shared/constants/game-config';
 import { Role, Team } from '@shared/types/game.types';
 import { ROLE_DEFINITIONS } from '@shared/constants/roles';
+import { JitsiMeetPanel } from '@/components/game/JitsiMeetPanel';
 
 // ─── Role emoji mapping ────────────────────────
 const ROLE_EMOJI: Record<string, string> = {
@@ -500,7 +501,7 @@ export default function RoomPage() {
   }
 
   return (
-    <main className="min-h-screen px-4 py-8">
+    <main className="min-h-screen px-4 py-8 relative">
       <div className="max-w-2xl mx-auto">
         {/* Room Header */}
         <div className="flex items-center justify-between mb-8">
@@ -515,9 +516,15 @@ export default function RoomPage() {
               {currentRoom.players.length}/{currentRoom.settings.maxPlayers} {t('lobby.players')}
             </p>
           </div>
-          <Button variant="ghost" onClick={handleLeave}>
-            {t('lobby.leave')}
-          </Button>
+          <div className="flex items-center gap-2">
+            <JitsiMeetPanel
+              roomCode={currentRoom.code}
+              displayName={user?.username}
+            />
+            <Button variant="ghost" onClick={handleLeave}>
+              {t('lobby.leave')}
+            </Button>
+          </div>
         </div>
 
         {/* Player List */}

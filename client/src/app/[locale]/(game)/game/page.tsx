@@ -18,6 +18,7 @@ import { useRouter } from '@/lib/navigation';
 import dynamic from 'next/dynamic';
 import { useVoiceChat } from '@/hooks/useVoiceChat';
 import { VoiceControls } from '@/components/game/VoiceControls';
+import { JitsiMeetPanel } from '@/components/game/JitsiMeetPanel';
 import { useRoomStore } from '@/stores/room-store';
 import * as THREE from 'three';
 import type { CollisionData } from '@/components/3d/collision-utils';
@@ -1172,6 +1173,7 @@ function RoleListButton({ isNight }: { isNight: boolean }) {
 function DeathLog({ isNight }: { isNight: boolean }) {
   const t = useTranslations();
   const deathLog = useGameStore((s) => s.deathLog);
+  const [isOpen, setIsOpen] = useState(true); // default open
 
   if (deathLog.length === 0) return null;
 
@@ -1188,34 +1190,50 @@ function DeathLog({ isNight }: { isNight: boolean }) {
   };
 
   return (
-    <div className="pointer-events-auto">
-      <GlassCard isNight={isNight} className="!py-2 !px-3 w-56">
-        <div className="flex items-center gap-1.5 mb-2">
-          <span>💀</span>
-          <span
-            className={`text-xs font-semibold ${isNight ? 'text-night-text' : 'text-day-text'}`}
+    <div className="pointer-events-auto relative">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all backdrop-blur-xl border ${
+          isNight
+            ? 'bg-night-card/70 border-night-border/50 text-night-text hover:bg-night-card/90'
+            : 'bg-white/70 border-day-border/50 text-day-text hover:bg-white/90'
+        }`}
+      >
+        <span>💀</span>
+        <span>{t('game.deathLog')}</span>
+        <Badge variant="danger">{deathLog.length}</Badge>
+        <span className="text-[10px]">{isOpen ? '▲' : '▼'}</span>
+      </button>
+
+      {isOpen && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
+          <div
+            className={`absolute top-full mt-2 left-0 z-50 w-56 rounded-xl border backdrop-blur-xl shadow-xl ${
+              isNight
+                ? 'bg-night-card/95 border-night-border/60'
+                : 'bg-white/95 border-day-border/60'
+            }`}
           >
-            {t('game.deathLog')}
-          </span>
-          <Badge variant="danger">{deathLog.length}</Badge>
-        </div>
-        <div className="space-y-1.5 max-h-32 overflow-y-auto scrollbar-thin">
-          {deathLog.map((entry, i) => (
-            <div key={`${entry.playerId}-${i}`} className="flex items-center gap-2 text-xs">
-              <span>{causeIcons[entry.cause] || '💀'}</span>
-              <span className="font-semibold text-danger truncate">{entry.playerName}</span>
-              <span className={`truncate ${isNight ? 'text-night-muted' : 'text-day-muted'}`}>
-                {causeLabels[entry.cause] || entry.cause}
-              </span>
-              <span
-                className={`ml-auto text-[10px] flex-shrink-0 ${isNight ? 'text-night-muted' : 'text-day-muted'}`}
-              >
-                R{entry.round}
-              </span>
+            <div className="p-2.5 space-y-1.5 max-h-40 overflow-y-auto scrollbar-thin">
+              {deathLog.map((entry, i) => (
+                <div key={`${entry.playerId}-${i}`} className="flex items-center gap-2 text-xs">
+                  <span>{causeIcons[entry.cause] || '💀'}</span>
+                  <span className="font-semibold text-danger truncate">{entry.playerName}</span>
+                  <span className={`truncate ${isNight ? 'text-night-muted' : 'text-day-muted'}`}>
+                    {causeLabels[entry.cause] || entry.cause}
+                  </span>
+                  <span
+                    className={`ml-auto text-[10px] flex-shrink-0 ${isNight ? 'text-night-muted' : 'text-day-muted'}`}
+                  >
+                    R{entry.round}
+                  </span>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      </GlassCard>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -1333,8 +1351,10 @@ function Game3DScene({
   const handleCollisionDataReady = useCallback((data: CollisionData) => {
     console.log(
       '[Game3D] Collision data ready:',
-      data.walkableMeshes.length, 'walkable,',
-      data.blockingMeshes.length, 'blocking',
+      data.walkableMeshes.length,
+      'walkable,',
+      data.blockingMeshes.length,
+      'blocking',
     );
     setCollisionData(data);
   }, []);
@@ -1431,9 +1451,9 @@ export default function GamePage() {
   const { user } = useAuthStore();
   const { emit } = useEmit();
 
-  // ── Voice chat ──
+  // ── Voice chat ── (disabled — video meet panel handles audio+video now)
   const roomCode = useRoomStore((s) => s.currentRoom?.code ?? null);
-  useVoiceChat(roomCode);
+  // useVoiceChat(roomCode);
 
   // ── Sound effects (subscribe to game state changes) ──
   useGameSounds();
@@ -1441,7 +1461,6 @@ export default function GamePage() {
   // ── Player selection state (used for voting + night actions + 3D highlight) ──
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   // ── Mobile bottom panel tab (toggle action panel vs chat) ──
-  const [mobileTab, setMobileTab] = useState<'action' | 'chat'>('action');
 
   // Clear selection when phase changes
   useEffect(() => {
@@ -1876,6 +1895,12 @@ export default function GamePage() {
 
               {/* Role list button - positioned near the role display */}
               <RoleListButton isNight={isNight} />
+
+              {/* Video meeting panel - beside role list */}
+              <JitsiMeetPanel roomCode={roomCode} displayName={user?.username} isNight={isNight} />
+
+              {/* Death Log - inline in top bar, always visible */}
+              <DeathLog isNight={isNight} />
             </div>
 
             <GlassCard isNight={isNight} className="!py-1 !px-3 md:!px-4 flex-shrink-0">
@@ -1906,46 +1931,11 @@ export default function GamePage() {
         {/* Spacer */}
         <div className="flex-1" />
 
-        {/* Death Log (fixed positioning — adjusts for mobile) */}
-        <div className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+12rem)] right-2 md:bottom-3 md:right-3 z-20">
-          <DeathLog isNight={isNight} />
-        </div>
-
-        {/* Bottom: Action Panel + Chat */}
+        {/* Bottom: Action Panel */}
         <div className="pointer-events-auto p-2 md:p-3 pb-[env(safe-area-inset-bottom,8px)]">
-          {/* Mobile tab switcher (visible only on small screens) */}
-          <div className="flex gap-1 mb-2 md:hidden">
-            <button
-              onClick={() => setMobileTab('action')}
-              className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                mobileTab === 'action'
-                  ? 'bg-primary text-white'
-                  : isNight
-                    ? 'bg-night-card/50 text-night-muted'
-                    : 'bg-white/50 text-day-muted'
-              }`}
-            >
-              🎮 {t('game.actions')}
-            </button>
-            <button
-              onClick={() => setMobileTab('chat')}
-              className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                mobileTab === 'chat'
-                  ? 'bg-primary text-white'
-                  : isNight
-                    ? 'bg-night-card/50 text-night-muted'
-                    : 'bg-white/50 text-day-muted'
-              }`}
-            >
-              💬 {t('chat.title')}
-            </button>
-          </div>
-
-          <div className="flex flex-col md:flex-row gap-2 md:gap-3 items-stretch md:items-end max-w-7xl mx-auto w-full">
-            {/* Action Panel — always visible on md+, toggleable on mobile */}
-            <div
-              className={`flex-1 max-w-none md:max-w-md ${mobileTab !== 'action' ? 'hidden md:block' : ''}`}
-            >
+          <div className="max-w-md w-full">
+            {/* Action Panel */}
+            <div>
               {phase === GamePhase.NIGHT && isAlive && (
                 <NightActionPanel
                   selectedPlayerId={selectedPlayerId}
@@ -1995,14 +1985,12 @@ export default function GamePage() {
               )}
               {/* INTRO and STARTING phases render as full-screen overlays below */}
             </div>
-
-            {/* Chat Panel — always visible on md+, toggleable on mobile */}
-            <div
-              className={`flex-1 max-w-none md:max-w-sm h-48 md:h-72 ${mobileTab !== 'chat' ? 'hidden md:block' : ''}`}
-            >
-              <ChatPanel isNight={isNight} />
-            </div>
           </div>
+        </div>
+
+        {/* Chat Panel — fixed bottom-right */}
+        <div className="pointer-events-auto fixed bottom-2 right-2 md:bottom-3 md:right-3 z-20 w-84 md:w-84 h-48 md:h-72">
+          <ChatPanel isNight={isNight} />
         </div>
       </div>
     </div>

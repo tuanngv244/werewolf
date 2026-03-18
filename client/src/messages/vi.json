@@ -211,6 +211,20 @@
     "micBlocked": "Không có quyền truy cập micro",
     "deadCantTalk": "Người chết không thể nói"
   },
+  "meeting": {
+    "title": "Họp Mặt",
+    "connecting": "Đang kết nối...",
+    "failed": "Kết nối thất bại",
+    "noRoom": "Không có phòng",
+    "showMeeting": "Hiện cuộc họp",
+    "muteMic": "Tắt micro",
+    "unmuteMic": "Bật micro",
+    "cameraOn": "Bật camera",
+    "cameraOff": "Tắt camera",
+    "muteSound": "Tắt âm thanh",
+    "unmuteSound": "Bật âm thanh",
+    "leaveMeeting": "Rời cuộc họp"
+  },
   "chat": {
     "title": "Trò Chuyện",
     "placeholder": "Nhập tin nhắn...",
