@@ -45,7 +45,7 @@ export default function RoomPage() {
   const t = useTranslations();
   const router = useRouter();
   const params = useParams();
-  const roomCode = params.code as string;
+  const roomCode = (params.code as string).toUpperCase();
   const { user } = useAuthStore();
   const { currentRoom, leaveRoom } = useRoomStore();
   const [codeCopied, setCodeCopied] = useState(false);
@@ -112,29 +112,31 @@ export default function RoomPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomCode]);
 
-  // ── Auto-leave room on unmount (SPA navigation away) ──
+  // ── Auto-leave room on unmount (SPA navigation away only) ──
   // When the user navigates away from the room page without clicking "Leave"
   // (e.g. browser back, clicking logo), the socket stays connected and the server
   // never fires handleDisconnect. This cleanup ensures the player slot is freed.
+  //
+  // IMPORTANT: We do NOT send room:leave on beforeunload (F5 / tab close) because
+  // that would destroy the room state before the page can reconnect. The server's
+  // handleDisconnect already has a 15-second grace period for this — on reload the
+  // socket reconnects within ~1s and handleConnection re-joins the room automatically.
+  const isUnloadingRef = useRef(false);
+
   useEffect(() => {
-    // Also handle browser tab close / full page navigation
+    // Track full page unloads (F5, tab close, external navigation)
+    // so the unmount cleanup can distinguish from SPA navigation
     const handleBeforeUnload = () => {
-      if (!hasJoinedRef.current) return;
-      const gameId = useGameStore.getState().gameId;
-      if (gameId) return;
-      try {
-        const socket = getSocket();
-        if (socket.connected) {
-          socket.emit('room:leave');
-        }
-      } catch {
-        // ignore
-      }
+      isUnloadingRef.current = true;
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
 
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
+
+      // If the page is fully unloading (F5 / tab close), do NOT send room:leave.
+      // The server's disconnect handler will handle cleanup after the grace period.
+      if (isUnloadingRef.current) return;
 
       // Don't leave if a game just started (navigating to game page)
       const gameId = useGameStore.getState().gameId;

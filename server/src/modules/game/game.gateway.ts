@@ -91,6 +91,9 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
               playerId: client.user.id,
             });
           }
+          // Send room state to the reconnecting client so the UI can render
+          // immediately without waiting for a separate room:join round-trip
+          client.emit('room:state', room);
         } else {
           // Room doesn't exist or player not in it — clean up stale pointer
           await this.roomsService.setPlayerRoom(client.user.id, null);
@@ -161,6 +164,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() data: { maxPlayers?: number; isPrivate?: boolean; roles?: string[] },
   ) {
+    if (!client.user) return;
     try {
       console.log('[Gateway] room:create from', client.user.username, '(', client.user.id, ')');
 
@@ -198,9 +202,22 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() data: { playerCount?: number },
   ) {
+    if (!client.user) return;
     try {
       const playerCount = Math.min(Math.max(data?.playerCount || 8, 6), 16);
       const roles = DEFAULT_ROLES[playerCount as keyof typeof DEFAULT_ROLES] || DEFAULT_ROLES[8];
+
+      // Evict from previous room if any
+      const prevRoomCode = await this.roomsService.getPlayerRoom(client.user.id);
+      if (prevRoomCode) {
+        const leftRoom = await this.roomsService.leaveRoom(prevRoomCode, client.user.id);
+        await this.roomsService.setPlayerRoom(client.user.id, null);
+        client.leave(`room:${prevRoomCode}`);
+        if (leftRoom) {
+          this.server.to(`room:${prevRoomCode}`).emit('room:player_left', { playerId: client.user.id });
+          this.server.to(`room:${prevRoomCode}`).emit('room:state', leftRoom);
+        }
+      }
 
       // Create room with the host
       const room = await this.roomsService.createRoom(client.user, {
@@ -279,9 +296,18 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() data: { code: string },
   ) {
+    if (!client.user) return;
+    // Normalize room code to uppercase — codes are generated as uppercase
+    // but clients may send lowercase (e.g. from URL params, copy-paste)
+    const code = data.code?.trim().toUpperCase();
+    if (!code) {
+      client.emit('room:error', { message: 'Invalid room code' });
+      return;
+    }
+
     // Evict from previous room before joining a new one
     const prevRoom = await this.roomsService.getPlayerRoom(client.user.id);
-    if (prevRoom && prevRoom !== data.code) {
+    if (prevRoom && prevRoom !== code) {
       const leftRoom = await this.roomsService.leaveRoom(prevRoom, client.user.id);
       await this.roomsService.setPlayerRoom(client.user.id, null);
       client.leave(`room:${prevRoom}`);
@@ -293,17 +319,27 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
       }
     }
 
-    const room = await this.roomsService.joinRoom(data.code, client.user);
-    if (!room) {
-      client.emit('room:error', { message: 'Room not found or cannot join' });
+    const result = await this.roomsService.joinRoom(code, client.user);
+
+    // Check for error responses
+    if (!result || (typeof result === 'object' && 'error' in result)) {
+      const errorCode = typeof result === 'object' && 'error' in result ? result.error : 'room_not_found';
+      const messages: Record<string, string> = {
+        room_not_found: 'Room not found. Please check the code and try again.',
+        room_full: 'Room is full. No more players can join.',
+        game_in_progress: 'A game is already in progress in this room.',
+      };
+      client.emit('room:error', { message: messages[errorCode] || messages.room_not_found });
       return;
     }
 
-    await this.roomsService.setPlayerRoom(client.user.id, data.code);
-    client.join(`room:${data.code}`);
+    const room = result;
+
+    await this.roomsService.setPlayerRoom(client.user.id, code);
+    client.join(`room:${code}`);
     client.emit('room:state', room);
     // Broadcast to others in the room (not self — self already got room:state)
-    client.to(`room:${data.code}`).emit('room:player_joined', {
+    client.to(`room:${code}`).emit('room:player_joined', {
       id: client.user.id,
       username: client.user.username,
       isReady: false,
@@ -314,6 +350,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
 
   @SubscribeMessage('room:leave')
   async handleLeaveRoom(@ConnectedSocket() client: AuthenticatedSocket) {
+    if (!client.user) return;
     const roomCode = await this.roomsService.getPlayerRoom(client.user.id);
     if (!roomCode) {
       // Acknowledge even if not in a room — so the client can proceed
@@ -351,6 +388,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() data: { playerId: string },
   ) {
+    if (!client.user) return;
     const roomCode = await this.roomsService.getPlayerRoom(client.user.id);
     if (!roomCode || !data?.playerId) return;
 
@@ -401,6 +439,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
 
   @SubscribeMessage('room:delete')
   async handleDeleteRoom(@ConnectedSocket() client: AuthenticatedSocket) {
+    if (!client.user) return;
     const roomCode = await this.roomsService.getPlayerRoom(client.user.id);
     if (!roomCode) return;
 
@@ -436,6 +475,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
 
   @SubscribeMessage('room:list')
   async handleListRooms(@ConnectedSocket() client: AuthenticatedSocket) {
+    if (!client.user) return;
     const rooms = await this.roomsService.listRooms();
     const list = rooms.map((r) => ({
       id: r.id,
@@ -454,6 +494,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() data: { maxPlayers?: number; roles?: string[]; timers?: Record<string, number> },
   ) {
+    if (!client.user || !data) return;
     const roomCode = await this.roomsService.getPlayerRoom(client.user.id);
     if (!roomCode) return;
 
@@ -472,6 +513,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
 
   @SubscribeMessage('game:start')
   async handleStartGame(@ConnectedSocket() client: AuthenticatedSocket) {
+    if (!client.user) return;
     const roomCode = await this.roomsService.getPlayerRoom(client.user.id);
     if (!roomCode) return;
 
@@ -544,6 +586,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() data: { gameId: string; action: string; targetId?: string },
   ) {
+    if (!client.user || !data?.gameId || !data?.action) return;
     await this.gameService.recordNightAction(
       data.gameId,
       client.user.id,
@@ -583,6 +626,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() data: { gameId: string; targetId: string },
   ) {
+    if (!client.user || !data?.gameId || !data?.targetId) return;
     const votes = await this.gameService.recordVote(data.gameId, client.user.id, data.targetId);
     if (votes) {
       const game = await this.gameService.getGame(data.gameId);
@@ -599,6 +643,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() data: { gameId: string; targetId: string },
   ) {
+    if (!client.user || !data?.gameId || !data?.targetId) return;
     const game = await this.gameService.getGame(data.gameId);
     if (!game || game.phase !== GamePhase.DAY) return;
 
@@ -622,6 +667,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() data: { gameId: string; targetId: string },
   ) {
+    if (!client.user || !data?.gameId || !data?.targetId) return;
     const game = await this.gameService.getGame(data.gameId);
     if (!game || game.phase !== GamePhase.DAY) return;
 
@@ -656,6 +702,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() data: { channel: 'DAY' | 'WEREWOLF' | 'DEAD'; content: string },
   ) {
+    if (!client.user || !data?.channel || !data?.content) return;
     const roomCode = await this.roomsService.getPlayerRoom(client.user.id);
     if (!roomCode) return;
 
@@ -728,6 +775,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() data: { targetId: string },
   ) {
+    if (!client.user || !data?.targetId) return;
     const roomCode = await this.roomsService.getPlayerRoom(client.user.id);
     if (!roomCode) return;
 
@@ -743,6 +791,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
   async handleJump(
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
+    if (!client.user) return;
     const roomCode = await this.roomsService.getPlayerRoom(client.user.id);
     if (!roomCode) return;
 
@@ -758,6 +807,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() data: { emoji: string },
   ) {
+    if (!client.user || !data?.emoji) return;
     const roomCode = await this.roomsService.getPlayerRoom(client.user.id);
     if (!roomCode) return;
 
@@ -775,6 +825,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() data: { roomCode: string },
   ) {
+    if (!client.user) return;
     const roomCode = await this.roomsService.getPlayerRoom(client.user.id);
     if (!roomCode) return;
 
@@ -789,6 +840,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() data: { roomCode: string },
   ) {
+    if (!client.user) return;
     const roomCode = await this.roomsService.getPlayerRoom(client.user.id);
     if (!roomCode) return;
 
@@ -802,8 +854,11 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() data: { targetId: string; sdp: any },
   ) {
-    // Relay the SDP offer to the target peer
-    const sockets = await this.server.fetchSockets();
+    if (!client.user || !data?.targetId || !data?.sdp) return;
+    // Relay the SDP offer to the target peer — scoped to sender's room only
+    const roomCode = await this.roomsService.getPlayerRoom(client.user.id);
+    if (!roomCode) return;
+    const sockets = await this.server.in(`room:${roomCode}`).fetchSockets();
     const target = sockets.find(
       (s) => (s as unknown as AuthenticatedSocket).user?.id === data.targetId,
     );
@@ -820,8 +875,11 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() data: { targetId: string; sdp: any },
   ) {
-    // Relay the SDP answer to the target peer
-    const sockets = await this.server.fetchSockets();
+    if (!client.user || !data?.targetId || !data?.sdp) return;
+    // Relay the SDP answer to the target peer — scoped to sender's room only
+    const roomCode = await this.roomsService.getPlayerRoom(client.user.id);
+    if (!roomCode) return;
+    const sockets = await this.server.in(`room:${roomCode}`).fetchSockets();
     const target = sockets.find(
       (s) => (s as unknown as AuthenticatedSocket).user?.id === data.targetId,
     );
@@ -838,8 +896,11 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() data: { targetId: string; candidate: any },
   ) {
-    // Relay ICE candidate to the target peer
-    const sockets = await this.server.fetchSockets();
+    if (!client.user || !data?.targetId || !data?.candidate) return;
+    // Relay ICE candidate to the target peer — scoped to sender's room only
+    const roomCode = await this.roomsService.getPlayerRoom(client.user.id);
+    if (!roomCode) return;
+    const sockets = await this.server.in(`room:${roomCode}`).fetchSockets();
     const target = sockets.find(
       (s) => (s as unknown as AuthenticatedSocket).user?.id === data.targetId,
     );
@@ -910,20 +971,21 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
   }
 
   private async handlePhaseEnd(gameId: string) {
-    const game = await this.gameService.getGame(gameId);
-    if (!game || game.phase === GamePhase.GAME_OVER) {
-      this.phaseTimers.delete(gameId);
-      return;
-    }
+    try {
+      const game = await this.gameService.getGame(gameId);
+      if (!game || game.phase === GamePhase.GAME_OVER) {
+        this.phaseTimers.delete(gameId);
+        return;
+      }
 
-    // If vote phase ending, fetch votes and pass to advancePhase
-    let votes: Record<string, string> | undefined;
-    if (game.phase === GamePhase.VOTE) {
-      votes = await this.gameService.getVotes(gameId);
-      await this.gameService.clearVotes(gameId);
-    }
+      // If vote phase ending, fetch votes and pass to advancePhase
+      let votes: Record<string, string> | undefined;
+      if (game.phase === GamePhase.VOTE) {
+        votes = await this.gameService.getVotes(gameId);
+        await this.gameService.clearVotes(gameId);
+      }
 
-    const { game: updatedGame, events } = await this.gameService.advancePhase(game, votes);
+      const { game: updatedGame, events } = await this.gameService.advancePhase(game, votes);
 
     // Broadcast events
     for (const event of events) {
@@ -944,7 +1006,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
         case 'dawn_result':
           this.server.to(`room:${game.roomCode}`).emit('game:dawn_result', {
             killed: event.killed,
-            saved: [],
+            saved: event.saved || [],
             messages: event.messages,
           });
           break;
@@ -1090,6 +1152,21 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     // Set next phase timer
     if (updatedGame.phase !== GamePhase.GAME_OVER) {
       this.startPhaseTimer(gameId, updatedGame.phaseEndAt);
+    }
+    } catch (error) {
+      console.error(`[Gateway] handlePhaseEnd failed for game ${gameId}:`, error?.message || error);
+      // Attempt to recover by re-scheduling the phase timer with a short delay
+      // so the game doesn't get permanently stuck
+      try {
+        const game = await this.gameService.getGame(gameId);
+        if (game && game.phase !== GamePhase.GAME_OVER) {
+          const retryDelay = Date.now() + 5000; // retry in 5 seconds
+          this.startPhaseTimer(gameId, retryDelay);
+          console.warn(`[Gateway] Scheduled retry for game ${gameId} phase end in 5s`);
+        }
+      } catch (retryError) {
+        console.error(`[Gateway] Failed to schedule retry for game ${gameId}:`, retryError?.message || retryError);
+      }
     }
   }
 }

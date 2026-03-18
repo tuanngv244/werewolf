@@ -7,6 +7,7 @@ import { Button, Card, Badge } from '@/components/ui';
 import { useRoomStore } from '@/stores/room-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { getSocket, waitForConnection } from '@/lib/socket';
+import { GAME_CONFIG } from '@shared/constants/game-config';
 
 export default function RoomsPage() {
   const t = useTranslations();
@@ -137,6 +138,15 @@ export default function RoomsPage() {
   const handleJoinByCode = async () => {
     if (!joinCode.trim() || isJoining) return;
     setJoinError('');
+
+    const code = joinCode.trim().toUpperCase();
+
+    // Validate code length before sending to server
+    if (code.length !== GAME_CONFIG.ROOM_CODE_LENGTH) {
+      setJoinError(t('lobby.invalidCodeLength'));
+      return;
+    }
+
     setIsJoining(true);
 
     try {
@@ -219,7 +229,7 @@ export default function RoomsPage() {
               value={joinCode}
               onChange={(e) => { setJoinCode(e.target.value.toUpperCase()); setJoinError(''); }}
               placeholder={t('lobby.joinByCodePlaceholder')}
-              maxLength={8}
+              maxLength={GAME_CONFIG.ROOM_CODE_LENGTH}
               className="flex-1 px-4 py-2.5 rounded-xl border-2 border-day-border bg-white text-day-text placeholder-day-muted focus:outline-none focus:border-primary transition-colors uppercase tracking-widest font-mono text-center"
               onKeyDown={(e) => e.key === 'Enter' && handleJoinByCode()}
             />

@@ -98,6 +98,7 @@
     "codeCopied": "Code copied!",
     "copyCode": "Copy Code",
     "roomNotFound": "Room not found",
+    "invalidCodeLength": "Room code must be exactly 6 characters",
     "deleteRoom": "Delete Room",
     "deleteRoomConfirm": "Are you sure? All players will be removed from this room.",
     "roomDeleted": "Room has been deleted by the host.",

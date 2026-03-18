@@ -98,6 +98,7 @@
     "codeCopied": "Đã sao chép mã!",
     "copyCode": "Sao Chép Mã",
     "roomNotFound": "Không tìm thấy phòng",
+    "invalidCodeLength": "Mã phòng phải đúng 6 ký tự",
     "deleteRoom": "Xoá Phòng",
     "deleteRoomConfirm": "Bạn chắc chắn chứ? Tất cả người chơi sẽ bị đuổi khỏi phòng.",
     "roomDeleted": "Phòng đã bị chủ phòng xoá.",

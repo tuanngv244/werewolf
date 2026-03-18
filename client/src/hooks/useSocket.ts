@@ -115,14 +115,20 @@ export function useSocket() {
     const handleDawnResult = (result: any) => {
       setNightResult(result);
       if (result.killed && Array.isArray(result.killed)) {
+        // Read player names BEFORE mutating store — updatePlayer changes the store
+        // and the player may no longer be findable after mutation
         const currentPlayers = useGameStore.getState().players;
         const currentRound = useGameStore.getState().round;
+        const playerNames = new Map<string, string>();
+        for (const killedId of result.killed) {
+          const player = currentPlayers.find((p) => p.id === killedId);
+          playerNames.set(killedId, player?.username || 'Unknown');
+        }
         for (const killedId of result.killed) {
           updatePlayer(killedId, { isAlive: false });
-          const player = currentPlayers.find((p) => p.id === killedId);
           addDeathLogEntry({
             playerId: killedId,
-            playerName: player?.username || 'Unknown',
+            playerName: playerNames.get(killedId) || 'Unknown',
             cause: 'night',
             round: currentRound,
             phase: 'DAWN',
@@ -141,13 +147,15 @@ export function useSocket() {
     const handleVoteResult = (result: any) => {
       setVoteState({ votes: {}, result });
       if (result.eliminatedId) {
-        updatePlayer(result.eliminatedId, { isAlive: false });
+        // Read player name BEFORE mutating store
         const currentPlayers = useGameStore.getState().players;
         const currentRound = useGameStore.getState().round;
         const player = currentPlayers.find((p) => p.id === result.eliminatedId);
+        const playerName = player?.username || 'Unknown';
+        updatePlayer(result.eliminatedId, { isAlive: false });
         addDeathLogEntry({
           playerId: result.eliminatedId,
-          playerName: player?.username || 'Unknown',
+          playerName,
           cause: 'voted',
           round: currentRound,
           phase: 'VOTE',
@@ -159,8 +167,21 @@ export function useSocket() {
         }
       }
     };
-    const handlePlayerDied = ({ playerId }: any) => {
+    const handlePlayerDied = ({ playerId, cause }: any) => {
+      // Read player name BEFORE mutating store
+      const currentPlayers = useGameStore.getState().players;
+      const currentRound = useGameStore.getState().round;
+      const phase = useGameStore.getState().phase;
+      const player = currentPlayers.find((p) => p.id === playerId);
+      const playerName = player?.username || 'Unknown';
       updatePlayer(playerId, { isAlive: false });
+      addDeathLogEntry({
+        playerId,
+        playerName,
+        cause: cause || 'unknown',
+        round: currentRound,
+        phase: phase || 'UNKNOWN',
+      });
       const userId = useAuthStore.getState().user?.id;
       if (userId && playerId === userId) {
         setIsAlive(false);
@@ -196,13 +217,15 @@ export function useSocket() {
       }
     };
     const handleGunnerShot = ({ targetId }: any) => {
-      updatePlayer(targetId, { isAlive: false });
+      // Read player name BEFORE mutating store
       const currentPlayers = useGameStore.getState().players;
       const currentRound = useGameStore.getState().round;
       const player = currentPlayers.find((p) => p.id === targetId);
+      const playerName = player?.username || 'Unknown';
+      updatePlayer(targetId, { isAlive: false });
       addDeathLogEntry({
         playerId: targetId,
-        playerName: player?.username || 'Unknown',
+        playerName,
         cause: 'gunner',
         round: currentRound,
         phase: 'DAY',

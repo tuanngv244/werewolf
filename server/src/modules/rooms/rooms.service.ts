@@ -52,10 +52,10 @@ export class RoomsService {
     await this.redis.hdel('rooms:index', code);
   }
 
-  async joinRoom(code: string, player: { id: string; username: string }): Promise<RoomState | null> {
+  async joinRoom(code: string, player: { id: string; username: string }): Promise<RoomState | { error: string }> {
     const room = await this.getRoom(code);
-    if (!room) return null;
-    if (room.status !== RoomStatus.WAITING) return null;
+    if (!room) return { error: 'room_not_found' };
+    if (room.status !== RoomStatus.WAITING) return { error: 'game_in_progress' };
 
     const existing = room.players.find((p) => p.id === player.id);
     if (existing) {
@@ -66,7 +66,7 @@ export class RoomsService {
       return room;
     }
 
-    if (room.players.length >= room.settings.maxPlayers) return null;
+    if (room.players.length >= room.settings.maxPlayers) return { error: 'room_full' };
 
     room.players.push({
       id: player.id,
@@ -104,12 +104,23 @@ export class RoomsService {
   async listRooms(): Promise<RoomState[]> {
     const index = await this.redis.hgetall('rooms:index');
     const rooms: RoomState[] = [];
+    const staleCodes: string[] = [];
 
     for (const code of Object.keys(index)) {
       const room = await this.getRoom(code);
-      if (room && room.status === RoomStatus.WAITING && !room.settings.isPrivate) {
+      if (!room) {
+        // Room TTL expired but rooms:index still has the entry — mark for cleanup
+        staleCodes.push(code);
+        continue;
+      }
+      if (room.status === RoomStatus.WAITING && !room.settings.isPrivate) {
         rooms.push(room);
       }
+    }
+
+    // Clean up stale entries from rooms:index (fire-and-forget)
+    for (const code of staleCodes) {
+      this.redis.hdel('rooms:index', code).catch(() => {});
     }
 
     return rooms;
