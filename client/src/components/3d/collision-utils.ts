@@ -47,9 +47,15 @@ const WATER_PATTERNS = ['river', 'water', 'pond', 'lake', 'stream'];
 const PASSTHROUGH_PATTERNS = [
   'icosphere', 'leaf', 'leaves', 'light', 'lamp', 'fairy', 'particle',
   'cloud', 'fire', 'flame', 'smoke', 'spark', 'glow', 'canopy', 'crown',
+  'sphere', 'fish', 'duck', 'mball', 'torus', 'bird',
 ];
 
 function matchesPatterns(name: string, patterns: string[]): boolean {
+  const lower = name.toLowerCase();
+  return patterns.some((p) => lower.includes(p));
+}
+
+function matchesPatternsDirect(name: string, patterns: string[]): boolean {
   const lower = name.toLowerCase();
   return patterns.some((p) => lower.includes(p));
 }
@@ -92,10 +98,11 @@ function analyzeNormals(mesh: THREE.Mesh): 'walkable' | 'blocking' | 'passthroug
 
   const avgAbsY = totalY / count;
   // Mostly upward-facing → walkable
-  if (avgAbsY > 0.7) return 'walkable';
+  if (avgAbsY > 0.6) return 'walkable';
   // Mostly vertical → blocking
   if (avgAbsY < 0.3) return 'blocking';
-  // Ambiguous → passthrough
+  // Ambiguous → passthrough (safer to let things through than block incorrectly
+  // since the map has many decorative meshes that shouldn't block movement)
   return 'passthrough';
 }
 
@@ -205,13 +212,25 @@ export function buildCollisionData(mapScene: THREE.Object3D): CollisionData {
       return;
     }
 
-    // 3. Check explicit walkable
+    // 3. Check explicit blocking on DIRECT mesh name first (before walkable)
+    // This prevents 'stone_wall' from matching 'stone' as walkable via ancestor names
+    if (matchesPatternsDirect(name, BLOCKING_PATTERNS)) {
+      // Exclude very small meshes (decorative details)
+      _box.setFromObject(mesh);
+      _box.getSize(_size);
+      if (_size.x > 0.1 && _size.y > 0.1 && _size.z > 0.1) {
+        blocking.push(mesh);
+      }
+      return;
+    }
+
+    // 4. Check explicit walkable
     if (matchesPatterns(combinedName, WALKABLE_PATTERNS)) {
       walkable.push(mesh);
       return;
     }
 
-    // 4. Check explicit blocking
+    // 5. Check blocking on combined name (ancestor-based)
     if (matchesPatterns(combinedName, BLOCKING_PATTERNS)) {
       // Exclude very small meshes (decorative details)
       _box.setFromObject(mesh);
@@ -222,7 +241,7 @@ export function buildCollisionData(mapScene: THREE.Object3D): CollisionData {
       return;
     }
 
-    // 5. Unrecognized mesh — use normal analysis
+    // 6. Unrecognized mesh — use normal analysis
     const classification = analyzeNormals(mesh);
     switch (classification) {
       case 'walkable':
@@ -253,6 +272,21 @@ export function buildCollisionData(mapScene: THREE.Object3D): CollisionData {
   console.log('  Water meshes:', water.length);
   if (deduplicatedWalkable.length > 0) {
     console.log('  Walkable mesh names:', deduplicatedWalkable.slice(0, 10).map(m => m.name || '(unnamed)'));
+    // Log world-space bounding boxes for walkable meshes
+    deduplicatedWalkable.forEach(m => {
+      const b = new THREE.Box3().setFromObject(m);
+      console.log('    ' + (m.name || '(unnamed)') + ' world bounds:',
+        'X[' + b.min.x.toFixed(1) + ',' + b.max.x.toFixed(1) + ']',
+        'Y[' + b.min.y.toFixed(1) + ',' + b.max.y.toFixed(1) + ']',
+        'Z[' + b.min.z.toFixed(1) + ',' + b.max.z.toFixed(1) + ']');
+    });
+    // Test raycast at origin to verify ground detection works
+    const testRay = new THREE.Raycaster(new THREE.Vector3(0, 30, 0), new THREE.Vector3(0, -1, 0), 0, 50);
+    const testHits = testRay.intersectObjects(deduplicatedWalkable, false);
+    console.log('  [DEBUG] Test raycast at (0,30,0) downward hits:', testHits.length);
+    testHits.forEach(h => {
+      console.log('    hit Y=' + h.point.y.toFixed(3) + ' face normal Y=' + (h.face ? h.face.normal.y.toFixed(3) : 'null'));
+    });
   }
   if (deduplicatedWalkable.length === 0) {
     console.warn('  ⚠️ No walkable meshes found! All walkable names:', walkable.map(m => m.name || '(unnamed)'));
@@ -367,7 +401,7 @@ export function getGroundYFromMeshes(
   // Walk through top-to-bottom and return the FIRST walkable surface
   for (const hit of intersects) {
     // Check if this face is upward-facing (walkable)
-    let isWalkable = true;
+    let isWalkable = false;
     if (hit.face) {
       _faceNormal.copy(hit.face.normal);
       if (hit.object.matrixWorld) {
@@ -375,6 +409,7 @@ export function getGroundYFromMeshes(
       }
       isWalkable = _faceNormal.y > 0.3;
     }
+    // If face is null, skip this hit (don't assume walkable)
 
     if (!isWalkable) continue;
 
@@ -424,12 +459,23 @@ export function canMoveToWithMeshes(
     currentY,
   );
 
-  // If no ground found at target, be lenient — allow movement.
-  // This prevents the character from getting stuck when walkable mesh classification
-  // missed some terrain. Only block if we positively detect a problem.
+  // If no ground found at target, check if there's ground at the source position.
+  // If we're currently standing on valid ground but the target has none, block movement
+  // to prevent walking on air. If source also has no ground, allow (we're already in void).
   if (targetGroundY <= MIN_GROUND_Y) {
-    // No walkable surface found — allow movement (graceful fallback)
-    // The boundary check above already prevents going off the map
+    const sourceGroundY = getGroundYFromMeshes(
+      collisionData.walkableMeshes,
+      fromX,
+      fromZ,
+      -999,
+      currentY,
+    );
+    // If we're currently on valid ground, don't let us walk into void
+    if (sourceGroundY > MIN_GROUND_Y) {
+      return false;
+    }
+    // Both source and target have no ground — allow movement (graceful fallback)
+    // to avoid getting permanently stuck in unclassified areas
     return true;
   }
 
@@ -443,23 +489,32 @@ export function canMoveToWithMeshes(
   }
 
   // Phase 3: Horizontal collision against blocking meshes only
+  // Cast rays at multiple heights to catch short obstacles and tall walls
   const dx = toX - fromX;
   const dz = toZ - fromZ;
   const dist = Math.sqrt(dx * dx + dz * dz);
   if (dist > 0.001 && collisionData.blockingMeshes.length > 0) {
     _collisionDir.set(dx / dist, 0, dz / dist);
-    _rayOrigin.set(fromX, currentY + characterHeight * 0.6, fromZ);
-    _collisionRaycaster.set(_rayOrigin, _collisionDir);
-    _collisionRaycaster.far = dist + 0.15;
 
-    const hits = _collisionRaycaster.intersectObjects(collisionData.blockingMeshes, false);
-    for (const hit of hits) {
-      if (hit.face) {
-        _faceNormal.copy(hit.face.normal);
-        if (hit.object.matrixWorld) {
-          _faceNormal.transformDirection(hit.object.matrixWorld);
-        }
-        if (Math.abs(_faceNormal.y) < 0.3) {
+    // Ray heights: low (0.15 — catches fences/short walls), mid (0.5), high (0.8)
+    const rayHeights = [0.15, 0.5, 0.8];
+    for (const hFraction of rayHeights) {
+      _rayOrigin.set(fromX, currentY + characterHeight * hFraction, fromZ);
+      _collisionRaycaster.set(_rayOrigin, _collisionDir);
+      _collisionRaycaster.far = dist + 0.15;
+
+      const hits = _collisionRaycaster.intersectObjects(collisionData.blockingMeshes, false);
+      for (const hit of hits) {
+        if (hit.face) {
+          _faceNormal.copy(hit.face.normal);
+          if (hit.object.matrixWorld) {
+            _faceNormal.transformDirection(hit.object.matrixWorld);
+          }
+          if (Math.abs(_faceNormal.y) < 0.5) {
+            return false;
+          }
+        } else {
+          // No face normal available — treat blocking mesh hit as a wall
           return false;
         }
       }

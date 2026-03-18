@@ -173,6 +173,10 @@ function useWander(
   const walkPhaseRef = useRef(seed * 5); // Walk animation phase
   const wanderRadius = 2.0;
 
+  // Use ref to always read the latest collisionData inside useFrame
+  const collisionDataRef = useRef(collisionData);
+  collisionDataRef.current = collisionData;
+
   // Set initial ground Y
   const initialGroundSet = useRef(false);
 
@@ -187,6 +191,9 @@ function useWander(
       posRef.current.y = homePos[1];
       initialGroundSet.current = true;
     }
+
+    // Read latest collision data from ref (avoids stale closure)
+    const cd = collisionDataRef.current;
 
     timerRef.current -= delta;
 
@@ -214,14 +221,14 @@ function useWander(
 
       // Check collision before moving
       let pathClear = true;
-      if (collisionData && collisionData.walkableMeshes.length > 0) {
-        pathClear = canMoveToWithMeshes(collisionData, current.x, current.z, newX, newZ, current.y);
+      if (cd && cd.walkableMeshes.length > 0) {
+        pathClear = canMoveToWithMeshes(cd, current.x, current.z, newX, newZ, current.y);
       }
 
       if (pathClear) {
         // Raycast to find ground at the new position, using current Y as reference
-        if (collisionData && collisionData.walkableMeshes.length > 0) {
-          const groundY = getGroundYFromMeshes(collisionData.walkableMeshes, newX, newZ, current.y, current.y);
+        if (cd && cd.walkableMeshes.length > 0) {
+          const groundY = getGroundYFromMeshes(cd.walkableMeshes, newX, newZ, current.y, current.y);
           if (groundY > MIN_GROUND_Y) {
             // Smooth Y interpolation instead of snapping
             current.y += (groundY + GROUND_Y_OFFSET - current.y) * 0.3;
@@ -265,6 +272,10 @@ function usePlayerControl(
   const walkPhaseRef = useRef(0); // Walk animation phase
   const speed = 2.5;
 
+  // Use ref to always read the latest collisionData inside useFrame
+  const collisionDataRef = useRef(collisionData);
+  collisionDataRef.current = collisionData;
+
   // Set initial ground Y
   const initialGroundSet = useRef(false);
 
@@ -279,6 +290,9 @@ function usePlayerControl(
       posRef.current.y = homePos[1];
       initialGroundSet.current = true;
     }
+
+    // Read latest collision data from ref (avoids stale closure)
+    const cd = collisionDataRef.current;
 
     let moveX = 0;
     let moveZ = 0;
@@ -301,10 +315,10 @@ function usePlayerControl(
       const newX = posRef.current.x + moveX * speed * delta;
       const newZ = posRef.current.z + moveZ * speed * delta;
 
-      if (collisionData && collisionData.walkableMeshes.length > 0) {
+      if (cd && cd.walkableMeshes.length > 0) {
         // Use wall sliding: try full movement, then axis-separated
         const slide = trySlideMovement(
-          collisionData,
+          cd,
           posRef.current.x,
           posRef.current.z,
           newX,
@@ -315,7 +329,7 @@ function usePlayerControl(
         if (slide.allowed) {
           // Find ground at the valid position
           const groundY = getGroundYFromMeshes(
-            collisionData.walkableMeshes,
+            cd.walkableMeshes,
             slide.x,
             slide.z,
             posRef.current.y,
@@ -583,6 +597,10 @@ function GLBCharacter({
   // Ground clamp frame counter (throttle to every 3rd frame)
   const groundClampFrameRef = useRef(0);
 
+  // Use ref for collisionData to avoid stale closure in useFrame
+  const collisionDataRef = useRef(collisionData);
+  collisionDataRef.current = collisionData;
+
   // Trigger jump from external prop
   useEffect(() => {
     if (isJumpingProp && !isJumpingRef.current) {
@@ -633,17 +651,22 @@ function GLBCharacter({
       // Apply model facing offset so the model's visual front faces the movement direction
       groupRef.current.rotation.y = rotRef.current + MODEL_FACING_OFFSET;
 
-      // ── Ground clamp: ensure character never sinks below the map ──
-      // Re-check ground at current position periodically to prevent sinking
+      // ── Ground clamp: ensure character stays on the map surface ──
+      // Re-check ground at current position periodically to prevent floating or sinking
       // Throttle to every 3rd frame for performance
-      if (collisionData && collisionData.walkableMeshes.length > 0 && !isJumpingRef.current) {
+      const cdClamp = collisionDataRef.current;
+      if (cdClamp && cdClamp.walkableMeshes.length > 0 && !isJumpingRef.current) {
         groundClampFrameRef.current++;
         if (groundClampFrameRef.current >= 3) {
           groundClampFrameRef.current = 0;
-          const groundY = getGroundYFromMeshes(collisionData.walkableMeshes, posRef.current.x, posRef.current.z, posRef.current.y, posRef.current.y);
-          if (groundY > MIN_GROUND_Y && posRef.current.y < groundY + GROUND_Y_OFFSET - 0.1) {
-            // Character is below ground — smooth lerp back up
-            posRef.current.y += (groundY + GROUND_Y_OFFSET - posRef.current.y) * 0.3;
+          const groundY = getGroundYFromMeshes(cdClamp.walkableMeshes, posRef.current.x, posRef.current.z, posRef.current.y, posRef.current.y);
+          if (groundY > MIN_GROUND_Y) {
+            const targetY = groundY + GROUND_Y_OFFSET;
+            const diff = targetY - posRef.current.y;
+            // Clamp both directions: pull UP if sinking, pull DOWN if floating
+            if (Math.abs(diff) > 0.05) {
+              posRef.current.y += diff * 0.3;
+            }
           }
         }
       }

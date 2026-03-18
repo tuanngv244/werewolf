@@ -67,7 +67,8 @@
       "Bash(redis-cli del \"player:aaaa2912-e138-41a2-83ee-b93b5be74d93:room\" && redis-cli del \"room:D649HS\" && redis-cli del \"room:HF9KGQ\" && redis-cli del \"room:UBL98G\" && redis-cli hdel \"rooms:index\" \"D649HS\" \"HF9KGQ\" \"UBL98G\")",
       "Bash(find /Users/cyan/Workspace/Personal/werewolf-game -maxdepth 3 -name \"*.env*\" -o -name \".env*\" 2>/dev/null | grep -v node_modules | sort)",
       "Bash(find /Users/cyan/Workspace/Personal/werewolf-game -maxdepth 4 -name \"*.yml\" -o -name \"*.yaml\" 2>/dev/null | grep -v node_modules | sort)",
-      "Bash(find /Users/cyan/Workspace/Personal/werewolf-game -maxdepth 4 -path \"*/.github/*\" 2>/dev/null | grep -v node_modules | head -20)"
+      "Bash(find /Users/cyan/Workspace/Personal/werewolf-game -maxdepth 4 -path \"*/.github/*\" 2>/dev/null | grep -v node_modules | head -20)",
+      "WebFetch(domain:jitsi.github.io)"
     ]
   }
 }

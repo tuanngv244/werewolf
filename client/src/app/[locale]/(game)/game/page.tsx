@@ -1368,8 +1368,8 @@ function Game3DScene({
         localPlayerPosition={localPlayerPos}
         localPlayerRotation={localPlayerRot}
       >
-        {/* Only render players once map data is ready to ensure correct positioning */}
-        {firePos && mapScene && (
+        {/* Only render players once map data and collision are ready to ensure correct positioning */}
+        {firePos && mapScene && collisionData && (
           <PlayerCircle
             players={players}
             selectedId={selectedId}
