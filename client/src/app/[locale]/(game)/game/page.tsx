@@ -2,11 +2,11 @@
 
 import { useTranslations } from 'next-intl';
 import { useGameStore } from '@/stores/game-store';
-import type { DeathLogEntry, GameLogEntry } from '@/stores/game-store';
+import type { GameLogEntry } from '@/stores/game-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { useChatStore } from '@/stores/chat-store';
 import { useCountdown } from '@/hooks/useCountdown';
-import { useSocket, useEmit } from '@/hooks/useSocket';
+import { useEmit } from '@/hooks/useSocket';
 import { useGameSounds } from '@/hooks/useGameSounds';
 import { playSound } from '@/lib/sounds';
 import { useUiStore } from '@/stores/ui-store';
@@ -16,8 +16,6 @@ import { Button, Badge } from '@/components/ui';
 import React, { useState, useEffect, useRef, useCallback, useMemo, Suspense } from 'react';
 import { useRouter } from '@/lib/navigation';
 import dynamic from 'next/dynamic';
-import { useVoiceChat } from '@/hooks/useVoiceChat';
-import { VoiceControls } from '@/components/game/VoiceControls';
 import { JitsiMeetPanel } from '@/components/game/JitsiMeetPanel';
 import { useRoomStore } from '@/stores/room-store';
 import * as THREE from 'three';
@@ -318,7 +316,6 @@ const ChatPanel = React.memo(function ChatPanel({ isNight }: { isNight: boolean 
           }
           disabled={!canSendMessage || noChatAvailable}
         />
-        <VoiceControls isNight={isNight} />
         <Button size="sm" onClick={handleSend} disabled={!canSendMessage || noChatAvailable}>
           {t('chat.send')}
         </Button>
@@ -1428,7 +1425,6 @@ export default function GamePage() {
   const {
     phase,
     myRole,
-    myTeam,
     phaseEndAt,
     winners,
     round,
@@ -1449,11 +1445,9 @@ export default function GamePage() {
   const lastRoomCode = useGameStore((s) => s.lastRoomCode);
   const deathLog = useGameStore((s) => s.deathLog);
   const { user } = useAuthStore();
-  const { emit } = useEmit();
 
   // ── Voice chat ── (disabled — video meet panel handles audio+video now)
   const roomCode = useRoomStore((s) => s.currentRoom?.code ?? null);
-  // useVoiceChat(roomCode);
 
   // ── Sound effects (subscribe to game state changes) ──
   useGameSounds();

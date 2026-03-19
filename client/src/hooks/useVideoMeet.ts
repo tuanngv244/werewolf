@@ -40,9 +40,12 @@ export function useVideoMeet(roomCode: string | null) {
   const [isJoined, setIsJoined] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Refs for callbacks
+  // Refs for callbacks (avoids stale closures)
   const roomCodeRef = useRef(roomCode);
   useEffect(() => { roomCodeRef.current = roomCode; }, [roomCode]);
+
+  // Queue for offers that arrive before local stream is ready
+  const pendingOffersRef = useRef<Array<{ fromId: string; sdp: RTCSessionDescriptionInit }>>([]);
 
   // Helper: update remoteStreams state from peersRef
   const syncRemoteStreams = useCallback(() => {
@@ -54,6 +57,22 @@ export function useVideoMeet(roomCode: string | null) {
     }
     setRemoteStreams(new Map(map));
   }, []);
+
+  // Ref-based removePeer to avoid stale closure in RTCPeerConnection callbacks
+  const removePeerRef = useRef<(remoteUserId: string) => void>(() => {});
+
+  const removePeer = useCallback((remoteUserId: string) => {
+    const peer = peersRef.current.get(remoteUserId);
+    if (peer) {
+      peer.pc.close();
+      peer.stream = null;
+      peersRef.current.delete(remoteUserId);
+      syncRemoteStreams();
+    }
+  }, [syncRemoteStreams]);
+
+  // Keep removePeerRef always up-to-date
+  useEffect(() => { removePeerRef.current = removePeer; }, [removePeer]);
 
   // Create peer connection for a remote user
   const createPeerConnection = useCallback((remoteUserId: string) => {
@@ -89,25 +108,15 @@ export function useVideoMeet(roomCode: string | null) {
       }
     };
 
+    // Use ref to avoid stale closure for removePeer
     pc.onconnectionstatechange = () => {
       if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
-        removePeer(remoteUserId);
+        removePeerRef.current(remoteUserId);
       }
     };
 
     peersRef.current.set(remoteUserId, { pc, stream: null });
     return pc;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [syncRemoteStreams]);
-
-  const removePeer = useCallback((remoteUserId: string) => {
-    const peer = peersRef.current.get(remoteUserId);
-    if (peer) {
-      peer.pc.close();
-      peer.stream = null;
-      peersRef.current.delete(remoteUserId);
-      syncRemoteStreams();
-    }
   }, [syncRemoteStreams]);
 
   // Initialize video meeting
@@ -152,7 +161,16 @@ export function useVideoMeet(roomCode: string | null) {
         setIsAudioMuted(true);
         setError(null);
 
-        // Announce to room
+        // Process any offers that arrived before local stream was ready
+        if (pendingOffersRef.current.length > 0) {
+          const pending = [...pendingOffersRef.current];
+          pendingOffersRef.current = [];
+          for (const { fromId, sdp } of pending) {
+            await handleOfferInternal(fromId, sdp);
+          }
+        }
+
+        // Announce to room (AFTER processing pending offers, so we're ready)
         socket.emit('voice:join', { roomCode });
       } catch (err) {
         if (!mounted) return;
@@ -184,12 +202,41 @@ export function useVideoMeet(roomCode: string | null) {
           setIsVideoMuted(true);
           setError('Camera not available — audio only');
 
+          // Process pending offers
+          if (pendingOffersRef.current.length > 0) {
+            const pending = [...pendingOffersRef.current];
+            pendingOffersRef.current = [];
+            for (const { fromId, sdp } of pending) {
+              await handleOfferInternal(fromId, sdp);
+            }
+          }
+
           socket.emit('voice:join', { roomCode });
         } catch {
           if (mounted) {
             setError('Camera & microphone access denied');
           }
         }
+      }
+    }
+
+    // Internal offer handler (shared by socket handler and pending queue)
+    async function handleOfferInternal(fromId: string, sdp: RTCSessionDescriptionInit) {
+      let pc = peersRef.current.get(fromId)?.pc;
+      if (!pc) {
+        pc = createPeerConnection(fromId);
+      }
+
+      try {
+        await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        socket.emit('voice:answer', {
+          targetId: fromId,
+          sdp: pc.localDescription?.toJSON(),
+        });
+      } catch (err) {
+        console.warn('[video-meet] Failed to handle offer:', err);
       }
     }
 
@@ -219,22 +266,13 @@ export function useVideoMeet(roomCode: string | null) {
     }) => {
       if (fromId === userId) return;
 
-      let pc = peersRef.current.get(fromId)?.pc;
-      if (!pc) {
-        pc = createPeerConnection(fromId);
+      // If local stream isn't ready yet, queue the offer for later
+      if (!localStreamRef.current) {
+        pendingOffersRef.current.push({ fromId, sdp });
+        return;
       }
 
-      try {
-        await pc.setRemoteDescription(new RTCSessionDescription(sdp));
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        socket.emit('voice:answer', {
-          targetId: fromId,
-          sdp: pc.localDescription?.toJSON(),
-        });
-      } catch (err) {
-        console.warn('[video-meet] Failed to handle offer:', err);
-      }
+      await handleOfferInternal(fromId, sdp);
     };
 
     const handleVoiceAnswer = async ({
@@ -270,7 +308,7 @@ export function useVideoMeet(roomCode: string | null) {
     };
 
     const handleVoiceLeft = ({ userId: remoteId }: { userId: string }) => {
-      removePeer(remoteId);
+      removePeerRef.current(remoteId);
     };
 
     socket.on('voice:joined', handleVoiceJoined);
@@ -292,11 +330,19 @@ export function useVideoMeet(roomCode: string | null) {
       socket.off('voice:ice-candidate', handleIceCandidate);
       socket.off('voice:left', handleVoiceLeft);
 
-      // Close all peers
-      for (const [id] of peersRef.current) {
-        removePeer(id);
+      // Close all peers — snapshot keys first to avoid iterator invalidation
+      const peerIds = Array.from(peersRef.current.keys());
+      for (const id of peerIds) {
+        const peer = peersRef.current.get(id);
+        if (peer) {
+          peer.pc.close();
+          peer.stream = null;
+        }
       }
       peersRef.current.clear();
+
+      // Clear pending offers queue
+      pendingOffersRef.current = [];
 
       // Stop local stream
       if (localStreamRef.current) {
@@ -338,7 +384,9 @@ export function useVideoMeet(roomCode: string | null) {
     const socket = getSocket();
     socket.emit('voice:leave', { roomCode: roomCodeRef.current });
 
-    for (const [id] of peersRef.current) {
+    // Snapshot keys first to avoid iterator invalidation during removePeer
+    const peerIds = Array.from(peersRef.current.keys());
+    for (const id of peerIds) {
       removePeer(id);
     }
     peersRef.current.clear();
