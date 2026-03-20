@@ -586,11 +586,6 @@ export default function HomePage() {
           ))}
         </div>
       </Modal>
-
-      {/* Footer */}
-      <footer className="px-4 py-8 text-center text-day-muted text-sm">
-        <p>Werewolf Game &copy; 2026</p>
-      </footer>
     </main>
   );
 }
