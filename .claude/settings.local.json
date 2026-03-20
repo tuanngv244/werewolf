@@ -69,7 +69,9 @@
       "Bash(find /Users/cyan/Workspace/Personal/werewolf-game -maxdepth 4 -name \"*.yml\" -o -name \"*.yaml\" 2>/dev/null | grep -v node_modules | sort)",
       "Bash(find /Users/cyan/Workspace/Personal/werewolf-game -maxdepth 4 -path \"*/.github/*\" 2>/dev/null | grep -v node_modules | head -20)",
       "WebFetch(domain:jitsi.github.io)",
-      "Bash(npx tsc --noEmit 2>&1; echo \"EXIT: $?\")"
+      "Bash(npx tsc --noEmit 2>&1; echo \"EXIT: $?\")",
+      "Bash(zip -j ssl.zip ssl/cert.pem ssl/private.key)",
+      "Bash(git rm --cached ssl/cert.pem ssl/private.key 2>/dev/null; echo \"Done\")"
     ]
   }
 }

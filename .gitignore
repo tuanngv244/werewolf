@@ -13,7 +13,7 @@ out/
 .env
 .env.local
 .env.*.local
-!.env.production
+.env.production
 
 # IDE
 .vscode/
@@ -38,3 +38,7 @@ coverage/
 # Misc
 *.tsbuildinfo
 .turbo/
+
+# SSL — extracted certs are ignored; only ssl.zip is tracked
+ssl/cert.pem
+ssl/private.key

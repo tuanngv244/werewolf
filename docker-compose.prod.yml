@@ -51,7 +51,7 @@ services:
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required}
-      CORS_ORIGIN: ${CORS_ORIGIN:-https://wolf.nguynchupanh.com}
+      CORS_ORIGIN: ${CORS_ORIGIN:-https://werewolf.ans-game.fun}
     depends_on:
       postgres:
         condition: service_healthy
@@ -66,8 +66,8 @@ services:
       context: .
       dockerfile: client/Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://wolf.nguynchupanh.com/api}
-        NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-https://wolf.nguynchupanh.com}
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://werewolf.ans-game.fun/api}
+        NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-https://werewolf.ans-game.fun}
         NEXT_PUBLIC_APP_NAME: ${NEXT_PUBLIC_APP_NAME:-Werewolf Game}
         NEXT_PUBLIC_DEFAULT_LOCALE: ${NEXT_PUBLIC_DEFAULT_LOCALE:-en}
     container_name: werewolf-client

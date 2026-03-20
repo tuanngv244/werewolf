@@ -2,7 +2,7 @@
 
 Complete deployment guide for Ubuntu server with Docker.
 
-**Live URL:** https://wolf.nguynchupanh.com
+**Live URL:** https://werewolf.ans-game.fun
 
 ---
 
@@ -28,7 +28,7 @@ Complete deployment guide for Ubuntu server with Docker.
 ```
                     ┌──────────────────────────────────────────┐
                     │            Ubuntu Server                  │
-                    │        wolf.nguynchupanh.com              │
+                    │        werewolf.ans-game.fun              │
                     │                                          │
   User ──► :443 ─► │  ┌─────────┐                             │
        ──► :80  ─► │  │  Nginx  │──► /          → Client:3000 │
@@ -77,7 +77,7 @@ Complete deployment guide for Ubuntu server with Docker.
 
 **DNS:**
 
-- `wolf.nguynchupanh.com` A record pointing to your server IP (159.223.65.161)
+- `werewolf.ans-game.fun` A record pointing to your server IP (159.223.65.161)
 
 **Local Machine:**
 
@@ -104,7 +104,7 @@ cd ~/app/werewolf
 ./deploy.sh deploy
 ```
 
-That's it! Your game is live at `https://wolf.nguynchupanh.com`
+That's it! Your game is live at `https://werewolf.ans-game.fun`
 
 ---
 
@@ -172,7 +172,7 @@ cd ~/app/werewolf
 ### Step 7: Get SSL Certificate
 
 ```bash
-# Make sure DNS is pointing wolf.nguynchupanh.com → your server IP
+# Make sure DNS is pointing werewolf.ans-game.fun → your server IP
 # Then get certificate:
 ./deploy.sh ssl
 ```
@@ -199,10 +199,10 @@ docker compose -f docker-compose.prod.yml --env-file .env.production logs server
 docker compose -f docker-compose.prod.yml --env-file .env.production logs client
 
 # Test from server
-curl -s https://wolf.nguynchupanh.com/health
+curl -s https://werewolf.ans-game.fun/health
 ```
 
-Open your browser: `https://wolf.nguynchupanh.com`
+Open your browser: `https://werewolf.ans-game.fun`
 
 ---
 
@@ -270,7 +270,7 @@ crontab -e
 
 ## SSL/HTTPS Setup
 
-SSL is **already configured** for `wolf.nguynchupanh.com`. The deploy script handles everything:
+SSL is **already configured** for `werewolf.ans-game.fun`. The deploy script handles everything:
 
 ### Get SSL Certificate (first time)
 
@@ -282,7 +282,7 @@ cd ~/app/werewolf
 This will:
 1. Install Certbot if not present
 2. Stop nginx temporarily
-3. Obtain certificate from Let's Encrypt for `wolf.nguynchupanh.com`
+3. Obtain certificate from Let's Encrypt for `werewolf.ans-game.fun`
 4. Set up auto-renewal cron job (runs every 2 months)
 
 ### Force Renew SSL
@@ -311,16 +311,16 @@ The `ssl` command automatically sets up a cron job:
 
 ### DNS Records
 
-The domain `wolf.nguynchupanh.com` should have the following DNS record:
+The domain `werewolf.ans-game.fun` should have the following DNS record:
 
 | Type | Name | Value           | TTL  |
 | ---- | ---- | --------------- | ---- |
-| A    | wolf | 159.223.65.161  | Auto |
+| A    | werewolf | 159.223.65.161  | Auto |
 
 ### Verify DNS
 
 ```bash
-dig wolf.nguynchupanh.com +short
+dig werewolf.ans-game.fun +short
 # Should return: 159.223.65.161
 ```
 
@@ -424,7 +424,7 @@ docker system prune -a --volumes
 
 ```bash
 # Nginx health
-curl -s https://wolf.nguynchupanh.com/health
+curl -s https://werewolf.ans-game.fun/health
 
 # Check individual services
 docker compose -f docker-compose.prod.yml --env-file .env.production ps
@@ -507,7 +507,7 @@ docker compose -f docker-compose.prod.yml --env-file .env.production up -d
 sudo certbot certificates
 
 # Test SSL
-curl -vI https://wolf.nguynchupanh.com 2>&1 | grep -E "SSL|subject|expire"
+curl -vI https://werewolf.ans-game.fun 2>&1 | grep -E "SSL|subject|expire"
 
 # Re-obtain certificate
 ./deploy.sh ssl-renew
@@ -543,7 +543,7 @@ docker compose -f docker-compose.prod.yml --env-file .env.production exec postgr
 docker compose -f docker-compose.prod.yml --env-file .env.production logs nginx | grep -i upgrade
 
 # Verify Socket.io endpoint
-curl -s https://wolf.nguynchupanh.com/socket.io/?EIO=4&transport=polling
+curl -s https://werewolf.ans-game.fun/socket.io/?EIO=4&transport=polling
 ```
 
 ### Out of disk space
@@ -599,7 +599,7 @@ werewolf-game/
 │   └── nginx.conf              ← Reverse proxy + SSL + WebSocket + caching
 ├── docker-compose.dev.yml      ← Dev: Postgres + Redis only
 ├── docker-compose.prod.yml     ← Prod: All 5 services + SSL volumes
-├── .env.production             ← Production env vars (domain: wolf.nguynchupanh.com)
+├── .env.production             ← Production env vars (domain: werewolf.ans-game.fun)
 ├── .dockerignore               ← Docker build exclusions
 ├── deploy.sh                   ← Deployment automation script (with SSL)
 └── Deploy.md                   ← This file

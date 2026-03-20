@@ -5,8 +5,8 @@
 # Usage: ./deploy.sh [command]
 # Commands: setup | deploy | update | logs | status | stop | restart | backup | rollback
 #
-# SSL: Uses Cloudflare Origin certs from ssl/cert.pem + ssl/private.key
-# If certs are missing/empty → falls back to HTTP automatically.
+# SSL: Auto-extracts ssl.zip → ssl/cert.pem + ssl/private.key
+# If ssl.zip or certs are missing/empty → falls back to HTTP automatically.
 
 set -euo pipefail
 
@@ -17,7 +17,7 @@ ENV_FILE=".env.production"
 BACKUP_DIR="$HOME/backups/werewolf"
 GIT_REPO="https://github.com/tuanngv244/werewolf.git"
 GIT_BRANCH="main"
-DOMAIN="wolf.nguynchupanh.com"
+DOMAIN="werewolf.ans-game.fun"
 
 # Colors
 RED='\033[0;31m'
@@ -31,8 +31,24 @@ log_ok()    { echo -e "${GREEN}[OK]${NC} $1"; }
 log_warn()  { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
+# ─── Extract SSL certs from ssl.zip if available ───
+extract_ssl() {
+    local zip_file="$APP_DIR/ssl.zip"
+    local ssl_dir="$APP_DIR/ssl"
+
+    if [ -s "$zip_file" ]; then
+        log_info "Found ssl.zip → extracting to ssl/..."
+        mkdir -p "$ssl_dir"
+        unzip -o "$zip_file" -d "$ssl_dir"
+        chmod 600 "$ssl_dir/cert.pem" "$ssl_dir/private.key" 2>/dev/null || true
+        log_ok "SSL certs extracted from ssl.zip"
+    fi
+}
+
 # ─── Check if SSL certs exist and have content ───
 has_ssl() {
+    # Auto-extract from ssl.zip first
+    extract_ssl
     [ -s "$APP_DIR/ssl/cert.pem" ] && [ -s "$APP_DIR/ssl/private.key" ]
 }
 
@@ -45,7 +61,7 @@ configure_for_deploy() {
         cp nginx/nginx-ssl.conf nginx/nginx.conf
         local scheme="https"
     else
-        log_warn "No SSL certs (or empty files) → HTTP mode"
+        log_warn "No SSL certs (ssl.zip missing or empty) → HTTP mode"
         # Restore HTTP-only nginx.conf from git
         git checkout nginx/nginx.conf 2>/dev/null || true
         local scheme="http"
@@ -164,8 +180,8 @@ cmd_setup() {
     if has_ssl; then
         log_ok "SSL certs found → HTTPS will be enabled"
     else
-        log_warn "SSL certs empty or missing (ssl/cert.pem, ssl/private.key)"
-        log_warn "App will run on HTTP. Add Cloudflare Origin certs to enable HTTPS."
+        log_warn "SSL certs empty or missing. Add ssl.zip (containing cert.pem + private.key)"
+        log_warn "App will run on HTTP. Add Cloudflare Origin certs to ssl.zip to enable HTTPS."
     fi
 
     echo ""
@@ -292,7 +308,7 @@ cmd_status() {
     else
         log_info "Mode: HTTP (no SSL)"
         log_info "URL:  http://$DOMAIN"
-        log_warn "Add certs to ssl/cert.pem + ssl/private.key for HTTPS"
+        log_warn "Add certs to ssl.zip (containing cert.pem + private.key) for HTTPS"
     fi
     echo ""
 }
@@ -469,7 +485,7 @@ case "${1:-help}" in
         if has_ssl; then
             echo "  Mode:   HTTPS (Cloudflare Origin SSL)"
         else
-            echo "  Mode:   HTTP (no certs — add ssl/cert.pem + ssl/private.key)"
+            echo "  Mode:   HTTP (no certs — add ssl.zip with cert.pem + private.key)"
         fi
         echo ""
         echo "  Usage: ./deploy.sh <command>"
