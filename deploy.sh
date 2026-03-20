@@ -36,13 +36,38 @@ extract_ssl() {
     local zip_file="$APP_DIR/ssl.zip"
     local ssl_dir="$APP_DIR/ssl"
 
-    if [ -s "$zip_file" ]; then
-        log_info "Found ssl.zip → extracting to ssl/..."
-        mkdir -p "$ssl_dir"
-        unzip -o "$zip_file" -d "$ssl_dir"
-        chmod 600 "$ssl_dir/cert.pem" "$ssl_dir/private.key" 2>/dev/null || true
-        log_ok "SSL certs extracted from ssl.zip"
+    # Skip if ssl.zip doesn't exist or certs already extracted
+    if [ ! -s "$zip_file" ]; then
+        return
     fi
+    if [ -s "$ssl_dir/cert.pem" ] && [ -s "$ssl_dir/private.key" ]; then
+        return
+    fi
+
+    log_info "Found ssl.zip → extracting to ssl/..."
+    mkdir -p "$ssl_dir"
+
+    # Extract to a temp dir first, then move files to ssl/
+    # This handles any zip structure (flat, nested ssl/, with __MACOSX junk)
+    local tmp_dir
+    tmp_dir=$(mktemp -d)
+    unzip -o "$zip_file" -d "$tmp_dir" 2>/dev/null
+
+    # Find cert.pem and private.key wherever they are in the extracted tree
+    local found_cert found_key
+    found_cert=$(find "$tmp_dir" -name "cert.pem" -not -path "*__MACOSX*" | head -1)
+    found_key=$(find "$tmp_dir" -name "private.key" -not -path "*__MACOSX*" | head -1)
+
+    if [ -n "$found_cert" ] && [ -n "$found_key" ]; then
+        cp "$found_cert" "$ssl_dir/cert.pem"
+        cp "$found_key" "$ssl_dir/private.key"
+        chmod 600 "$ssl_dir/cert.pem" "$ssl_dir/private.key"
+        log_ok "SSL certs extracted from ssl.zip"
+    else
+        log_error "ssl.zip does not contain cert.pem and/or private.key"
+    fi
+
+    rm -rf "$tmp_dir"
 }
 
 # ─── Check if SSL certs exist and have content ───
