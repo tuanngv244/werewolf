@@ -6,6 +6,7 @@ import { useGameStore } from '@/stores/game-store';
 import { useRoomStore } from '@/stores/room-store';
 import { useChatStore } from '@/stores/chat-store';
 import { useAuthStore } from '@/stores/auth-store';
+import { useToastStore } from '@/stores/toast-store';
 import { GamePhase } from '@shared/types/game.types';
 import { isWerewolfRole } from '@shared/constants/roles';
 import type { Socket } from 'socket.io-client';
@@ -37,6 +38,7 @@ export function useSocket() {
   const setAuraSeerResult = useGameStore((s) => s.setAuraSeerResult);
   const setWerewolfSeerResult = useGameStore((s) => s.setWerewolfSeerResult);
   const setWerewolfTeam = useGameStore((s) => s.setWerewolfTeam);
+  const setWerewolfKillVotes = useGameStore((s) => s.setWerewolfKillVotes);
   const setIsAlive = useGameStore((s) => s.setIsAlive);
   const setWitchAttackedTarget = useGameStore((s) => s.setWitchAttackedTarget);
   const setWitchPotionState = useGameStore((s) => s.setWitchPotionState);
@@ -92,10 +94,23 @@ export function useSocket() {
     };
     const handleGameStarted = ({ gameId, players, timers, phase, phaseEndAt, roleList }: any) => {
       setGame(gameId, players, timers, phase, phaseEndAt, roleList);
-      // Store the current room code for post-game navigation
+      // If reconnecting to a game past the INTRO phase, skip the intro overlay
+      // and do NOT redirect (user may have intentionally navigated away).
+      // Compare using GamePhase enum values (lowercase: 'intro', 'starting')
+      // to avoid case-mismatch bugs with raw string comparisons.
+      const isFreshStart = !phase || phase === GamePhase.INTRO || phase === GamePhase.STARTING;
+      if (isFreshStart) {
+        // Fresh game start (INTRO or STARTING phase) — trigger redirect to /game
+        useGameStore.setState({ pendingGameRedirect: true });
+      } else {
+        // Reconnect to an ongoing game — don't redirect, don't show intro
+        useGameStore.setState({ shouldShowIntro: false, pendingGameRedirect: false });
+      }
+      // Store the current room code for post-game navigation (also persists to localStorage)
       const roomCode = useRoomStore.getState().currentRoom?.code;
       if (roomCode) {
         useGameStore.setState({ lastRoomCode: roomCode });
+        try { localStorage.setItem('werewolf-last-room', roomCode); } catch {}
       }
     };
     const handleRoleAssigned = ({ role, team, headhunterTarget }: any) => {
@@ -134,6 +149,26 @@ export function useSocket() {
             phase: 'DAWN',
           });
         }
+        // Show dawn death toasts for each killed player
+        if (result.killed.length > 0) {
+          const names = result.killed.map((id: string) => playerNames.get(id) || 'Unknown');
+          useToastStore.getState().addToast({
+            icon: '💀',
+            title: 'Dawn',
+            message: `${names.join(', ')} died last night.`,
+            variant: 'danger',
+            duration: 6000,
+          });
+        }
+      } else {
+        // No one died
+        useToastStore.getState().addToast({
+          icon: '☀️',
+          title: 'Dawn',
+          message: 'No one died last night!',
+          variant: 'success',
+          duration: 5000,
+        });
       }
       const userId = useAuthStore.getState().user?.id;
       if (userId && result.killed && result.killed.includes(userId)) {
@@ -209,11 +244,35 @@ export function useSocket() {
         setActiveChannel('WEREWOLF');
       }
     };
+    const handleWolfVoteUpdate = ({ votes, allVoted }: { votes: Record<string, string>; allVoted?: boolean }) => {
+      setWerewolfKillVotes(votes, allVoted);
+    };
     const handleWitchTarget = ({ targetId, hasHealPotion, hasKillPotion }: any) => {
       setWitchAttackedTarget(targetId);
       // Update potion availability if server sent it
       if (hasHealPotion !== undefined && hasKillPotion !== undefined) {
         setWitchPotionState(hasHealPotion, hasKillPotion);
+      }
+      // Show toast notification so the Witch clearly sees who was attacked
+      if (targetId) {
+        const currentPlayers = useGameStore.getState().players;
+        const attackedPlayer = currentPlayers.find((p) => p.id === targetId);
+        const attackedName = attackedPlayer?.username || 'Unknown';
+        useToastStore.getState().addToast({
+          icon: '🐺',
+          title: '🧪 Witch Alert',
+          message: `${attackedName} was attacked by werewolves!`,
+          variant: 'witch',
+          duration: 8000,
+        });
+      } else {
+        useToastStore.getState().addToast({
+          icon: '🌙',
+          title: '🧪 Witch Alert',
+          message: 'No one was attacked tonight.',
+          variant: 'info',
+          duration: 5000,
+        });
       }
     };
     const handleGunnerShot = ({ targetId }: any) => {
@@ -242,6 +301,50 @@ export function useSocket() {
     const handleChatMessage = (message: any) => {
       addMessage(message);
     };
+    const handleReconnectState = (state: any) => {
+      // Restore full game state on reconnection (F5, network blip, etc.)
+      // This event is sent by the server after game:started + game:role_assigned
+      // to fill in additional state that those events don't carry.
+
+      // 1. Restore alive status
+      if (state.isAlive === false) {
+        setIsAlive(false);
+        setActiveChannel('DEAD');
+      }
+
+      // 2. Restore night action state
+      if (state.nightActionDone) {
+        useGameStore.setState({
+          nightActionDone: true,
+          nightActionTarget: state.nightActionTarget || null,
+        });
+      }
+
+      // 3. Restore witch state
+      if (state.witchHasHealPotion !== undefined) {
+        setWitchPotionState(state.witchHasHealPotion, state.witchHasKillPotion);
+      }
+      if (state.witchAttackedTarget) {
+        setWitchAttackedTarget(state.witchAttackedTarget);
+      }
+
+      // 4. Restore vote state
+      if (state.votes) {
+        setVoteState({ votes: state.votes });
+      }
+
+      // 5. Restore death log
+      if (state.deathLog && Array.isArray(state.deathLog)) {
+        for (const entry of state.deathLog) {
+          addDeathLogEntry(entry);
+        }
+      }
+
+      // 6. Restore werewolf kill votes (for wolf players during night)
+      if (state.werewolfKillVotes) {
+        setWerewolfKillVotes(state.werewolfKillVotes, state.allWolvesVoted);
+      }
+    };
 
     function registerListeners() {
       socket.on('room:state', handleRoomState);
@@ -266,9 +369,11 @@ export function useSocket() {
       socket.on('game:aura_seer_result', handleAuraSeerResult);
       socket.on('game:werewolf_seer_result', handleWerewolfSeerResult);
       socket.on('game:werewolf_team', handleWerewolfTeam);
+      socket.on('game:wolf_vote_update', handleWolfVoteUpdate);
       socket.on('game:witch_target', handleWitchTarget);
       socket.on('game:gunner_shot', handleGunnerShot);
       socket.on('game:action_confirmed', handleActionConfirmed);
+      socket.on('game:reconnect_state', handleReconnectState);
       socket.on('chat:message', handleChatMessage);
     }
 
@@ -295,9 +400,11 @@ export function useSocket() {
       socket.off('game:aura_seer_result', handleAuraSeerResult);
       socket.off('game:werewolf_seer_result', handleWerewolfSeerResult);
       socket.off('game:werewolf_team', handleWerewolfTeam);
+      socket.off('game:wolf_vote_update', handleWolfVoteUpdate);
       socket.off('game:witch_target', handleWitchTarget);
       socket.off('game:gunner_shot', handleGunnerShot);
       socket.off('game:action_confirmed', handleActionConfirmed);
+      socket.off('game:reconnect_state', handleReconnectState);
       socket.off('chat:message', handleChatMessage);
     }
 
@@ -337,6 +444,7 @@ export function useSocket() {
     setAuraSeerResult,
     setWerewolfSeerResult,
     setWerewolfTeam,
+    setWerewolfKillVotes,
     setIsAlive,
     setWitchAttackedTarget,
     setWitchPotionState,

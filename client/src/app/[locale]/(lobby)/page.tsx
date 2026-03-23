@@ -6,6 +6,7 @@ import { useRouter, usePathname } from '@/lib/navigation';
 import { Button } from '@/components/ui';
 import { Modal } from '@/components/ui';
 import { useAuthStore } from '@/stores/auth-store';
+import { useGameStore } from '@/stores/game-store';
 import { getSocket, waitForConnection } from '@/lib/socket';
 import { Role, Team } from '@shared/types/game.types';
 import { ROLE_DEFINITIONS } from '@shared/constants/roles';
@@ -240,15 +241,7 @@ export default function HomePage() {
       demoListenersRef.current?.();
 
       const cleanup = () => {
-        socket.off('game:started', onGameStarted);
         socket.off('room:error', onError);
-      };
-
-      const onGameStarted = () => {
-        cleanup();
-        demoListenersRef.current = null;
-        setIsDemoLoading(false);
-        // GameStartRedirect will auto-navigate to /game
       };
 
       const onError = (err: { message: string }) => {
@@ -259,13 +252,25 @@ export default function HomePage() {
       };
 
       demoListenersRef.current = cleanup;
-      socket.once('game:started', onGameStarted);
       socket.once('room:error', onError);
       socket.emit('room:create_demo', { playerCount: 8 });
+
+      // The useSocket handler will process game:started and set pendingGameRedirect,
+      // which triggers GameStartRedirect to navigate to /game.
+      // We watch the store for the redirect flag to stop the loading indicator.
+      const unsubscribe = useGameStore.subscribe((state) => {
+        if (state.pendingGameRedirect || state.gameId) {
+          unsubscribe();
+          cleanup();
+          demoListenersRef.current = null;
+          setIsDemoLoading(false);
+        }
+      });
 
       // Timeout fallback
       setTimeout(() => {
         if (demoListenersRef.current === cleanup) {
+          unsubscribe();
           cleanup();
           demoListenersRef.current = null;
           setIsDemoLoading(false);

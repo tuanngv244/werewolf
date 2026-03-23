@@ -94,6 +94,11 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
           // Send room state to the reconnecting client so the UI can render
           // immediately without waiting for a separate room:join round-trip
           client.emit('room:state', room);
+
+          // If game is in progress, send full game state so client can rejoin
+          if (room.status === RoomStatus.IN_GAME) {
+            await this.sendGameStateToClient(client, roomCode);
+          }
         } else {
           // Room doesn't exist or player not in it — clean up stale pointer
           await this.roomsService.setPlayerRoom(client.user.id, null);
@@ -324,6 +329,36 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     // Check for error responses
     if (!result || (typeof result === 'object' && 'error' in result)) {
       const errorCode = typeof result === 'object' && 'error' in result ? result.error : 'room_not_found';
+
+      // Special case: game_in_progress — if the player is already part of this game,
+      // let them rejoin (reconnection scenario)
+      if (errorCode === 'game_in_progress') {
+        const room = await this.roomsService.getRoom(code);
+        if (room && room.players.some((p) => p.id === client.user.id)) {
+          // Player was in this room when game started — let them reconnect
+          const player = room.players.find((p) => p.id === client.user.id);
+          if (player && !player.isConnected) {
+            player.isConnected = true;
+            await this.roomsService.updateRoom(code, room);
+            // Cancel any pending disconnect timer
+            const disconnectTimer = this.disconnectTimers.get(client.user.id);
+            if (disconnectTimer) {
+              clearTimeout(disconnectTimer);
+              this.disconnectTimers.delete(client.user.id);
+            }
+            this.server.to(`room:${code}`).emit('room:player_reconnected', {
+              playerId: client.user.id,
+            });
+          }
+          await this.roomsService.setPlayerRoom(client.user.id, code);
+          client.join(`room:${code}`);
+          client.emit('room:state', room);
+          // Send game state so they can rejoin the active game
+          await this.sendGameStateToClient(client, code);
+          return;
+        }
+      }
+
       const messages: Record<string, string> = {
         room_not_found: 'Room not found. Please check the code and try again.',
         room_full: 'Room is full. No more players can join.',
@@ -519,9 +554,33 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
 
     const room = await this.roomsService.getRoom(roomCode);
     if (!room || room.hostId !== client.user.id) return;
-    if (room.players.length < 6) {
-      client.emit('room:error', { message: 'Need at least 6 players' });
+
+    // Only count connected players (exclude disconnected ones who would miss game:started)
+    const connectedPlayers = room.players.filter((p) => p.isConnected);
+    if (connectedPlayers.length < 6) {
+      const disconnectedCount = room.players.length - connectedPlayers.length;
+      const message = disconnectedCount > 0
+        ? `Need at least 6 connected players. ${disconnectedCount} player(s) disconnected.`
+        : 'Need at least 6 players';
+      client.emit('room:error', { message });
       return;
+    }
+
+    // Remove disconnected players from the room before starting
+    // This prevents ghost players who would miss game events
+    const disconnectedPlayers = room.players.filter((p) => !p.isConnected);
+    if (disconnectedPlayers.length > 0) {
+      console.log(`[Gateway] Removing ${disconnectedPlayers.length} disconnected player(s) before game start`);
+      room.players = connectedPlayers;
+      for (const dp of disconnectedPlayers) {
+        await this.roomsService.setPlayerRoom(dp.id, null);
+        // Cancel any pending disconnect timer
+        const timer = this.disconnectTimers.get(dp.id);
+        if (timer) {
+          clearTimeout(timer);
+          this.disconnectTimers.delete(dp.id);
+        }
+      }
     }
 
     // Create game
@@ -535,12 +594,24 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
         || [];
     }
 
+    // Adjust roles array to match actual connected player count
+    // (in case disconnected players were removed and count changed)
+    if (room.settings.roles.length !== room.players.length) {
+      const playerCount = room.players.length;
+      room.settings.roles = DEFAULT_ROLES[playerCount as keyof typeof DEFAULT_ROLES]
+        || DEFAULT_ROLES[8 as keyof typeof DEFAULT_ROLES]
+        || room.settings.roles.slice(0, playerCount);
+    }
+
     await this.roomsService.updateRoom(roomCode, room);
 
     const game = await this.gameService.createGame(room);
 
-    // Send game started to all players
-    this.server.to(`room:${roomCode}`).emit('game:started', {
+    // Fetch sockets FIRST, then broadcast game:started and role assignments atomically
+    // This eliminates the race window between broadcast and fetchSockets
+    const sockets = await this.server.in(`room:${roomCode}`).fetchSockets();
+
+    const gameStartedPayload = {
       gameId: game.id,
       phase: game.phase,
       players: game.players.map((p) => ({
@@ -552,14 +623,19 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
       timers: game.timers,
       phaseEndAt: game.phaseEndAt,
       roleList: room.settings.roles,
-    });
+    };
 
-    // Send individual role assignments
-    const sockets = await this.server.in(`room:${roomCode}`).fetchSockets();
+    // Send game:started + role assignments to each socket individually
+    // This is more reliable than broadcast + fetchSockets as two separate operations
     for (const socket of sockets) {
       const authSocket = socket as unknown as AuthenticatedSocket;
       const player = game.players.find((p) => p.id === authSocket.user?.id);
+
+      // Send game:started to everyone in the room
+      socket.emit('game:started', gameStartedPayload);
+
       if (player) {
+        // Send role assignment immediately after game:started
         socket.emit('game:role_assigned', {
           role: player.role,
           team: player.team,
@@ -595,16 +671,31 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     );
     client.emit('game:action_confirmed', { action: data.action });
 
-    // After a werewolf votes, notify the Witch of the current target
+    // After a werewolf votes, broadcast wolf votes to all wolves and notify the Witch
     const game = await this.gameService.getGame(data.gameId);
     if (game && game.phase === GamePhase.NIGHT) {
       const player = game.players.find((p) => p.id === client.user.id);
       if (player && isWerewolfRole(player.role)) {
+        const sockets = await this.server.in(`room:${game.roomCode}`).fetchSockets();
+
+        // Broadcast current wolf kill votes to all living wolves
+        const wolfVotes = game.nightActions.werewolfVotes || {};
+        const wolfPlayerIds = new Set(
+          game.players.filter((p) => isWerewolfRole(p.role) && p.isAlive).map((p) => p.id),
+        );
+        const allWolvesVoted = wolfPlayerIds.size > 0 && [...wolfPlayerIds].every((id) => id in wolfVotes);
+        for (const s of sockets) {
+          const userId = (s as unknown as AuthenticatedSocket).user?.id;
+          if (userId && wolfPlayerIds.has(userId)) {
+            s.emit('game:wolf_vote_update', { votes: wolfVotes, allVoted: allWolvesVoted });
+          }
+        }
+
+        // Notify the Witch of the current target
         const werewolfTarget = this.gameService.getWerewolfTarget(game);
         if (werewolfTarget) {
           const witch = game.players.find((p) => p.role === Role.WITCH && p.isAlive);
           if (witch) {
-            const sockets = await this.server.in(`room:${game.roomCode}`).fetchSockets();
             const witchSocket = sockets.find(
               (s) => (s as unknown as AuthenticatedSocket).user?.id === witch.id,
             );
@@ -909,6 +1000,203 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
         fromId: client.user.id,
         candidate: data.candidate,
       });
+    }
+  }
+
+  // ─── Game State Sync (for reconnecting players) ────────────────
+
+  /**
+   * Sends the full game state to a single client socket.
+   * Used when a player reconnects while a game is in progress so they can
+   * rejoin seamlessly instead of being stuck in the room/waiting page.
+   *
+   * Sends: game:started, game:role_assigned, game:werewolf_team,
+   *        game:phase_changed, game:reconnect_state (custom sync event)
+   */
+  private async sendGameStateToClient(client: AuthenticatedSocket, roomCode: string) {
+    try {
+      const game = await this.gameService.getGameByRoom(roomCode);
+      if (!game) return;
+
+      const room = await this.roomsService.getRoom(roomCode);
+
+      // Send game:started with current state so the client sets gameId and navigates
+      client.emit('game:started', {
+        gameId: game.id,
+        phase: game.phase,
+        players: game.players.map((p) => ({
+          id: p.id,
+          username: p.username,
+          isAlive: p.isAlive,
+          isConnected: room ? room.players.find((rp) => rp.id === p.id)?.isConnected ?? true : true,
+        })),
+        timers: game.timers,
+        phaseEndAt: game.phaseEndAt,
+        roleList: room?.settings?.roles || [],
+      });
+
+      // Send role assignment
+      const player = game.players.find((p) => p.id === client.user.id);
+      if (player) {
+        client.emit('game:role_assigned', {
+          role: player.role,
+          team: player.team,
+          ...(player.headhunterState ? { headhunterTarget: player.headhunterState.targetId } : {}),
+        });
+
+        // Send werewolf team info
+        if (isWerewolfRole(player.role)) {
+          const wolfIds = game.players
+            .filter((p) => isWerewolfRole(p.role))
+            .map((p) => ({ id: p.id, username: p.username, role: p.role }));
+          client.emit('game:werewolf_team', { wolves: wolfIds });
+        }
+      }
+
+      // Send current phase info so the client's timer is in sync
+      client.emit('game:phase_changed', {
+        phase: game.phase,
+        endAt: game.phaseEndAt,
+        round: game.round,
+      });
+
+      // ─── Send additional state for full reconnection ───
+
+      // Build reconnect state payload with everything the client needs
+      const reconnectState: Record<string, unknown> = {
+        round: game.round,
+      };
+
+      // 1. Player's alive status
+      if (player && !player.isAlive) {
+        reconnectState.isAlive = false;
+      }
+
+      // 2. Night action state — let client know if this player already acted this night
+      if (game.phase === GamePhase.NIGHT && player && player.isAlive) {
+        let hasActed = false;
+        let actionTarget: string | null = null;
+
+        switch (player.role) {
+          case Role.SEER:
+            hasActed = !!game.nightActions.seerTarget;
+            actionTarget = game.nightActions.seerTarget || null;
+            break;
+          case Role.AURA_SEER:
+            hasActed = !!game.nightActions.auraSeerTarget;
+            actionTarget = game.nightActions.auraSeerTarget || null;
+            break;
+          case Role.DOCTOR:
+            hasActed = !!game.nightActions.doctorTarget;
+            actionTarget = game.nightActions.doctorTarget || null;
+            break;
+          case Role.WITCH:
+            hasActed = game.nightActions.witchHeal === true || !!game.nightActions.witchKillTarget;
+            break;
+          case Role.AVENGER:
+            hasActed = !!game.nightActions.avengerTarget;
+            actionTarget = game.nightActions.avengerTarget || null;
+            break;
+          case Role.BEAST_HUNTER:
+            hasActed = !!game.nightActions.beastHunterTrap;
+            actionTarget = game.nightActions.beastHunterTrap || null;
+            break;
+          case Role.BOMBER:
+            hasActed = !!game.nightActions.bomberTarget;
+            actionTarget = game.nightActions.bomberTarget || null;
+            break;
+          case Role.MEDIUM:
+            hasActed = !!game.nightActions.mediumRevive;
+            actionTarget = game.nightActions.mediumRevive || null;
+            break;
+          case Role.BODYGUARD:
+            hasActed = !!game.nightActions.bodyguardTarget;
+            actionTarget = game.nightActions.bodyguardTarget || null;
+            break;
+          case Role.SERIAL_KILLER:
+            hasActed = !!game.nightActions.serialKillerTarget;
+            actionTarget = game.nightActions.serialKillerTarget || null;
+            break;
+          case Role.MONK:
+            hasActed = !!game.nightActions.monkTarget;
+            actionTarget = game.nightActions.monkTarget || null;
+            break;
+          default:
+            // Werewolf roles
+            if (isWerewolfRole(player.role)) {
+              hasActed = !!game.nightActions.werewolfVotes[player.id];
+              actionTarget = game.nightActions.werewolfVotes[player.id] || null;
+            }
+            break;
+        }
+        if (hasActed) {
+          reconnectState.nightActionDone = true;
+          reconnectState.nightActionTarget = actionTarget;
+        }
+      }
+
+      // 3. Witch state — potion availability and current werewolf target
+      if (player?.role === Role.WITCH && player.isAlive) {
+        reconnectState.witchHasHealPotion = player.witchState?.hasHealPotion ?? true;
+        reconnectState.witchHasKillPotion = player.witchState?.hasKillPotion ?? true;
+        if (game.phase === GamePhase.NIGHT) {
+          const werewolfTarget = this.gameService.getWerewolfTarget(game);
+          if (werewolfTarget) {
+            reconnectState.witchAttackedTarget = werewolfTarget;
+          }
+        }
+      }
+
+      // 4. Vote state — if in VOTE phase, send current votes
+      if (game.phase === GamePhase.VOTE) {
+        const votes = await this.gameService.getVotes(game.id);
+        if (votes && Object.keys(votes).length > 0) {
+          reconnectState.votes = votes;
+        }
+      }
+
+      // 4.5 Werewolf kill votes — send to wolf players during night
+      if (game.phase === GamePhase.NIGHT && player && isWerewolfRole(player.role)) {
+        const wolfVotes = game.nightActions.werewolfVotes || {};
+        if (Object.keys(wolfVotes).length > 0) {
+          reconnectState.werewolfKillVotes = wolfVotes;
+        }
+        // Compute whether all living wolves have voted
+        const wolfPlayerIds = game.players
+          .filter((p) => isWerewolfRole(p.role) && p.isAlive)
+          .map((p) => p.id);
+        const allVoted = wolfPlayerIds.length > 0 && wolfPlayerIds.every((id) => id in wolfVotes);
+        reconnectState.allWolvesVoted = allVoted;
+      }
+
+      // 5. Death log — reconstruct from game's player death data
+      const deathLog: Array<{ playerId: string; playerName: string; cause: string; round: number; phase: string }> = [];
+      for (const p of game.players) {
+        if (!p.isAlive && p.deathCause && p.deathRound !== undefined) {
+          const phase = p.deathCause === 'VOTED' ? 'VOTE'
+            : p.deathCause === DeathCause.GUNNER_SHOT ? 'DAY'
+            : 'DAWN';
+          deathLog.push({
+            playerId: p.id,
+            playerName: p.username,
+            cause: p.deathCause === 'VOTED' ? 'voted'
+              : p.deathCause === DeathCause.GUNNER_SHOT ? 'gunner'
+              : 'night',
+            round: p.deathRound,
+            phase,
+          });
+        }
+      }
+      if (deathLog.length > 0) {
+        reconnectState.deathLog = deathLog;
+      }
+
+      // Send the combined reconnect state
+      client.emit('game:reconnect_state', reconnectState);
+
+      console.log(`[Gateway] Sent game state to reconnecting player ${client.user.username} (game: ${game.id}, phase: ${game.phase}, round: ${game.round})`);
+    } catch (error) {
+      console.error(`[Gateway] Failed to send game state to client:`, error?.message || error);
     }
   }
 

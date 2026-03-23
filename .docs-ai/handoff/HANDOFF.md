@@ -1,14 +1,277 @@
 # Werewolf Game — Session Handoff
 
-> Last updated: 2026-03-18
+> Last updated: 2026-03-23
 
 ---
 
 ## Current Session
 
-**Status:** Socket Audit — ALL FIXES COMPLETED
-**Date:** 2026-03-18
+**Status:** Wolf Kill Majority Vote Fix — COMPLETED
+**Date:** 2026-03-23
 **Summary (latest):**
+
+### Wolf Kill Majority Vote Fix (2026-03-23)
+
+**Bug: Wolf kill executed with only 1 vote regardless of wolf count**
+- **Root cause:** Both `resolveNight()` in `game.engine.ts` and `getWerewolfTarget()` in `game.service.ts` picked whichever target had the most votes — even 1 vote from 1 wolf out of many was enough. No majority rule existed.
+- **Fix:** Added majority vote logic. The winning target must have **strictly more than half** of the total eligible vote weight (including wolves who didn't vote). Ties also result in no kill.
+  - 1 wolf → 1 vote needed (always kills)
+  - 2 wolves → 2 votes needed (unanimous)
+  - 3 wolves → 2 votes needed (majority)
+  - 4 wolves → 3 votes needed
+  - Alpha Werewolf counts as weight 2; Wolf Fang excluded unless last wolf
+- **Files:** `server/src/modules/game/game.engine.ts` (resolveNight), `server/src/modules/game/game.service.ts` (getWerewolfTarget + added isWerewolfRole import)
+
+### Wolf Vote Change Feature (2026-03-23)
+
+**Feature: Allow wolves to change their bite vote after all wolves have voted**
+
+- **Server (`game.gateway.ts`):** Added `allVoted` boolean to `game:wolf_vote_update` event payload. Computed by checking whether every living wolf's ID has an entry in `werewolfVotes`. Also added `allWolvesVoted` to reconnect state for reconnecting wolf players.
+- **Client store (`game-store.ts`):** Added `allWolvesVoted: boolean` state field, updated `setWerewolfKillVotes` to accept optional `allVoted` param, added `resetNightAction()` method to unlock the UI.
+- **Client socket (`useSocket.ts`):** Updated `handleWolfVoteUpdate` and reconnect handler to pass `allVoted` from server to store.
+- **Client UI (`game/page.tsx`):** In `NightActionPanel`, when `nightActionDone && isWolf && allWolvesVoted`, a "🔄 Change Vote" button appears. Clicking it calls `resetNightAction()` which resets `nightActionDone` to false, re-showing the target selection UI so the wolf can submit a new vote.
+- **i18n:** Added `game.changeVote` — EN: "Change Vote", VI: "Đổi Phiếu"
+- **Server allows re-votes:** `recordNightAction()` already overwrites `werewolfVotes[playerId]` with no lock, so server-side naturally supports vote changes.
+
+### Errors.md Batch #2 — 3 New Issues Fixed (2026-03-23)
+
+**1. Intro not showing on first game start**
+- **Root cause:** `IntroStoryOverlay` used its own client-side timer (12.8s) independent of the server's INTRO phase (15s). On cold page load with lazy 3D bundles, the component could mount late and desync from the server phase.
+- **Fix:** Modified `IntroStoryOverlay` to sync with the server's `phaseEndAt` — it reads the server's remaining INTRO time and scales the line animation to fit. If the phase has already passed INTRO (late mount), it still plays the full client-side intro.
+- **File:** `client/src/app/[locale]/(game)/game/page.tsx` — `IntroStoryOverlay` component
+
+**2. URL navigation trap — only keep room on F5 reload**
+- **Root cause:** Two bugs: (A) `GameStartRedirect` in `SocketProvider` unconditionally pushed to `/game` whenever `gameId` was truthy — even when the user intentionally navigated away and the socket reconnected. (B) The 8-second timeout on `/game` redirected to `/room/{code}` using `lastRoomCode` from localStorage even on non-reload navigations.
+- **Fix A:** Added `usePathname()` check to `GameStartRedirect` — it only redirects from game-related pages (`/game`, `/room/*`, `/rooms`, `/`), not from other pages the user intentionally navigated to.
+- **Fix B:** The 8-second timeout now uses `Performance Navigation API` to detect F5 reload. Only redirects to `/room/{code}` on actual reloads; otherwise goes to `/rooms` (lobby).
+- **Files:** `client/src/components/providers/SocketProvider.tsx`, `client/src/app/[locale]/(game)/game/page.tsx`
+
+**3. Show wolf ally names in wolf pack chat tab**
+- **Root cause:** `werewolfTeam` data (array of `{id, username, role}`) was already sent by the server and stored in the Zustand game-store, but was never read or rendered by any component.
+- **Fix:** Added `werewolfTeam` selector to `ChatPanel`. When the WEREWOLF tab is active, ally names and roles are shown as red badges below the "Wolf Pack Chat" header. Works in both single-channel mode (night) and multi-channel mode (dead spectators).
+- **File:** `client/src/app/[locale]/(game)/game/page.tsx` — `ChatPanel` component
+
+**Build Status:** Client typecheck passes with zero errors.
+
+### Video Call (WebRTC) Performance Optimization (2026-03-23)
+User requested: "Check the video call function with Jitsi Meet to see if it's causing lag."
+
+**Key Finding:** Despite the name `JitsiMeetPanel`, there is NO Jitsi Meet iframe. The codebase uses a custom WebRTC peer-to-peer mesh implementation (`useVideoMeet`). Also found a dead `useVoiceChat` hook that is defined but never imported anywhere.
+
+**Problems Found & Fixed:**
+
+1. **Auto-join removed → manual opt-in** — Previously, `getUserMedia` (camera+mic) was called immediately when the game page mounted. Now the system only registers socket listeners on mount; camera/mic are only requested when the user explicitly clicks "Join Meeting". This eliminates CPU/GPU usage from video encoding for players who don't use video chat.
+
+2. **Video starts OFF** — Previously camera was enabled by default (`isVideoMuted: false`). Now both audio and video start disabled (`isVideoMuted: true`, `isAudioMuted: true`). Users opt-in to each. Video encoding is the #1 CPU consumer in WebRTC.
+
+3. **Lower video constraints** — Reduced from 120×180px @ 15-24fps to 100×160px @ 10-15fps. This reduces encoding CPU by ~40%.
+
+4. **Bandwidth constraints added** — New `applyBandwidthConstraints()` function limits video to 100kbps and audio to 32kbps per peer connection. Previously WebRTC auto-negotiated bandwidth with no limits, potentially using 300+ kbps per peer for video.
+
+5. **VideoTile polling fixed** — Previously each tile ran `setInterval(checkTracks, 500)` (16 tiles = 32 checks/second). Now uses native MediaStreamTrack events (`mute`/`unmute`/`ended`) for instant track state detection, with a single 2-second fallback interval per tile instead of 500ms.
+
+6. **Debounced syncRemoteStreams** — Previously `setRemoteStreams(new Map(map))` was called synchronously on every peer event, causing React re-renders of all tiles. Now debounced to batch updates within a 50ms window.
+
+7. **"Join Meeting" UI** — Panel now shows a clear "Join Meeting" button when not connected, instead of silently activating video in the background.
+
+8. **Removed `removePeer` from useEffect dependency** — The `removePeer` → `syncRemoteStreams` → `setRemoteStreams` dependency chain caused the main effect to re-run when remote streams changed. Now only depends on `[roomCode, userId, createPeerConnection]`.
+
+**Files Modified:**
+- `client/src/hooks/useVideoMeet.ts` — Major rewrite: lazy join, bandwidth constraints, debounced sync, lower video settings
+- `client/src/components/game/JitsiMeetPanel.tsx` — Join button UI, fixed VideoTile polling, wired `join()` callback
+- `Errors.md` — Marked task 6 as checked
+
+**Dead Code Identified (not removed — informational):**
+- `client/src/hooks/useVoiceChat.ts` — Audio-only WebRTC hook, never imported
+- `client/src/components/game/VoiceControls.tsx` — Voice controls UI, only used with the unused voice-store
+
+**Build Status:** Client typecheck passes with zero errors.
+
+### 3D Performance Optimization (2026-03-23)
+User requested: "Reduce 3D effects (remove clouds), lower graphics, and check details to optimize performance."
+
+**Comprehensive performance audit and optimization across 3 files:**
+
+#### ForestScene.tsx — Major optimizations
+1. **Clouds removed** — Removed `<Cloud>` components (expensive particle billboarding with alpha-blending). Removed `Cloud` and `Float` imports from drei.
+2. **Shadow map halved** — 2048×2048 → 1024×1024 (4× fewer shadow texels to render)
+3. **Shadow camera tightened** — Frustum from ±25 → ±18, far from 80 → 60 (tighter shadow maps = better shadow quality at lower resolution)
+4. **Map mesh shadows optimized** — Previously all 307 map meshes had `castShadow=true` AND `receiveShadow=true`. Now: `castShadow=false` on all map meshes, `receiveShadow=true` only on ground/terrain meshes. Eliminates ~300 shadow casting draw calls.
+5. **Moon simplified** — Removed `<Float>` wrapper (CPU overhead), removed `<pointLight>` (expensive dynamic light at distance 50), reduced sphere segments from 16×16 → 12×12.
+6. **Stars halved** — count: 1500 → 800, speed: 0.5 → 0.3
+7. **Fireflies reduced** — count: 40 → 15, vertex buffer updates throttled from every frame → every 3rd frame
+8. **Canvas optimized** — `shadows="basic"` (BasicShadowMap instead of PCFShadowMap), `antialias: false` (removes MSAA), `alpha: false`, `stencil: false`, `powerPreference: 'high-performance'`, `dpr: [1, 1.5]` (caps pixel ratio), `far: 200 → 150`
+9. **Zero GC allocations in render loop** — Pre-allocated `THREE.Color` objects for light lerping, pre-allocated `THREE.Vector3` for camera calculations. Previously creating 4 new Color objects + 2 new Vector3 objects every frame.
+10. **Removed console.log** from MapModel collision data callback.
+
+#### PlayerCircle.tsx — Character optimizations
+1. **Character shadows** — Changed from `castShadow=true + receiveShadow=true` to `castShadow=true + receiveShadow=false` on character meshes. Characters cast shadows on ground but don't receive (saves draw calls per character).
+2. **Role glow lights removed** — Removed per-character `<pointLight>` for role glow. Previously up to 16 dynamic point lights (one per character with a glowColor). Kept only the single selection glow light.
+3. **Geometry segments reduced** — Selection ring: 32 → 16 segments. Shadow blob circle: 20 → 12 segments.
+4. **Position tracking GC eliminated** — `GLBCharacterWithPosTracking.useFrame`: eliminated `_worldPos.clone()` per frame by reusing existing Vector3 in positionsRef map. Eliminated `new THREE.Vector3(0,0,-1)` per frame for facing direction by pre-allocating. Eliminated `_worldPos.clone()` in `onLocalPlayerPosition` callback.
+5. **Position tracking throttled** — Position/facing updates every 2nd frame instead of every frame.
+
+#### collision-utils.ts — Debug cleanup
+1. **Removed all debug console.log** — ~30 lines of debug logging (bounding boxes, classification results, test raycasts) removed from `buildCollisionData()`.
+
+**Performance impact summary:**
+| Category | Before | After | Improvement |
+|----------|--------|-------|-------------|
+| Shadow map resolution | 2048×2048 (4M texels) | 1024×1024 (1M texels) | 4× fewer texels |
+| Map mesh shadow draws | ~307 cast + ~307 receive | 0 cast + ~10 receive | ~600 fewer draw calls |
+| Dynamic point lights | 2 (scene) + up to 17 (characters) | 2 (scene) + up to 1 (selected) | ~16 fewer lights |
+| Night particles | 1540 (1500 stars + 40 fireflies) | 815 (800 stars + 15 fireflies) | 47% fewer |
+| Per-frame GC objects | 4 Colors + 4-5 Vector3s | 0 | Zero allocations |
+| Antialias MSAA | 4x MSAA | Off | Significant GPU save |
+| Cloud particles | 2 Cloud components | 0 | Removed entirely |
+
+**Files Modified:**
+- `client/src/components/3d/ForestScene.tsx` — Clouds removed, shadow/canvas/lighting/moon optimized
+- `client/src/components/3d/PlayerCircle.tsx` — Character shadows, role lights, geometry, GC optimized
+- `client/src/components/3d/collision-utils.ts` — Debug logging removed
+
+**Build Status:** Both client and server typecheck pass with zero errors.
+
+### Witch Toast Notification for Attacked Players (2026-03-20)
+User requested: "Add a toast notification for the wizard to clearly see who died."
+
+The "wizard" refers to the **Witch (Phù Thủy)** role. During night phase, the server sends `game:witch_target` to the Witch with the attacked player's ID, but this information was only visible if the Witch manually clicked the "Heal" button in the action panel. There was no proactive notification.
+
+**Solution:**
+
+Created a full toast notification system and wired it into the game's socket event flow:
+
+1. **Toast Store** (`client/src/stores/toast-store.ts`) — New Zustand store with `addToast`, `removeToast`, `clearAll`. Each toast has: id, icon, title, message, variant (info/danger/success/warning/witch), duration (auto-dismiss via setTimeout), and createdAt timestamp.
+
+2. **Toast Component** (`client/src/components/game/GameToast.tsx`) — `GameToastContainer` renders a fixed-position stack of toasts (top-right corner, z-50). Each `ToastItem` has enter/exit slide animation (translate-x + opacity), 5 color variant styles with glassmorphism, icon + title + message layout, and manual dismiss button.
+
+3. **Witch Target Toast** — In `useSocket.ts`, `handleWitchTarget` now shows a purple "witch" variant toast: `"🐺 {playerName} was attacked by werewolves!"` (8s duration). If no one was attacked, shows an info toast: `"🌙 No one was attacked tonight."` (5s duration).
+
+4. **Dawn Death Toasts** — In `useSocket.ts`, `handleDawnResult` now shows toast notifications for ALL players:
+   - If players died: danger toast `"💀 {names} died last night."` (6s)
+   - If no one died: success toast `"☀️ No one died last night!"` (5s)
+
+5. **Game Page Integration** — `<GameToastContainer />` mounted in the game page right after the 3D scene, before the UI overlay.
+
+6. **i18n Keys** — Added toast translation keys in both `en.json` and `vi.json`:
+   - `game.toastWitchTitle` — "Witch Alert" / "Cảnh Báo Phù Thủy"
+   - `game.toastWitchAttacked` — "{player} was attacked by werewolves!" / "{player} đã bị sói tấn công!"
+   - `game.toastWitchNoAttack` — "No one was attacked tonight." / "Không ai bị tấn công đêm nay."
+   - `game.toastDawnTitle` — "Dawn" / "Bình Minh"
+   - `game.toastDawnDied` — "{players} died last night." / "{players} đã chết đêm qua."
+   - `game.toastDawnNoDeath` — "No one died last night!" / "Không ai chết đêm qua!"
+
+**Files Created:**
+- `client/src/stores/toast-store.ts` — Toast state management
+- `client/src/components/game/GameToast.tsx` — Toast UI component
+
+**Files Modified:**
+- `client/src/hooks/useSocket.ts` — Added toast triggers in `handleWitchTarget` and `handleDawnResult`
+- `client/src/app/[locale]/(game)/game/page.tsx` — Import and mount `<GameToastContainer />`
+- `client/src/messages/en.json` — Added toast i18n keys
+- `client/src/messages/vi.json` — Added toast i18n keys
+
+**Build Status:** Both client and server typecheck pass with zero errors.
+
+### Socket Error: Players Stuck in Waiting Room During Game Start (2026-03-20)
+User reported: "Socket error when entering the game; some players can join, others are stuck in the waiting room."
+
+**Root Causes Identified:**
+1. **Game starts with disconnected players** — `game:start` counted ALL players in Redis including disconnected ones. Those players missed `game:started` and `game:role_assigned` events because they weren't in the Socket.io room, becoming ghost players.
+2. **Race condition between broadcast and fetchSockets** — `game:started` was broadcast to the Socket.io room, then `fetchSockets()` was called separately for role assignments. If a socket reconnected between these two operations, it could receive `game:started` but miss `game:role_assigned`.
+3. **No game state sync on reconnect** — `handleConnection` only sent `room:state` when a player reconnected. If the room was IN_GAME, the reconnecting player had no game state (gameId, role, phase, etc.) and was stuck on the room page.
+4. **Room page couldn't detect active game** — If a player refreshed during a game, they'd land on the room page with the room in IN_GAME status but no way to rejoin the game.
+5. **`room:join` rejected existing players when game in progress** — `joinRoom()` returned `game_in_progress` error even for players who were already part of the game, blocking reconnection.
+
+**Fixes Applied:**
+
+1. **Server: Only start game with connected players** — `game:start` now filters `room.players` to only count connected players. Disconnected players are removed from the room before game creation. Roles array is auto-adjusted to match actual connected player count. Error message tells the host how many are disconnected.
+
+2. **Server: Atomic game start delivery** — Replaced the two-step broadcast + fetchSockets approach with a single `fetchSockets()` call upfront. Each socket receives `game:started`, `game:role_assigned`, and `game:werewolf_team` in sequence, eliminating the race window.
+
+3. **Server: Full game state sync on reconnect** — Added `sendGameStateToClient()` private method that sends the complete game state (game:started, game:role_assigned, game:werewolf_team, game:phase_changed) to a reconnecting client. Called from `handleConnection` when `room.status === IN_GAME`.
+
+4. **Server: Allow rejoining active game via room:join** — When `joinRoom()` returns `game_in_progress`, the gateway now checks if the player was already part of the game. If so, it marks them as connected, joins the socket to the room channel, and sends the full game state.
+
+5. **Client: Room page detects active game** — Added a `useEffect` that watches `currentRoom.status`. If the room is `IN_GAME` but no `gameId` exists in the game store, it waits 2 seconds then re-emits `room:join` to trigger a re-sync. Also prevents room:leave on unmount when room is IN_GAME.
+
+6. **Client: Skip intro on reconnect** — `handleGameStarted` now checks the phase — if the game is past INTRO/STARTING, it sets `shouldShowIntro: false` so the reconnecting player jumps straight into the action.
+
+**Files Modified:**
+- `server/src/modules/game/game.gateway.ts` — Connected-only player check, atomic game start, sendGameStateToClient, room:join reconnection, handleConnection game state sync
+- `client/src/hooks/useSocket.ts` — Skip intro on reconnect (shouldShowIntro check)
+- `client/src/app/[locale]/(lobby)/room/[code]/page.tsx` — IN_GAME detection with re-sync, prevent room:leave during active game
+
+**Build Status:** Both client and server typecheck pass with zero errors.
+
+### Chat Box Size Increase (2026-03-20)
+User requested: "Increase the size of the chat box."
+
+**Before → After sizes:**
+
+| | Mobile (<768px) | Desktop (≥768px) | Large (≥1024px) |
+|---|---|---|---|
+| **Width (before)** | 336px (w-84) | 336px (w-84) | 336px |
+| **Width (after)** | 320px (w-80) | 384px (w-96) | 416px (w-[26rem]) |
+| **Height (before)** | 192px (h-48) | 288px (h-72) | 288px |
+| **Height (after)** | 288px (h-72) | 448px (h-[28rem]) | 512px (h-[32rem]) |
+| **Height increase** | **+50%** | **+56%** | **+78%** |
+
+**Changes Applied:**
+
+1. **Container sizing** — Three-tier responsive: mobile `w-80 h-72`, desktop `md:w-96 md:h-[28rem]`, large `lg:w-[26rem] lg:h-[32rem]`
+2. **Message text** — `text-xs` → `text-xs md:text-sm` (12px → 14px on desktop)
+3. **System messages** — `text-[10px]` → `text-[10px] md:text-xs`
+4. **Input field** — `py-2 text-xs` → `py-2 md:py-2.5 text-xs md:text-sm` (larger tap target + readable text)
+5. **Channel tabs** — `text-xs` → `text-xs md:text-sm`
+6. **Message spacing** — `space-y-1.5` → `space-y-1.5 md:space-y-2`
+7. **Message line height** — Added `leading-relaxed` for better readability
+8. **Scrollbar** — Replaced invisible scrollbar (`[scrollbar-color:transparent_transparent]`) with thin visible scrollbar (`scrollbar-thin` utility) — 4px wide, subtle gray, slightly more visible on hover
+9. **CSS utility** — Added `.scrollbar-thin` to `globals.css` with cross-browser support (Firefox scrollbar-width + Webkit pseudo-elements)
+
+**Files Modified:**
+- `client/src/app/[locale]/(game)/game/page.tsx` — Container size, text sizes, input size, scrollbar classes
+- `client/src/styles/globals.css` — Added `.scrollbar-thin` utility
+
+**Build Status:** Both client and server typecheck pass with zero errors.
+
+### F5 Refresh: Full Game State Restoration (2026-03-20)
+User reported: "Refreshing (F5) doesn't return to the current game state."
+
+**Root Causes Identified:**
+1. **Game store is NOT persisted** — After F5, all Zustand stores are wiped except auth-store (which uses `zustand/persist`). `gameId`, `phase`, `myRole`, etc. are all null.
+2. **Server only sent partial state on reconnect** — The previous `sendGameStateToClient` sent `game:started`, `game:role_assigned`, `game:werewolf_team`, and `game:phase_changed`, but NOT: night action done status, witch potion state, vote state, death log, or the player's alive/dead status.
+3. **3-second redirect timeout was too aggressive** — Game page redirected to `/rooms` after 3s if no gameId. Socket reconnection on slow networks can take longer.
+4. **`lastRoomCode` was lost on F5** — The game store wasn't persisted, so `lastRoomCode` was null after refresh. The fallback redirect went to `/rooms` instead of back to the player's specific room.
+
+**Fixes Applied:**
+
+1. **Server: Comprehensive `sendGameStateToClient`** — Now sends a `game:reconnect_state` event containing:
+   - `isAlive` status (so dead players see spectator mode)
+   - `nightActionDone` + `nightActionTarget` (so the action panel shows "already acted")
+   - Witch potion availability + current werewolf target
+   - Current vote state (if in VOTE phase)
+   - Complete death log reconstructed from player death data
+
+2. **Client: `game:reconnect_state` handler** — New event handler in `useSocket` that restores all additional state: alive/dead status, night action state, witch state, vote state, and death log entries.
+
+3. **Client: `lastRoomCode` persisted to localStorage** — On game start, `lastRoomCode` is saved to `localStorage` under `werewolf-last-room`. On page load, `initialState` reads it back. On `resetGame()`, it's cleared. This ensures the fallback redirect goes to the correct room after F5.
+
+4. **Client: Redirect timeout increased to 8 seconds** — From 3s to 8s to handle slow connections and server cold starts. Added "Reconnecting to game..." status text to the loading spinner.
+
+5. **Client: `setGame` preserves `lastRoomCode`** — Previously, `setGame` spread `...initialState` which reset `lastRoomCode` to null before the room store had populated. Now it preserves the existing `lastRoomCode`.
+
+6. **i18n: Added "reconnecting" translation** — en: "Reconnecting to game..." / vi: "Đang kết nối lại..."
+
+**Files Modified:**
+- `server/src/modules/game/game.gateway.ts` — Enhanced `sendGameStateToClient` with full state sync via `game:reconnect_state` event
+- `client/src/hooks/useSocket.ts` — Added `handleReconnectState` handler, `lastRoomCode` localStorage persistence
+- `client/src/stores/game-store.ts` — `lastRoomCode` read from localStorage on init, preserved in `setGame`, cleared in `resetGame`
+- `client/src/app/[locale]/(game)/game/page.tsx` — 8s redirect timeout, "Reconnecting" status text
+- `client/src/messages/en.json` — Added `game.reconnecting` key
+- `client/src/messages/vi.json` — Added `game.reconnecting` key
+
+**Build Status:** Both client and server typecheck pass with zero errors.
 
 ### Socket Audit & Bug Fixes (2026-03-18)
 User requested: "Please scan all place have socket and ensure it perfect"

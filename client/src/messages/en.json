@@ -128,6 +128,7 @@
     "gameOver": "Game Over",
     "backToLobby": "Back to Lobby",
     "backToRoom": "Back to Room",
+    "reconnecting": "Reconnecting to game...",
     "dawnResult": "Dawn Results",
     "win_village": "The Village Wins!",
     "win_werewolf": "The Werewolves Win!",
@@ -147,6 +148,8 @@
     "introLine6": "Open your eyes, observe carefully… and let the game begin. 🐺",
     "seerCheckResult": "{target}'s alignment is {result}",
     "wolfSeerCheckResult": "{target} is {role}",
+    "wolfPackVotes": "Pack Kill Votes",
+    "changeVote": "Change Vote",
     "auraSeerCheckResult": "{target}'s aura is {result}",
     "spectating": "You are spectating",
     "witchChooseAction": "Choose your potion",
@@ -201,7 +204,13 @@
     "vampireMarkDesc": "Select a player to mark for future kill",
     "seer_good": "Good",
     "seer_evil": "Evil",
-    "seer_unknown": "Unknown"
+    "seer_unknown": "Unknown",
+    "toastWitchTitle": "Witch Alert",
+    "toastWitchAttacked": "{player} was attacked by werewolves!",
+    "toastWitchNoAttack": "No one was attacked tonight.",
+    "toastDawnTitle": "Dawn",
+    "toastDawnDied": "{players} died last night.",
+    "toastDawnNoDeath": "No one died last night!"
   },
   "voice": {
     "muteSound": "Mute sound",

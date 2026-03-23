@@ -71,7 +71,8 @@
       "WebFetch(domain:jitsi.github.io)",
       "Bash(npx tsc --noEmit 2>&1; echo \"EXIT: $?\")",
       "Bash(zip -j ssl.zip ssl/cert.pem ssl/private.key)",
-      "Bash(git rm --cached ssl/cert.pem ssl/private.key 2>/dev/null; echo \"Done\")"
+      "Bash(git rm --cached ssl/cert.pem ssl/private.key 2>/dev/null; echo \"Done\")",
+      "Bash(wc -l /Users/cyan/Workspace/Personal/werewolf-game/client/src/app/\\\\\\\\[locale\\\\\\\\]/\\\\\\\\\\(game\\\\\\\\\\)/game/page.tsx)"
     ]
   }
 }

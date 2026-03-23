@@ -237,9 +237,13 @@ export class GameEngine {
     }
 
     // ─── 4. Werewolf kill vote ───
+    // Majority rule: the winning target must have > half of total eligible vote weight.
+    // e.g. 2 wolves → need 2 votes (unanimous), 3 wolves → need 2 votes, etc.
+    // Ties or no majority → no kill.
     let werewolfTarget: string | null = null;
     if (Object.keys(actions.werewolfVotes).length > 0) {
       const voteCounts: Record<string, number> = {};
+      let totalWeight = 0;
       for (const [wolfId, targetId] of Object.entries(actions.werewolfVotes)) {
         const wolf = game.players.find((p) => p.id === wolfId);
         // Wolf Fang can only vote when it's the last wolf alive
@@ -249,14 +253,38 @@ export class GameEngine {
         }
         const weight = wolf?.role === Role.ALPHA_WEREWOLF ? 2 : 1;
         voteCounts[targetId] = (voteCounts[targetId] || 0) + weight;
+        totalWeight += weight;
       }
 
+      // Also count weight from wolves who didn't vote (they still count toward the total)
+      for (const p of alive) {
+        if (isWerewolfRole(p.role) && !(p.id in actions.werewolfVotes)) {
+          // Wolf Fang doesn't count if not last wolf
+          if (p.role === Role.WOLF_FANG) {
+            const otherWolves = alive.filter((w) => isWerewolfRole(w.role) && w.id !== p.id);
+            if (otherWolves.length > 0) continue;
+          }
+          const weight = p.role === Role.ALPHA_WEREWOLF ? 2 : 1;
+          totalWeight += weight;
+        }
+      }
+
+      const majorityThreshold = totalWeight / 2;
       let maxVotes = 0;
+      let isTied = false;
       for (const [targetId, count] of Object.entries(voteCounts)) {
         if (count > maxVotes) {
           maxVotes = count;
           werewolfTarget = targetId;
+          isTied = false;
+        } else if (count === maxVotes) {
+          isTied = true;
         }
+      }
+
+      // No kill if tied or doesn't reach majority
+      if (isTied || maxVotes <= majorityThreshold) {
+        werewolfTarget = null;
       }
     }
 

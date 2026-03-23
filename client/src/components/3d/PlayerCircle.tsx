@@ -546,8 +546,9 @@ function GLBCharacter({
         if (mesh.material) {
           mesh.material = (mesh.material as THREE.Material).clone();
         }
+        // Only the character model casts shadow, not receives (saves draw calls)
         mesh.castShadow = true;
-        mesh.receiveShadow = true;
+        mesh.receiveShadow = false;
       }
     });
     return clone;
@@ -758,14 +759,14 @@ function GLBCharacter({
       {/* Selection ring */}
       {player.isSelected && (
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
-          <ringGeometry args={[0.5, 0.62, 32]} />
+          <ringGeometry args={[0.5, 0.62, 16]} />
           <meshBasicMaterial color="#FFD700" transparent opacity={0.8} side={THREE.DoubleSide} />
         </mesh>
       )}
 
       {/* Shadow blob */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
-        <circleGeometry args={[0.3, 20]} />
+        <circleGeometry args={[0.3, 12]} />
         <meshBasicMaterial color="#000000" transparent opacity={player.isAlive ? 0.25 : 0.1} />
       </mesh>
 
@@ -875,17 +876,7 @@ function GLBCharacter({
         </div>
       </Html>
 
-      {/* Role glow effect */}
-      {player.isAlive && costume.glowColor && (
-        <pointLight
-          position={[0, 0.6, 0]}
-          color={costume.glowColor}
-          intensity={player.isSelected ? 1.5 : 0.4}
-          distance={player.isSelected ? 3 : 1.5}
-        />
-      )}
-
-      {/* Selected glow */}
+      {/* Selected glow — single light only when selected (removed per-role glow for performance) */}
       {player.isSelected && (
         <pointLight position={[0, 0.5, 0]} color="#FFD700" intensity={1.2} distance={2.5} />
       )}
@@ -1181,9 +1172,17 @@ function GLBCharacterWithPosTracking(props: {
   const { positionsRef, facingRef, collisionData, onLocalPlayerPosition, ...charProps } = props;
   const trackRef = useRef<THREE.Group>(null);
   const _worldPos = useMemo(() => new THREE.Vector3(), []);
+  const _facingDir = useMemo(() => new THREE.Vector3(), []);
+  // Reusable vector for position reporting (avoids clone() per frame)
+  const _reportPos = useMemo(() => new THREE.Vector3(), []);
+  // Throttle position tracking to every 2nd frame
+  const _frameCounter = useRef(0);
 
   useFrame(() => {
     if (!trackRef.current) return;
+    _frameCounter.current++;
+    // Throttle: update position tracking every 2nd frame
+    if (_frameCounter.current % 2 !== 0) return;
 
     // The actual character group is the first child (GLBCharacter's groupRef)
     const charGroup = trackRef.current.children[0] as THREE.Object3D | undefined;
@@ -1193,22 +1192,27 @@ function GLBCharacterWithPosTracking(props: {
     charGroup.getWorldPosition(_worldPos);
 
     if (positionsRef.current) {
-      positionsRef.current.set(props.player.id, _worldPos.clone());
+      // Reuse existing Vector3 or create once per player (avoid clone every frame)
+      const existing = positionsRef.current.get(props.player.id);
+      if (existing) {
+        existing.copy(_worldPos);
+      } else {
+        positionsRef.current.set(props.player.id, _worldPos.clone());
+      }
     }
 
-    // Track facing direction for local player
+    // Track facing direction for local player (reuse vector)
     if (facingRef) {
-      const dir = new THREE.Vector3(0, 0, -1);
-      dir.applyQuaternion(charGroup.quaternion);
-      facingRef.current.copy(dir);
+      _facingDir.set(0, 0, -1);
+      _facingDir.applyQuaternion(charGroup.quaternion);
+      facingRef.current.copy(_facingDir);
     }
 
     // Report local player position for third-person camera
     if (onLocalPlayerPosition && props.isLocalPlayer) {
-      // charGroup.rotation.y = rotRef + MODEL_FACING_OFFSET
-      // For camera placement we want the logical facing rotation (without model offset)
       const logicalRot = charGroup.rotation.y - MODEL_FACING_OFFSET;
-      onLocalPlayerPosition(_worldPos.clone(), logicalRot);
+      _reportPos.copy(_worldPos);
+      onLocalPlayerPosition(_reportPos, logicalRot);
     }
   });
 

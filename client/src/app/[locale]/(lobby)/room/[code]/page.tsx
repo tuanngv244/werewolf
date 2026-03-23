@@ -11,6 +11,7 @@ import { useGameStore } from '@/stores/game-store';
 import { waitForConnection, getSocket } from '@/lib/socket';
 import { GAME_CONFIG, DEFAULT_ROLES } from '@shared/constants/game-config';
 import { Role, Team } from '@shared/types/game.types';
+import { RoomStatus } from '@shared/types/room.types';
 import { ROLE_DEFINITIONS } from '@shared/constants/roles';
 import { JitsiMeetPanel } from '@/components/game/JitsiMeetPanel';
 
@@ -124,6 +125,32 @@ export default function RoomPage() {
   // socket reconnects within ~1s and handleConnection re-joins the room automatically.
   const isUnloadingRef = useRef(false);
 
+  // ── Detect room is IN_GAME but client missed game:started ──
+  // If room status is 'in_game' but game store has no gameId, the client is stuck.
+  // This can happen if the player was briefly disconnected during game start.
+  // The server's reconnect handler now sends game:started, but we also watch
+  // room status as a fallback to trigger re-sync.
+  useEffect(() => {
+    if (currentRoom?.status === RoomStatus.IN_GAME) {
+      const gameId = useGameStore.getState().gameId;
+      if (!gameId) {
+        // Room is in game but client has no game state.
+        // Server should have sent game:started on reconnect — wait briefly
+        // and if gameId is still empty, emit room:join to trigger re-sync.
+        const timer = setTimeout(() => {
+          const gId = useGameStore.getState().gameId;
+          if (!gId) {
+            console.warn('[RoomPage] Room is IN_GAME but no gameId received — requesting re-sync');
+            waitForConnection().then((socket) => {
+              socket.emit('room:join', { code: roomCode });
+            }).catch(() => {});
+          }
+        }, 2000);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [currentRoom?.status, roomCode]);
+
   useEffect(() => {
     // Track full page unloads (F5, tab close, external navigation)
     // so the unmount cleanup can distinguish from SPA navigation
@@ -142,6 +169,10 @@ export default function RoomPage() {
       // Don't leave if a game just started (navigating to game page)
       const gameId = useGameStore.getState().gameId;
       if (gameId) return;
+
+      // Don't leave if the room is IN_GAME — player may be reconnecting
+      const room = useRoomStore.getState().currentRoom;
+      if (room?.status === RoomStatus.IN_GAME) return;
 
       // Don't leave if we never joined
       if (!hasJoinedRef.current) return;

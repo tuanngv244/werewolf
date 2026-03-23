@@ -93,6 +93,12 @@ interface GameState {
   // Werewolf team info
   werewolfTeam: WolfPlayer[];
 
+  // Werewolf kill votes (wolfId → targetId) — visible to all wolves during night
+  werewolfKillVotes: Record<string, string>;
+
+  // Whether all living wolves have cast their kill vote
+  allWolvesVoted: boolean;
+
   // Headhunter target
   headhunterTarget: string | null;
 
@@ -104,6 +110,10 @@ interface GameState {
 
   // Intro overlay — tracked client-side since server INTRO phase may elapse before client navigates
   shouldShowIntro: boolean;
+
+  // Flag to trigger redirect to /game — set true only on fresh game start,
+  // NOT on reconnect (prevents hijacking when user navigates away)
+  pendingGameRedirect: boolean;
 
   // Room code for post-game navigation
   lastRoomCode: string | null;
@@ -123,6 +133,7 @@ interface GameState {
   setNightResult: (result: NightResult) => void;
   setVoteState: (state: VoteState) => void;
   setNightAction: (target: string | null) => void;
+  resetNightAction: () => void;
   setWinners: (team: Team, playerIds: string[], winCondition?: string, revealedPlayers?: GamePlayer[], gameLog?: GameLogEntry[], rounds?: number, duration?: number) => void;
   setSeerResult: (result: SeerResultData) => void;
   setAuraSeerResult: (result: AuraSeerResultData) => void;
@@ -130,6 +141,7 @@ interface GameState {
   setWitchAttackedTarget: (targetId: string | null) => void;
   setWitchPotionState: (hasHeal: boolean, hasKill: boolean) => void;
   setWerewolfTeam: (wolves: WolfPlayer[]) => void;
+  setWerewolfKillVotes: (votes: Record<string, string>, allVoted?: boolean) => void;
   setIsAlive: (alive: boolean) => void;
   addDeathLogEntry: (entry: DeathLogEntry) => void;
   setShouldShowIntro: (show: boolean) => void;
@@ -158,11 +170,15 @@ const initialState = {
   witchHasHealPotion: true,
   witchHasKillPotion: true,
   werewolfTeam: [],
+  werewolfKillVotes: {},
+  allWolvesVoted: false,
   headhunterTarget: null,
   roleList: [],
   deathLog: [],
   shouldShowIntro: false,
-  lastRoomCode: null,
+  pendingGameRedirect: false,
+  // Restore lastRoomCode from localStorage so it survives F5 refresh
+  lastRoomCode: typeof window !== 'undefined' ? localStorage.getItem('werewolf-last-room') : null,
 };
 
 export const useGameStore = create<GameState>()((set) => ({
@@ -176,6 +192,8 @@ export const useGameStore = create<GameState>()((set) => ({
       seen.add(p.id);
       return true;
     });
+    // Preserve lastRoomCode if we already have one (e.g. from localStorage on F5)
+    const currentLastRoom = useGameStore.getState().lastRoomCode;
     // Reset all game state when starting a new game (prevents stale state on replay)
     set({
       ...initialState,
@@ -187,6 +205,7 @@ export const useGameStore = create<GameState>()((set) => ({
       round: 0,
       roleList: roleList || [],
       shouldShowIntro: true,
+      lastRoomCode: currentLastRoom,
     });
   },
 
@@ -202,6 +221,9 @@ export const useGameStore = create<GameState>()((set) => ({
       auraSeerResult: phase === GamePhase.NIGHT ? null : state.auraSeerResult,
       werewolfSeerResult: phase === GamePhase.NIGHT ? null : state.werewolfSeerResult,
       witchAttackedTarget: phase === GamePhase.NIGHT ? null : state.witchAttackedTarget,
+      // Reset wolf kill votes at the start of each night
+      werewolfKillVotes: phase === GamePhase.NIGHT ? {} : state.werewolfKillVotes,
+      allWolvesVoted: phase === GamePhase.NIGHT ? false : state.allWolvesVoted,
     })),
 
   setMyRole: (role, team, headhunterTarget) =>
@@ -217,6 +239,8 @@ export const useGameStore = create<GameState>()((set) => ({
   setVoteState: (voteState) => set({ voteState }),
 
   setNightAction: (target) => set({ nightActionDone: true, nightActionTarget: target }),
+
+  resetNightAction: () => set({ nightActionDone: false, nightActionTarget: null }),
 
   setWinners: (team, playerIds, winCondition, revealedPlayers, gameLog, rounds, duration) =>
     set({ winners: { team, playerIds, winCondition, revealedPlayers, gameLog, rounds, duration } }),
@@ -234,6 +258,12 @@ export const useGameStore = create<GameState>()((set) => ({
 
   setWerewolfTeam: (werewolfTeam) => set({ werewolfTeam }),
 
+  setWerewolfKillVotes: (werewolfKillVotes, allVoted) =>
+    set((state) => ({
+      werewolfKillVotes,
+      allWolvesVoted: allVoted ?? state.allWolvesVoted,
+    })),
+
   setIsAlive: (isAlive) => set({ isAlive }),
 
   addDeathLogEntry: (entry) =>
@@ -241,5 +271,8 @@ export const useGameStore = create<GameState>()((set) => ({
 
   setShouldShowIntro: (shouldShowIntro) => set({ shouldShowIntro }),
 
-  resetGame: () => set(initialState),
+  resetGame: () => {
+    try { localStorage.removeItem('werewolf-last-room'); } catch {}
+    set({ ...initialState, lastRoomCode: null });
+  },
 }));

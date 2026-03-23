@@ -13,24 +13,24 @@ function SocketEventListener() {
   return null;
 }
 
+/**
+ * Redirects the user to the /game page when a FRESH game starts.
+ *
+ * Uses `pendingGameRedirect` flag (set only on fresh game:started with INTRO/STARTING phase).
+ * On reconnect (past INTRO/STARTING), the flag stays false → no redirect.
+ * This prevents hijacking the user when they navigate away from /game to Home.
+ */
 function GameStartRedirect() {
   const router = useRouter();
-  const gameId = useGameStore((s) => s.gameId);
-  const hasRedirected = useRef(false);
+  const pendingGameRedirect = useGameStore((s) => s.pendingGameRedirect);
 
   useEffect(() => {
-    if (gameId && !hasRedirected.current) {
-      hasRedirected.current = true;
+    if (pendingGameRedirect) {
+      // Clear the flag immediately so it doesn't re-fire
+      useGameStore.setState({ pendingGameRedirect: false });
       router.push('/game');
     }
-  }, [gameId, router]);
-
-  // Reset when game is cleared
-  useEffect(() => {
-    if (!gameId) {
-      hasRedirected.current = false;
-    }
-  }, [gameId]);
+  }, [pendingGameRedirect, router]);
 
   return null;
 }

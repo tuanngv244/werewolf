@@ -17,6 +17,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo, Suspense } fr
 import { useRouter } from '@/lib/navigation';
 import dynamic from 'next/dynamic';
 import { JitsiMeetPanel } from '@/components/game/JitsiMeetPanel';
+import { GameToastContainer } from '@/components/game/GameToast';
 import { useRoomStore } from '@/stores/room-store';
 import * as THREE from 'three';
 import type { CollisionData } from '@/components/3d/collision-utils';
@@ -93,12 +94,14 @@ function PlayerList({
   excludeIds = [],
   showDead = false,
   isNight = false,
+  wolfVoteCounts,
 }: {
   onSelect?: (playerId: string) => void;
   selectedId?: string | null;
   excludeIds?: string[];
   showDead?: boolean;
   isNight?: boolean;
+  wolfVoteCounts?: Record<string, number>;
 }) {
   const t = useTranslations();
   const { players: rawPlayers } = useGameStore();
@@ -118,40 +121,48 @@ function PlayerList({
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-      {displayPlayers.map((player) => (
-        <button
-          key={player.id}
-          onClick={() => onSelect?.(player.id)}
-          disabled={!player.isAlive || !onSelect}
-          className={`p-2.5 rounded-xl text-left transition-all text-sm ${
-            !player.isAlive
-              ? 'opacity-40 cursor-default ' + (isNight ? 'bg-night-bg/50' : 'bg-gray-100/50')
-              : selectedId === player.id
-                ? 'bg-primary/20 border-2 border-primary ring-1 ring-primary/30'
-                : onSelect
-                  ? isNight
-                    ? 'bg-night-bg/40 hover:bg-night-bg/70 cursor-pointer'
-                    : 'bg-white/40 hover:bg-white/70 cursor-pointer'
-                  : isNight
-                    ? 'bg-night-bg/30 cursor-default'
-                    : 'bg-white/30 cursor-default'
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            <div
-              className={`w-7 h-7 rounded-full flex items-center justify-center text-xs ${
-                player.isAlive ? 'bg-primary/15' : 'bg-gray-400/20'
-              }`}
-            >
-              {player.isAlive ? '👤' : '💀'}
+      {displayPlayers.map((player) => {
+        const voteCount = wolfVoteCounts?.[player.id] || 0;
+        return (
+          <button
+            key={player.id}
+            onClick={() => onSelect?.(player.id)}
+            disabled={!player.isAlive || !onSelect}
+            className={`p-2.5 rounded-xl text-left transition-all text-sm ${
+              !player.isAlive
+                ? 'opacity-40 cursor-default ' + (isNight ? 'bg-night-bg/50' : 'bg-gray-100/50')
+                : selectedId === player.id
+                  ? 'bg-primary/20 border-2 border-primary ring-1 ring-primary/30'
+                  : onSelect
+                    ? isNight
+                      ? 'bg-night-bg/40 hover:bg-night-bg/70 cursor-pointer'
+                      : 'bg-white/40 hover:bg-white/70 cursor-pointer'
+                    : isNight
+                      ? 'bg-night-bg/30 cursor-default'
+                      : 'bg-white/30 cursor-default'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <div
+                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs ${
+                  player.isAlive ? 'bg-primary/15' : 'bg-gray-400/20'
+                }`}
+              >
+                {player.isAlive ? '👤' : '💀'}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-xs truncate">{player.username}</p>
+                {!player.isAlive && <p className="text-[10px] text-danger">{t('game.dead')}</p>}
+              </div>
+              {voteCount > 0 && (
+                <span className="flex items-center gap-0.5 px-1.5 py-0.5 bg-red-500/25 rounded-full text-[10px] font-bold text-red-300 border border-red-400/30">
+                  🐺 {voteCount}
+                </span>
+              )}
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="font-semibold text-xs truncate">{player.username}</p>
-              {!player.isAlive && <p className="text-[10px] text-danger">{t('game.dead')}</p>}
-            </div>
-          </div>
-        </button>
-      ))}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -165,6 +176,7 @@ const ChatPanel = React.memo(function ChatPanel({ isNight }: { isNight: boolean 
   const myRole = useGameStore((s) => s.myRole);
   const phase = useGameStore((s) => s.phase);
   const isAlive = useGameStore((s) => s.isAlive);
+  const werewolfTeam = useGameStore((s) => s.werewolfTeam);
   const scrollRef = useRef<HTMLDivElement>(null);
   const isComposingRef = useRef(false);
 
@@ -225,7 +237,7 @@ const ChatPanel = React.memo(function ChatPanel({ isNight }: { isNight: boolean 
             <button
               key={ch.key}
               onClick={() => setActiveChannel(ch.key as any)}
-              className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+              className={`px-3 py-1 rounded-lg text-xs md:text-sm font-semibold transition-all ${
                 activeChannel === ch.key
                   ? 'bg-primary text-white'
                   : isNight
@@ -238,27 +250,46 @@ const ChatPanel = React.memo(function ChatPanel({ isNight }: { isNight: boolean 
           ))}
         </div>
       )}
-      {availableChannels.length === 1 && activeChannel === 'WEREWOLF' && (
-        <div className="flex items-center gap-1.5 mb-2">
-          <span className="text-sm">🐺</span>
-          <span className="text-xs font-semibold text-red-400">{t('chat.wolfChat')}</span>
+      {/* Wolf ally roster — shown whenever the WEREWOLF tab is active */}
+      {activeChannel === 'WEREWOLF' && werewolfTeam.length > 0 && (
+        <div className="mb-2">
+          {availableChannels.length === 1 && (
+            <div className="flex items-center gap-1.5 mb-1">
+              <span className="text-sm md:text-base">🐺</span>
+              <span className="text-xs md:text-sm font-semibold text-red-400">
+                {t('chat.wolfChat')}
+              </span>
+            </div>
+          )}
+          <div className="flex flex-wrap gap-1">
+            {werewolfTeam.map((wolf) => (
+              <span
+                key={wolf.id}
+                className="text-[10px] text-red-300 bg-red-900/30 rounded px-1.5 py-0.5"
+              >
+                🐺 {wolf.username} ({t(`roles.${roleToCamel(wolf.role)}`)})
+              </span>
+            ))}
+          </div>
         </div>
       )}
 
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto [scrollbar-color:transparent_transparent] space-y-1.5 mb-2 min-h-0"
+        className="flex-1 overflow-y-auto space-y-1.5 md:space-y-2 mb-2 min-h-0 pr-1 scrollbar-thin"
       >
         {noChatAvailable ? (
           <div className="flex flex-col items-center justify-center h-full py-8 gap-2">
-            <span className="text-2xl">🌙</span>
-            <p className={`text-xs text-center ${isNight ? 'text-night-muted' : 'text-day-muted'}`}>
+            <span className="text-2xl md:text-3xl">🌙</span>
+            <p
+              className={`text-xs md:text-sm text-center ${isNight ? 'text-night-muted' : 'text-day-muted'}`}
+            >
               {t('game.nightSilence')}
             </p>
           </div>
         ) : channelMessages.length === 0 ? (
           <p
-            className={`text-xs text-center py-4 ${isNight ? 'text-night-muted' : 'text-day-muted'}`}
+            className={`text-xs md:text-sm text-center py-4 ${isNight ? 'text-night-muted' : 'text-day-muted'}`}
           >
             {t('game.noMessages')}
           </p>
@@ -267,12 +298,12 @@ const ChatPanel = React.memo(function ChatPanel({ isNight }: { isNight: boolean 
             <div key={msg.id} className={msg.isSystem ? 'text-center' : ''}>
               {msg.isSystem ? (
                 <p
-                  className={`text-[10px] italic ${isNight ? 'text-night-muted' : 'text-day-muted'}`}
+                  className={`text-[10px] md:text-xs italic ${isNight ? 'text-night-muted' : 'text-day-muted'}`}
                 >
                   {msg.content}
                 </p>
               ) : (
-                <p className="text-xs">
+                <p className="text-xs md:text-sm leading-relaxed">
                   <span className="font-semibold text-primary">{msg.senderName}: </span>
                   {msg.content}
                 </p>
@@ -284,7 +315,7 @@ const ChatPanel = React.memo(function ChatPanel({ isNight }: { isNight: boolean 
 
       <div className="flex gap-2 items-center">
         <input
-          className={`flex-1 px-3 py-2 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary ${
+          className={`flex-1 px-3 py-2 md:py-2.5 rounded-lg text-xs md:text-sm focus:outline-none focus:ring-1 focus:ring-primary ${
             isNight
               ? 'bg-night-bg/60 border border-night-border/50 text-night-text placeholder-night-muted'
               : 'bg-white/60 border border-day-border/50 text-day-text placeholder-day-muted'
@@ -395,6 +426,9 @@ function NightActionPanel({
 }) {
   const t = useTranslations();
   const { myRole, nightActionDone, nightActionTarget, gameId, players } = useGameStore();
+  const werewolfKillVotes = useGameStore((s) => s.werewolfKillVotes);
+  const werewolfTeam = useGameStore((s) => s.werewolfTeam);
+  const allWolvesVoted = useGameStore((s) => s.allWolvesVoted);
   const seerResult = useGameStore((s) => s.seerResult);
   const auraSeerResult = useGameStore((s) => s.auraSeerResult);
   const werewolfSeerResult = useGameStore((s) => s.werewolfSeerResult);
@@ -406,6 +440,17 @@ function NightActionPanel({
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
   const [witchAction, setWitchAction] = useState<'heal' | 'kill' | null>(null);
   const [vampireAction, setVampireAction] = useState<'mark' | 'kill' | null>(null);
+
+  // Compute wolf kill vote counts (targetId → count) for display
+  const isWolf = myRole ? isWerewolfRole(myRole) : false;
+  const wolfVoteCounts = useMemo(() => {
+    if (!isWolf || !werewolfKillVotes) return undefined;
+    const counts: Record<string, number> = {};
+    for (const targetId of Object.values(werewolfKillVotes)) {
+      counts[targetId] = (counts[targetId] || 0) + 1;
+    }
+    return Object.keys(counts).length > 0 ? counts : undefined;
+  }, [isWolf, werewolfKillVotes]);
 
   // Sync 3D selection with night action target
   // Doctor and Beast Hunter can target themselves, so allow self-selection for those roles
@@ -479,6 +524,49 @@ function NightActionPanel({
                 role: t(`roles.${roleToCamel(werewolfSeerResult.role)}`),
               })}
             </p>
+          </div>
+        )}
+        {/* Wolf pack kill votes (visible to all wolves after they've acted) */}
+        {isWolf && wolfVoteCounts && (
+          <div className="mt-3 p-3 bg-red-500/10 rounded-xl border border-red-400/20">
+            <p className="text-xs font-semibold text-red-400 mb-1.5">
+              🐺 {t('game.wolfPackVotes')}
+            </p>
+            <div className="space-y-1">
+              {Object.entries(wolfVoteCounts).map(([targetId, count]) => {
+                const targetName = players.find((p) => p.id === targetId)?.username || '???';
+                // Find which wolves voted for this target
+                const voterIds = Object.entries(werewolfKillVotes)
+                  .filter(([, tid]) => tid === targetId)
+                  .map(([wolfId]) => wolfId);
+                const voterNames = voterIds.map((wid) => {
+                  const wolf = werewolfTeam.find((w) => w.id === wid);
+                  return wolf?.username || players.find((p) => p.id === wid)?.username || '???';
+                });
+                return (
+                  <div key={targetId} className="flex items-center justify-between text-xs">
+                    <span className="text-red-300">🎯 {targetName}</span>
+                    <span className="text-red-400/70">
+                      {voterNames.join(', ')} ({count})
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        {/* Allow wolves to change their vote after all wolves have voted */}
+        {isWolf && allWolvesVoted && nightActionDone && (
+          <div className="mt-3">
+            <Button
+              className="w-full border border-red-400/40 bg-red-500/10 hover:bg-red-500/20 text-red-300"
+              variant="ghost"
+              onClick={() => {
+                useGameStore.getState().resetNightAction();
+              }}
+            >
+              🔄 {t('game.changeVote')}
+            </Button>
           </div>
         )}
       </GlassCard>
@@ -800,6 +888,7 @@ function NightActionPanel({
         selectedId={selectedTarget}
         excludeIds={selfTargetExcludeIds}
         isNight
+        wolfVoteCounts={isWolf ? wolfVoteCounts : undefined}
       />
       <div className="mt-3">
         <Button className="w-full" onClick={handleConfirmAction} disabled={!selectedTarget}>
@@ -1244,29 +1333,45 @@ function IntroStoryOverlay() {
   const t = useTranslations();
   const [visibleLines, setVisibleLines] = useState(0);
   const [fadeOut, setFadeOut] = useState(false);
+  const phase = useGameStore((s) => s.phase);
+  const phaseEndAt = useGameStore((s) => s.phaseEndAt);
 
   useEffect(() => {
+    // Calculate remaining intro time from server's phaseEndAt to stay in sync.
+    // If the server INTRO phase has already ended (phase !== INTRO), use the
+    // full client-side duration so the overlay still plays once on cold start.
+    let totalDuration = INTRO_TOTAL_DURATION_MS;
+    if (phase === GamePhase.INTRO && phaseEndAt) {
+      const remaining = phaseEndAt - Date.now();
+      if (remaining > 0) {
+        totalDuration = Math.min(remaining, INTRO_TOTAL_DURATION_MS);
+      }
+    }
+    // Scale line delay proportionally if we have less time
+    const scaledLineDelay = Math.min(LINE_DELAY_MS, (totalDuration - 1000) / INTRO_LINE_COUNT);
+
     // Show title immediately, then stagger story lines
     const timers: NodeJS.Timeout[] = [];
     for (let i = 1; i <= INTRO_LINE_COUNT; i++) {
-      timers.push(setTimeout(() => setVisibleLines(i), i * LINE_DELAY_MS));
+      timers.push(setTimeout(() => setVisibleLines(i), i * scaledLineDelay));
     }
     // Start fade-out near the end
-    timers.push(setTimeout(() => setFadeOut(true), INTRO_TOTAL_DURATION_MS - 800));
+    timers.push(setTimeout(() => setFadeOut(true), totalDuration - 800));
     // Auto-dismiss the intro overlay after total duration
     timers.push(
       setTimeout(() => {
         useGameStore.getState().setShouldShowIntro(false);
-      }, INTRO_TOTAL_DURATION_MS),
+      }, totalDuration),
     );
     return () => timers.forEach(clearTimeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const lines = Array.from({ length: INTRO_LINE_COUNT }, (_, i) => t(`game.introLine${i + 1}`));
 
   return (
     <div
-      className={`absolute inset-0 z-30 flex items-center justify-center bg-black/95 transition-opacity duration-700 ${fadeOut ? 'opacity-0' : 'opacity-100'}`}
+      className={`absolute inset-0 z-[100] flex items-center justify-center bg-black/95 transition-opacity duration-700 ${fadeOut ? 'opacity-0' : 'opacity-100'}`}
     >
       <div className="w-full max-w-lg px-8">
         {/* Moon + Title */}
@@ -1510,19 +1615,32 @@ export default function GamePage() {
 
   useEffect(() => {
     if (!gameId && !winners) {
+      // After F5 on /game, the socket needs time to reconnect and receive game state.
+      // The auth token is persisted → socket auto-reconnects → server sends game:started.
+      // Use 8s timeout (up from 3s) to handle slow connections and server cold starts.
       const timer = setTimeout(() => {
         const state = useGameStore.getState();
         if (!state.gameId) {
-          // Navigate back to room if we know which room, otherwise go to room list
-          if (state.lastRoomCode) {
+          // Only redirect back to the specific room if this was an F5 reload.
+          // Detect F5 reload via performance.navigation or PerformanceNavigationTiming.
+          const isReload =
+            typeof window !== 'undefined' &&
+            ((performance.getEntriesByType?.('navigation')?.[0] as PerformanceNavigationTiming)
+              ?.type === 'reload' ||
+              (performance as any).navigation?.type === 1);
+
+          if (isReload && state.lastRoomCode) {
+            // F5 reload — go back to the room page to re-sync
             const roomCode = state.lastRoomCode;
             state.resetGame();
             router.push(`/room/${roomCode}`);
           } else {
+            // Intentional navigation or no room — go to lobby
+            state.resetGame();
             router.push('/rooms');
           }
         }
-      }, 3000);
+      }, 8000);
       return () => clearTimeout(timer);
     }
   }, [gameId, winners, router]);
@@ -1809,6 +1927,7 @@ export default function GamePage() {
         <div className="text-center">
           <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4" />
           <p className="text-day-muted">{t('common.loading')}</p>
+          <p className="text-day-muted/60 text-xs mt-2">{t('game.reconnecting')}</p>
         </div>
       </div>
     );
@@ -1834,6 +1953,9 @@ export default function GamePage() {
           chatBubbles={chatBubbles}
         />
       </Suspense>
+
+      {/* Toast notifications (Witch alerts, dawn deaths, etc.) */}
+      <GameToastContainer />
 
       {/* ── INTRO Phase: Cinematic line-by-line story overlay (client-side tracked) ── */}
       {shouldShowIntro && <IntroStoryOverlay />}
@@ -1983,7 +2105,7 @@ export default function GamePage() {
         </div>
 
         {/* Chat Panel — fixed bottom-right */}
-        <div className="pointer-events-auto fixed bottom-2 right-2 md:bottom-3 md:right-3 z-20 w-84 md:w-84 h-48 md:h-72">
+        <div className="pointer-events-auto fixed bottom-2 right-2 md:bottom-3 md:right-3 z-20 w-80 md:w-96 lg:w-[25rem] h-40rem md:h-[28rem] lg:h-[30rem]">
           <ChatPanel isNight={isNight} />
         </div>
       </div>

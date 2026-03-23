@@ -26,6 +26,32 @@ const ICE_SERVERS: RTCConfiguration = {
   ],
 };
 
+// Bandwidth limits for video — prevents WebRTC from using too much bandwidth
+const MAX_VIDEO_BITRATE = 100_000; // 100 kbps (enough for 120×120 thumbnails)
+const MAX_AUDIO_BITRATE = 32_000;  // 32 kbps (voice quality)
+
+/**
+ * Apply bandwidth constraints to an RTCPeerConnection's senders.
+ * This limits video/audio encoding bitrate to reduce CPU/network load.
+ */
+async function applyBandwidthConstraints(pc: RTCPeerConnection) {
+  for (const sender of pc.getSenders()) {
+    const params = sender.getParameters();
+    if (!params.encodings || params.encodings.length === 0) {
+      params.encodings = [{}];
+    }
+    const isVideo = sender.track?.kind === 'video';
+    for (const encoding of params.encodings) {
+      encoding.maxBitrate = isVideo ? MAX_VIDEO_BITRATE : MAX_AUDIO_BITRATE;
+    }
+    try {
+      await sender.setParameters(params);
+    } catch {
+      // Some browsers don't support setParameters; ignore
+    }
+  }
+}
+
 // ─── Hook ──────────────────────────────
 export function useVideoMeet(roomCode: string | null) {
   const peersRef = useRef<Map<string, VideoPeer>>(new Map());
@@ -35,7 +61,7 @@ export function useVideoMeet(roomCode: string | null) {
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStreams, setRemoteStreams] = useState<Map<string, MediaStream>>(new Map());
   const [isAudioMuted, setIsAudioMuted] = useState(true);
-  const [isVideoMuted, setIsVideoMuted] = useState(false);
+  const [isVideoMuted, setIsVideoMuted] = useState(true); // Start with video OFF
   const [isSoundMuted, setIsSoundMuted] = useState(false);
   const [isJoined, setIsJoined] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,15 +73,21 @@ export function useVideoMeet(roomCode: string | null) {
   // Queue for offers that arrive before local stream is ready
   const pendingOffersRef = useRef<Array<{ fromId: string; sdp: RTCSessionDescriptionInit }>>([]);
 
-  // Helper: update remoteStreams state from peersRef
+  // Debounced syncRemoteStreams to avoid thrashing state on rapid peer events
+  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const syncRemoteStreams = useCallback(() => {
-    const map = new Map<string, MediaStream>();
-    for (const [id, peer] of peersRef.current) {
-      if (peer.stream) {
-        map.set(id, peer.stream);
+    // Debounce: batch multiple sync calls into a single state update
+    if (syncTimerRef.current) return;
+    syncTimerRef.current = setTimeout(() => {
+      syncTimerRef.current = null;
+      const map = new Map<string, MediaStream>();
+      for (const [id, peer] of peersRef.current) {
+        if (peer.stream) {
+          map.set(id, peer.stream);
+        }
       }
-    }
-    setRemoteStreams(new Map(map));
+      setRemoteStreams(map);
+    }, 50);
   }, []);
 
   // Ref-based removePeer to avoid stale closure in RTCPeerConnection callbacks
@@ -108,8 +140,11 @@ export function useVideoMeet(roomCode: string | null) {
       }
     };
 
-    // Use ref to avoid stale closure for removePeer
+    // Apply bandwidth constraints once connection is established
     pc.onconnectionstatechange = () => {
+      if (pc.connectionState === 'connected') {
+        applyBandwidthConstraints(pc);
+      }
       if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
         removePeerRef.current(remoteUserId);
       }
@@ -119,106 +154,13 @@ export function useVideoMeet(roomCode: string | null) {
     return pc;
   }, [syncRemoteStreams]);
 
-  // Initialize video meeting
+  // ─── Lazy Join — only register socket listeners; do NOT auto-start getUserMedia ───
+  // Socket listeners must be registered so we can respond to incoming offers.
+  // But getUserMedia is only called when user explicitly clicks "Join".
   useEffect(() => {
     if (!roomCode || !userId) return;
 
     const socket = getSocket();
-    let mounted = true;
-
-    async function init() {
-      try {
-        // Request camera + microphone
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-          },
-          video: {
-            width: { ideal: 120, max: 180 },
-            height: { ideal: 120, max: 180 },
-            frameRate: { ideal: 15, max: 24 },
-          },
-        });
-
-        if (!mounted) {
-          stream.getTracks().forEach((t) => t.stop());
-          return;
-        }
-
-        localStreamRef.current = stream;
-
-        // Start with audio muted (avoid echo surprise), but video ON
-        for (const track of stream.getAudioTracks()) {
-          track.enabled = false;
-        }
-        // Video tracks stay enabled — user granted camera permission
-
-        setLocalStream(stream);
-        setIsJoined(true);
-        setIsVideoMuted(false);
-        setIsAudioMuted(true);
-        setError(null);
-
-        // Process any offers that arrived before local stream was ready
-        if (pendingOffersRef.current.length > 0) {
-          const pending = [...pendingOffersRef.current];
-          pendingOffersRef.current = [];
-          for (const { fromId, sdp } of pending) {
-            await handleOfferInternal(fromId, sdp);
-          }
-        }
-
-        // Announce to room (AFTER processing pending offers, so we're ready)
-        socket.emit('voice:join', { roomCode });
-      } catch (err) {
-        if (!mounted) return;
-        // If video fails, try audio-only
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({
-            audio: {
-              echoCancellation: true,
-              noiseSuppression: true,
-              autoGainControl: true,
-            },
-            video: false,
-          });
-
-          if (!mounted) {
-            stream.getTracks().forEach((t) => t.stop());
-            return;
-          }
-
-          localStreamRef.current = stream;
-          // Audio-only: mic starts muted
-          for (const track of stream.getAudioTracks()) {
-            track.enabled = false;
-          }
-
-          setLocalStream(stream);
-          setIsJoined(true);
-          setIsAudioMuted(true);
-          setIsVideoMuted(true);
-          setError('Camera not available — audio only');
-
-          // Process pending offers
-          if (pendingOffersRef.current.length > 0) {
-            const pending = [...pendingOffersRef.current];
-            pendingOffersRef.current = [];
-            for (const { fromId, sdp } of pending) {
-              await handleOfferInternal(fromId, sdp);
-            }
-          }
-
-          socket.emit('voice:join', { roomCode });
-        } catch {
-          if (mounted) {
-            setError('Camera & microphone access denied');
-          }
-        }
-      }
-    }
 
     // Internal offer handler (shared by socket handler and pending queue)
     async function handleOfferInternal(fromId: string, sdp: RTCSessionDescriptionInit) {
@@ -317,11 +259,7 @@ export function useVideoMeet(roomCode: string | null) {
     socket.on('voice:ice-candidate', handleIceCandidate);
     socket.on('voice:left', handleVoiceLeft);
 
-    init();
-
     return () => {
-      mounted = false;
-
       socket.emit('voice:leave', { roomCode });
 
       socket.off('voice:joined', handleVoiceJoined);
@@ -344,6 +282,12 @@ export function useVideoMeet(roomCode: string | null) {
       // Clear pending offers queue
       pendingOffersRef.current = [];
 
+      // Clear sync timer
+      if (syncTimerRef.current) {
+        clearTimeout(syncTimerRef.current);
+        syncTimerRef.current = null;
+      }
+
       // Stop local stream
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach((t) => t.stop());
@@ -353,7 +297,122 @@ export function useVideoMeet(roomCode: string | null) {
       setRemoteStreams(new Map());
       setIsJoined(false);
     };
-  }, [roomCode, userId, createPeerConnection, removePeer]);
+  }, [roomCode, userId, createPeerConnection]);
+
+  // ─── Manual Join (user clicks "Join") ───────────
+  const join = useCallback(async () => {
+    if (!roomCodeRef.current || isJoined) return;
+
+    const socket = getSocket();
+
+    try {
+      // Request audio only first (lower resource usage than video)
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+        video: {
+          width: { ideal: 100, max: 160 },
+          height: { ideal: 100, max: 160 },
+          frameRate: { ideal: 10, max: 15 },
+        },
+      });
+
+      localStreamRef.current = stream;
+
+      // Start with audio muted AND video muted — user opts in manually
+      for (const track of stream.getAudioTracks()) {
+        track.enabled = false;
+      }
+      for (const track of stream.getVideoTracks()) {
+        track.enabled = false;
+      }
+
+      setLocalStream(stream);
+      setIsJoined(true);
+      setIsVideoMuted(true);
+      setIsAudioMuted(true);
+      setError(null);
+
+      // Process any offers that arrived before local stream was ready
+      if (pendingOffersRef.current.length > 0) {
+        const pending = [...pendingOffersRef.current];
+        pendingOffersRef.current = [];
+        for (const { fromId, sdp } of pending) {
+          let pc = peersRef.current.get(fromId)?.pc;
+          if (!pc) {
+            pc = createPeerConnection(fromId);
+          }
+          try {
+            await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            socket.emit('voice:answer', {
+              targetId: fromId,
+              sdp: pc.localDescription?.toJSON(),
+            });
+          } catch (err) {
+            console.warn('[video-meet] Failed to handle pending offer:', err);
+          }
+        }
+      }
+
+      // Announce to room
+      socket.emit('voice:join', { roomCode: roomCodeRef.current });
+    } catch {
+      // If video fails, try audio-only
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+          video: false,
+        });
+
+        localStreamRef.current = stream;
+        for (const track of stream.getAudioTracks()) {
+          track.enabled = false;
+        }
+
+        setLocalStream(stream);
+        setIsJoined(true);
+        setIsAudioMuted(true);
+        setIsVideoMuted(true);
+        setError('Camera not available — audio only');
+
+        // Process pending offers
+        if (pendingOffersRef.current.length > 0) {
+          const pending = [...pendingOffersRef.current];
+          pendingOffersRef.current = [];
+          for (const { fromId, sdp } of pending) {
+            let pc = peersRef.current.get(fromId)?.pc;
+            if (!pc) {
+              pc = createPeerConnection(fromId);
+            }
+            try {
+              await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+              const answer = await pc.createAnswer();
+              await pc.setLocalDescription(answer);
+              socket.emit('voice:answer', {
+                targetId: fromId,
+                sdp: pc.localDescription?.toJSON(),
+              });
+            } catch (err) {
+              console.warn('[video-meet] Failed to handle pending offer:', err);
+            }
+          }
+        }
+
+        socket.emit('voice:join', { roomCode: roomCodeRef.current });
+      } catch {
+        setError('Camera & microphone access denied');
+      }
+    }
+  }, [isJoined, createPeerConnection]);
 
   // ─── Controls ───────────
   const toggleAudio = useCallback(() => {
@@ -408,6 +467,7 @@ export function useVideoMeet(roomCode: string | null) {
     isSoundMuted,
     isJoined,
     error,
+    join,
     toggleAudio,
     toggleVideo,
     toggleSound,

@@ -128,6 +128,7 @@
     "gameOver": "Kết Thúc",
     "backToLobby": "Về Sảnh",
     "backToRoom": "Về Phòng",
+    "reconnecting": "Đang kết nối lại...",
     "dawnResult": "Kết Quả Bình Minh",
     "win_village": "Dân Làng Chiến Thắng!",
     "win_werewolf": "Ma Sói Chiến Thắng!",
@@ -147,6 +148,8 @@
     "introLine6": "Hãy mở mắt, quan sát thật kỹ… và bắt đầu trò chơi. 🐺",
     "seerCheckResult": "Phe của {target} là {result}",
     "wolfSeerCheckResult": "{target} là {role}",
+    "wolfPackVotes": "Phiếu bầu giết của bầy",
+    "changeVote": "Đổi Phiếu",
     "auraSeerCheckResult": "Linh khí của {target} là {result}",
     "spectating": "Bạn đang xem trận đấu",
     "witchChooseAction": "Chọn bình thuốc",
@@ -201,7 +204,13 @@
     "vampireMarkDesc": "Chọn người để đánh dấu cho lần giết sau",
     "seer_good": "Thiện",
     "seer_evil": "Ác",
-    "seer_unknown": "Không Rõ"
+    "seer_unknown": "Không Rõ",
+    "toastWitchTitle": "Cảnh Báo Phù Thủy",
+    "toastWitchAttacked": "{player} đã bị sói tấn công!",
+    "toastWitchNoAttack": "Không ai bị tấn công đêm nay.",
+    "toastDawnTitle": "Bình Minh",
+    "toastDawnDied": "{players} đã chết đêm qua.",
+    "toastDawnNoDeath": "Không ai chết đêm qua!"
   },
   "voice": {
     "muteSound": "Tắt âm thanh",

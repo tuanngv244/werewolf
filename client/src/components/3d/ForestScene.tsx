@@ -2,7 +2,7 @@
 
 import { useRef, useMemo, useCallback, useEffect } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { Stars, Cloud, Float, OrbitControls, useGLTF } from '@react-three/drei';
+import { Stars, OrbitControls, useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { buildCollisionData, type CollisionData } from './collision-utils';
 
@@ -23,13 +23,20 @@ function MapModel({
   const { scene } = useGLTF(MAP_MODEL_PATH);
   const primitiveRef = useRef<THREE.Object3D>(null);
 
-  // Enable shadows on all meshes
+  // Enable receive-shadow only on large ground meshes (not all 307 meshes)
+  // This significantly reduces draw calls — skip castShadow on map meshes entirely
   useMemo(() => {
     scene.traverse((child) => {
       if ((child as THREE.Mesh).isMesh) {
         const mesh = child as THREE.Mesh;
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
+        mesh.castShadow = false;
+        // Only large ground-like meshes receive shadows
+        const name = (mesh.name || '').toLowerCase();
+        if (name.includes('ground') || name.includes('grass') || name.includes('terrain') || name.includes('path') || name.includes('dirt') || name.includes('road') || name.includes('floor')) {
+          mesh.receiveShadow = true;
+        } else {
+          mesh.receiveShadow = false;
+        }
       }
     });
   }, [scene]);
@@ -101,12 +108,6 @@ function MapModel({
         // Build and emit collision data
         if (onCollisionDataReady) {
           const collisionData = buildCollisionData(primitiveRef.current);
-          console.log(
-            '[MapModel] Collision data built:',
-            collisionData.walkableMeshes.length, 'walkable,',
-            collisionData.blockingMeshes.length, 'blocking,',
-            collisionData.waterMeshes.length, 'water',
-          );
           onCollisionDataReady(collisionData);
         }
       }, 150);
@@ -127,7 +128,7 @@ function MapModel({
 }
 
 // ─── Fireflies (Night) ────────────────────────────────
-function Fireflies({ count = 30 }: { count?: number }) {
+function Fireflies({ count = 15 }: { count?: number }) {
   const ref = useRef<THREE.Points>(null);
   const positions = useMemo(() => {
     const pos = new Float32Array(count * 3);
@@ -139,12 +140,17 @@ function Fireflies({ count = 30 }: { count?: number }) {
     return pos;
   }, [count]);
 
+  const frameRef = useRef(0);
+
   useFrame(({ clock }) => {
     if (ref.current) {
+      // Update only every 3rd frame for performance
+      frameRef.current++;
+      if (frameRef.current % 3 !== 0) return;
       const t = clock.getElapsedTime();
       const posArray = ref.current.geometry.attributes.position.array as Float32Array;
       for (let i = 0; i < count; i++) {
-        posArray[i * 3 + 1] += Math.sin(t * 0.5 + i) * 0.002;
+        posArray[i * 3 + 1] += Math.sin(t * 0.5 + i) * 0.005;
       }
       ref.current.geometry.attributes.position.needsUpdate = true;
     }
@@ -167,14 +173,10 @@ function Fireflies({ count = 30 }: { count?: number }) {
 // ─── Moon ────────────────────────────────
 function Moon() {
   return (
-    <Float speed={0.5} floatIntensity={0.3}>
-      <mesh position={[8, 12, -10]}>
-        <sphereGeometry args={[1.5, 16, 16]} />
-        <meshBasicMaterial color="#C4D7E0" />
-      </mesh>
-      {/* Moon glow */}
-      <pointLight position={[8, 12, -10]} color="#8899BB" intensity={4} distance={50} />
-    </Float>
+    <mesh position={[8, 12, -10]}>
+      <sphereGeometry args={[1.5, 12, 12]} />
+      <meshBasicMaterial color="#C4D7E0" />
+    </mesh>
   );
 }
 
@@ -192,19 +194,22 @@ function SceneContent({
 }) {
   const ambientRef = useRef<THREE.AmbientLight>(null);
   const dirRef = useRef<THREE.DirectionalLight>(null);
+  // Pre-allocate color targets to avoid GC per frame
+  const _nightAmbientColor = useMemo(() => new THREE.Color('#556688'), []);
+  const _dayAmbientColor = useMemo(() => new THREE.Color('#FFF8E7'), []);
+  const _nightDirColor = useMemo(() => new THREE.Color('#7788BB'), []);
+  const _dayDirColor = useMemo(() => new THREE.Color('#FFE4B5'), []);
 
   useFrame(() => {
     if (ambientRef.current) {
       const target = isNight ? 0.35 : 0.6;
       ambientRef.current.intensity += (target - ambientRef.current.intensity) * 0.02;
-      const color = isNight ? new THREE.Color('#556688') : new THREE.Color('#FFF8E7');
-      ambientRef.current.color.lerp(color, 0.02);
+      ambientRef.current.color.lerp(isNight ? _nightAmbientColor : _dayAmbientColor, 0.02);
     }
     if (dirRef.current) {
       const target = isNight ? 0.6 : 1.2;
       dirRef.current.intensity += (target - dirRef.current.intensity) * 0.02;
-      const color = isNight ? new THREE.Color('#7788BB') : new THREE.Color('#FFE4B5');
-      dirRef.current.color.lerp(color, 0.02);
+      dirRef.current.color.lerp(isNight ? _nightDirColor : _dayDirColor, 0.02);
     }
   });
 
@@ -217,12 +222,12 @@ function SceneContent({
         position={isNight ? [5, 15, -5] : [15, 20, 10]}
         intensity={isNight ? 0.6 : 1.2}
         castShadow
-        shadow-mapSize={[2048, 2048]}
-        shadow-camera-far={80}
-        shadow-camera-left={-25}
-        shadow-camera-right={25}
-        shadow-camera-top={25}
-        shadow-camera-bottom={-25}
+        shadow-mapSize={[1024, 1024]}
+        shadow-camera-far={60}
+        shadow-camera-left={-18}
+        shadow-camera-right={18}
+        shadow-camera-top={18}
+        shadow-camera-bottom={-18}
       />
 
       {/* GLB Map Model */}
@@ -235,18 +240,12 @@ function SceneContent({
       {isNight && (
         <>
           <Moon />
-          <Fireflies count={40} />
-          <Stars radius={50} depth={30} count={1500} factor={3} saturation={0} fade speed={0.5} />
+          <Fireflies count={15} />
+          <Stars radius={50} depth={30} count={800} factor={3} saturation={0} fade speed={0.3} />
         </>
       )}
 
-      {/* Day elements */}
-      {!isNight && (
-        <>
-          <Cloud position={[-5, 10, -8]} speed={0.2} opacity={0.3} />
-          <Cloud position={[8, 12, -12]} speed={0.1} opacity={0.2} />
-        </>
-      )}
+      {/* Day elements — clouds removed for performance */}
     </>
   );
 }
@@ -273,6 +272,9 @@ function CameraController({
   const cameraOffset = useRef(new THREE.Vector3(0, 3.5, 5.5));
   // How far ahead of the character the camera looks
   const lookAheadDist = 2.0;
+  // Reusable vectors to avoid per-frame allocations
+  const _targetPos = useMemo(() => new THREE.Vector3(), []);
+  const _targetLook = useMemo(() => new THREE.Vector3(), []);
 
   useFrame((_, delta) => {
     if (mode === 'thirdPerson' && playerPosition) {
@@ -284,19 +286,17 @@ function CameraController({
       const rot = playerRotation ?? 0;
 
       // Calculate desired camera position: behind the player
-      // sin(rot) and cos(rot) give the direction the character faces (+Z behind)
       const offsetX = Math.sin(rot) * cameraOffset.current.z;
       const offsetZ = Math.cos(rot) * cameraOffset.current.z;
 
-      const targetPos = new THREE.Vector3(
+      _targetPos.set(
         playerPosition.x + offsetX,
         playerPosition.y + cameraOffset.current.y,
         playerPosition.z + offsetZ,
       );
 
       // Look ahead of the character in the direction they're facing
-      // Character faces -sin(rot) on X and -cos(rot) on Z
-      const targetLook = new THREE.Vector3(
+      _targetLook.set(
         playerPosition.x - Math.sin(rot) * lookAheadDist,
         playerPosition.y + 1.2,
         playerPosition.z - Math.cos(rot) * lookAheadDist,
@@ -306,8 +306,8 @@ function CameraController({
       const lerpFactor = isFirstFrameRef.current ? 1.0 : Math.min(1.0, delta * 4.0);
       isFirstFrameRef.current = false;
 
-      smoothPosRef.current.lerp(targetPos, lerpFactor);
-      smoothLookRef.current.lerp(targetLook, lerpFactor);
+      smoothPosRef.current.lerp(_targetPos, lerpFactor);
+      smoothLookRef.current.lerp(_targetLook, lerpFactor);
 
       camera.position.copy(smoothPosRef.current);
       camera.lookAt(smoothLookRef.current);
@@ -380,9 +380,10 @@ export function ForestScene({
   return (
     <div className="absolute inset-0 w-full h-full">
       <Canvas
-        shadows
-        camera={{ position: [3, 10, 16], fov: 50, near: 0.1, far: 200 }}
-        gl={{ antialias: true, alpha: true }}
+        shadows="basic"
+        camera={{ position: [3, 10, 16], fov: 50, near: 0.1, far: 150 }}
+        gl={{ antialias: false, alpha: false, powerPreference: 'high-performance', stencil: false, depth: true }}
+        dpr={[1, 1.5]}
         style={{ background: isNight ? '#1A2240' : '#87CEEB' }}
       >
         <CameraController

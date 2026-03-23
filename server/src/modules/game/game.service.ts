@@ -6,6 +6,7 @@ import { GameEngine } from './game.engine';
 import { GameRecord } from '../../database/entities/game-record.entity';
 import { GamePhase, Role, Team, PlayerState, GameTimers, WinCondition, DeathCause } from '@shared/types/game.types';
 import { RoomState } from '@shared/types/room.types';
+import { isWerewolfRole } from '@shared/constants/roles';
 import { v4 as uuid } from 'uuid';
 
 const GAME_TTL = 7200; // 2 hours
@@ -508,21 +509,53 @@ export class GameService {
     const votes = game.nightActions.werewolfVotes;
     if (Object.keys(votes).length === 0) return null;
 
+    const alive = game.players.filter((p) => p.isAlive);
     const voteCounts: Record<string, number> = {};
+    let totalWeight = 0;
+
     for (const [wolfId, targetId] of Object.entries(votes)) {
       const wolf = game.players.find((p) => p.id === wolfId);
+      // Wolf Fang can only vote when it's the last wolf alive
+      if (wolf?.role === Role.WOLF_FANG) {
+        const otherWolves = alive.filter((p) => isWerewolfRole(p.role) && p.id !== wolf.id);
+        if (otherWolves.length > 0) continue;
+      }
       const weight = wolf?.role === Role.ALPHA_WEREWOLF ? 2 : 1;
       voteCounts[targetId] = (voteCounts[targetId] || 0) + weight;
+      totalWeight += weight;
     }
 
+    // Also count weight from wolves who didn't vote
+    for (const p of alive) {
+      if (isWerewolfRole(p.role) && !(p.id in votes)) {
+        if (p.role === Role.WOLF_FANG) {
+          const otherWolves = alive.filter((w) => isWerewolfRole(w.role) && w.id !== p.id);
+          if (otherWolves.length > 0) continue;
+        }
+        const weight = p.role === Role.ALPHA_WEREWOLF ? 2 : 1;
+        totalWeight += weight;
+      }
+    }
+
+    const majorityThreshold = totalWeight / 2;
     let maxVotes = 0;
     let target: string | null = null;
+    let isTied = false;
     for (const [targetId, count] of Object.entries(voteCounts)) {
       if (count > maxVotes) {
         maxVotes = count;
         target = targetId;
+        isTied = false;
+      } else if (count === maxVotes) {
+        isTied = true;
       }
     }
+
+    // No target if tied or doesn't reach majority
+    if (isTied || maxVotes <= majorityThreshold) {
+      return null;
+    }
+
     return target;
   }
 

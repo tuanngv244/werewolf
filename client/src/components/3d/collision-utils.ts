@@ -264,34 +264,6 @@ export function buildCollisionData(mapScene: THREE.Object3D): CollisionData {
   // Deduplicate terrain layers
   const deduplicatedWalkable = deduplicateTerrainLayers(walkable);
 
-  // Debug: log classification results
-  console.log('[CollisionData] Classification results:');
-  console.log('  Walkable meshes (before dedup):', walkable.length);
-  console.log('  Walkable meshes (after dedup):', deduplicatedWalkable.length);
-  console.log('  Blocking meshes:', blocking.length);
-  console.log('  Water meshes:', water.length);
-  if (deduplicatedWalkable.length > 0) {
-    console.log('  Walkable mesh names:', deduplicatedWalkable.slice(0, 10).map(m => m.name || '(unnamed)'));
-    // Log world-space bounding boxes for walkable meshes
-    deduplicatedWalkable.forEach(m => {
-      const b = new THREE.Box3().setFromObject(m);
-      console.log('    ' + (m.name || '(unnamed)') + ' world bounds:',
-        'X[' + b.min.x.toFixed(1) + ',' + b.max.x.toFixed(1) + ']',
-        'Y[' + b.min.y.toFixed(1) + ',' + b.max.y.toFixed(1) + ']',
-        'Z[' + b.min.z.toFixed(1) + ',' + b.max.z.toFixed(1) + ']');
-    });
-    // Test raycast at origin to verify ground detection works
-    const testRay = new THREE.Raycaster(new THREE.Vector3(0, 30, 0), new THREE.Vector3(0, -1, 0), 0, 50);
-    const testHits = testRay.intersectObjects(deduplicatedWalkable, false);
-    console.log('  [DEBUG] Test raycast at (0,30,0) downward hits:', testHits.length);
-    testHits.forEach(h => {
-      console.log('    hit Y=' + h.point.y.toFixed(3) + ' face normal Y=' + (h.face ? h.face.normal.y.toFixed(3) : 'null'));
-    });
-  }
-  if (deduplicatedWalkable.length === 0) {
-    console.warn('  ⚠️ No walkable meshes found! All walkable names:', walkable.map(m => m.name || '(unnamed)'));
-  }
-
   // Compute bounds from walkable mesh positions with 1.0-unit margin
   let minX = Infinity,
     maxX = -Infinity,
