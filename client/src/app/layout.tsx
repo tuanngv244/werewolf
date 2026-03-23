@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Nunito, Fredoka } from 'next/font/google';
+import Script from 'next/script';
 import '@/styles/globals.css';
 
 const nunito = Nunito({
@@ -31,9 +32,7 @@ export const metadata: Metadata = {
       { url: '/favicon-16x16.png', sizes: '16x16', type: 'image/png' },
       { url: '/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
     ],
-    apple: [
-      { url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
-    ],
+    apple: [{ url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
   },
   manifest: '/site.webmanifest',
   appleWebApp: {
@@ -43,13 +42,18 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html suppressHydrationWarning>
+      <head>
+        <meta name="google-adsense-account" content="ca-pub-2758602150824394" />
+        <Script
+          async
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2758602150824394"
+          crossOrigin="anonymous"
+          strategy="afterInteractive"
+        />
+      </head>
       <body className={`${nunito.variable} ${fredoka.variable} font-body antialiased`}>
         {children}
       </body>
