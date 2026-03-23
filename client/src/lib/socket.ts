@@ -2,7 +2,7 @@ import { io, Socket } from 'socket.io-client';
 
 function getWsUrl(): string {
   // NEXT_PUBLIC_WS_URL is baked at build time
-  // Production: http://159.223.65.161 (goes through nginx, which handles /socket.io/)
+  // Production: https://werewolf.ans-game.fun (goes through Cloudflare + nginx, which handles /socket.io/)
   // Development: http://localhost:3001 (direct to NestJS)
   if (process.env.NEXT_PUBLIC_WS_URL) {
     return process.env.NEXT_PUBLIC_WS_URL;
@@ -22,7 +22,7 @@ export function getSocket(): Socket {
   if (!socket) {
     socket = io(WS_URL, {
       autoConnect: false,
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'],
     });
   }
   return socket;
